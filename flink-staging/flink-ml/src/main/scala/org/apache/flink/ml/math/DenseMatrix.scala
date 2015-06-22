@@ -168,6 +168,45 @@ case class DenseMatrix(
   override def copy: DenseMatrix = {
     new DenseMatrix(numRows, numCols, data.clone)
   }
+
+  def +(other: DenseMatrix): DenseMatrix = {
+    require(numRows == other.numRows && numCols == other.numCols)
+    val result = copy
+    var i = 0
+    while (i < data.length) {
+      result.data(i) += other.data(i)
+      i += 1
+    }
+    result
+  }
+
+  def *(scalar: Double): DenseMatrix = {
+    val result = copy
+    var i = 0
+    while (i < data.length) {
+      result.data(i) *= scalar
+      i += 1
+    }
+    result
+  }
+
+  /**
+   * Solve this * leftHandSide = rightHandSide
+   *
+   * @param rightHandSide
+   * @return leftHandSide
+   */
+  def solve(rightHandSide: Vector): Vector = {
+    import Breeze._
+
+    val rhs = rightHandSide.toDenseVector.asBreeze.toDenseVector
+
+    val m = this.asBreeze.toDenseMatrix
+
+    val result = m \ rhs
+
+    result.fromBreeze
+  }
 }
 
 object DenseMatrix {
@@ -189,5 +228,9 @@ object DenseMatrix {
 
   def eye(numRows: Int, numCols: Int): DenseMatrix = {
     new DenseMatrix(numRows, numCols, Array.fill(numRows * numCols)(1.0))
+  }
+
+  def eye(size: Int): DenseMatrix = {
+    eye(size, size)
   }
 }

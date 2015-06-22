@@ -113,6 +113,68 @@ case class DenseVector(
 
     SparseVector.fromCOO(size, nonZero)
   }
+
+  def *(scalar: Double): DenseVector = {
+    DenseVector(data.map(_ * scalar))
+  }
+
+  def +(other: Vector): DenseVector = {
+    other match {
+      case SparseVector(_, otherIndices, otherData) =>
+        var i = 0
+        val result = copy
+        while (i < otherIndices.length) {
+          result(otherIndices(i)) += otherData(i)
+          i += 1
+        }
+        result
+      case DenseVector(otherData) =>
+        val result = copy
+        var i = 0
+        while (i < size) {
+          result(i) = data(i) + otherData(i)
+          i += 1
+        }
+        result
+    }
+  }
+
+  def -(other: Vector): DenseVector = {
+    other match {
+      case SparseVector(_, otherIndices, otherData) =>
+        var i = 0
+        val result = copy
+        while (i < otherIndices.length) {
+          result(otherIndices(i)) -= otherData(i)
+          i += 1
+        }
+        result
+      case DenseVector(otherData) =>
+        val result = copy
+        var i = 0
+        while (i < size) {
+          result(i) -= otherData(i)
+          i += 1
+        }
+        result
+    }
+  }
+
+  def outer(other: Vector): DenseMatrix = {
+    val otherDense = other.toDenseVector
+
+    val result = DenseMatrix.zeros(size, otherDense.size)
+    var i = 0
+    while (i < size) {
+      var j = 0
+      while (j < size) {
+        result(i, j) = other(i) * otherDense(j)
+        j += 1
+      }
+      i += 1
+    }
+    result
+  }
 }
 
 object DenseVector {

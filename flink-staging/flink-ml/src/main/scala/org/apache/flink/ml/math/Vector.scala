@@ -74,6 +74,20 @@ trait Vector extends Serializable {
       false
     }
   }
+
+  def toSparseVector: SparseVector
+
+  def toDenseVector: DenseVector
+
+  def *(scala: Double): Vector
+
+  def +(other: Vector): Vector
+
+  def -(other: Vector): Vector
+
+  def outer(other: Vector): DenseMatrix
+
+  def norm2(): Double = this.dot(this)
 }
 
 object Vector{
