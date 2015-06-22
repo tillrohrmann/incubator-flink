@@ -114,11 +114,11 @@ case class DenseVector(
     SparseVector.fromCOO(size, nonZero)
   }
 
-  def *(scalar: Double): DenseVector = {
+  def * (scalar: Double): DenseVector = {
     DenseVector(data.map(_ * scalar))
   }
 
-  def +(other: Vector): DenseVector = {
+  def + (other: Vector): DenseVector = {
     other match {
       case SparseVector(_, otherIndices, otherData) =>
         var i = 0
@@ -139,7 +139,7 @@ case class DenseVector(
     }
   }
 
-  def -(other: Vector): DenseVector = {
+  def - (other: Vector): DenseVector = {
     other match {
       case SparseVector(_, otherIndices, otherData) =>
         var i = 0
@@ -175,6 +175,8 @@ case class DenseVector(
     }
     result
   }
+
+  override def toDenseVector: DenseVector = this
 }
 
 object DenseVector {

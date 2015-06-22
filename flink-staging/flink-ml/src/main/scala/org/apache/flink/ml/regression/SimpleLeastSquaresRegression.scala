@@ -69,7 +69,11 @@ object SimpleLeastSquaresRegression {
   }
 
   implicit val fitLabelVectors = new FitOperation[SimpleLeastSquaresRegression, LabeledVector] {
-    def fit(instance: SimpleLeastSquaresRegression, fitParameters: ParameterMap, input: DataSet[LabeledVector]): Unit = {
+    def fit(
+        instance: SimpleLeastSquaresRegression,
+        fitParameters: ParameterMap,
+        input: DataSet[LabeledVector])
+      : Unit = {
       val C = fitParameters.get(Regularization).get
 
       val alg = new SimpleLeastSquaresRegressionAlg(C)
@@ -82,7 +86,10 @@ object SimpleLeastSquaresRegression {
 
   implicit def predictVectors[T <: Vector] =
     new PredictOperation[SimpleLeastSquaresRegression, Vector, T, Double]() {
-      def getModel(instance: SimpleLeastSquaresRegression, predictParameters: ParameterMap): DataSet[Vector] =
+      def getModel(
+          instance: SimpleLeastSquaresRegression,
+          predictParameters: ParameterMap)
+        : DataSet[Vector] =
         instance.weights match {
           case Some(w) => w
           case None =>

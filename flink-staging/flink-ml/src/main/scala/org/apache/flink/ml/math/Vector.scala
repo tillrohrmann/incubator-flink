@@ -79,11 +79,11 @@ trait Vector extends Serializable {
 
   def toDenseVector: DenseVector
 
-  def *(scala: Double): Vector
+  def * (scala: Double): Vector
 
-  def +(other: Vector): Vector
+  def + (other: Vector): Vector
 
-  def -(other: Vector): Vector
+  def - (other: Vector): Vector
 
   def outer(other: Vector): DenseMatrix
 

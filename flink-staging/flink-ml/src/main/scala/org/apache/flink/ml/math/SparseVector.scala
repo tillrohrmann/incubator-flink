@@ -142,17 +142,19 @@ case class SparseVector(
     java.util.Arrays.binarySearch(indices, 0, indices.length, index)
   }
 
-  def *(scala: Double): Vector =
+  def * (scala: Double): Vector =
     throw new NotImplementedError()
 
   def outer(other: Vector): DenseMatrix =
     throw new NotImplementedError()
 
-  def +(other: Vector): Vector =
+  def + (other: Vector): Vector =
     throw new NotImplementedError()
 
-  def -(other: Vector): Vector =
+  def - (other: Vector): Vector =
     throw new NotImplementedError()
+
+  override def toSparseVector: SparseVector = this
 }
 
 object SparseVector {

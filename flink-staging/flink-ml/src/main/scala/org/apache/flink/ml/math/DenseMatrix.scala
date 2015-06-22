@@ -169,7 +169,7 @@ case class DenseMatrix(
     new DenseMatrix(numRows, numCols, data.clone)
   }
 
-  def +(other: DenseMatrix): DenseMatrix = {
+  def + (other: DenseMatrix): DenseMatrix = {
     require(numRows == other.numRows && numCols == other.numCols)
     val result = copy
     var i = 0
