@@ -25,7 +25,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.ml.common.{LabeledVector, Parameter, ParameterMap}
 import org.apache.flink.ml.math.Breeze._
-import org.apache.flink.ml.math.{BreezeVectorConverter, Vector}
+import org.apache.flink.ml.math.{DenseVector, BreezeVectorConverter, Vector}
 import org.apache.flink.ml.pipeline.{TransformOperation, FitOperation,
 Transformer}
 import org.apache.flink.ml.preprocessing.StandardScaler.{Mean, Std}
@@ -137,7 +137,7 @@ object StandardScaler {
           fitParameters: ParameterMap,
           input: DataSet[LabeledVector])
         : Unit = {
-        val vectorDS = input.map(_.vector)
+        val vectorDS = input.map(x => DenseVector(x.label +: x.vector.toDenseVector.data))
         val metrics = extractFeatureMetrics(vectorDS)
 
         instance.metricsOption = Some(metrics)
@@ -294,7 +294,12 @@ object StandardScaler {
       : LabeledVector = {
       val LabeledVector(label, vector) = element
 
-      LabeledVector(label, scale(vector, model))
+      val combinedVector = DenseVector(label +: vector.toDenseVector.data)
+      val scaledCombinedVector = scale(vector, model)
+
+      val scaledVector = DenseVector(scaledCombinedVector.toDenseVector.data.tail)
+
+      LabeledVector(scaledCombinedVector(0), scaledVector)
     }
   }
 

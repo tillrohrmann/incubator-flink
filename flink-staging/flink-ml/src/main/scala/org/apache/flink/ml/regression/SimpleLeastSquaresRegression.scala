@@ -80,6 +80,8 @@ object SimpleLeastSquaresRegression {
         fitParameters: ParameterMap,
         input: DataSet[LabeledVector])
       : Unit = {
+      val effectiveParameters = instance.parameters ++ fitParameters
+
       val C = fitParameters.get(Regularization).get
 
       val alg = new SimpleLeastSquaresRegressionAlg(C)
