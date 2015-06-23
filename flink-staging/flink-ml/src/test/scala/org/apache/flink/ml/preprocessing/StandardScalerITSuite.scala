@@ -41,7 +41,7 @@ class StandardScalerITSuite
     val env = ExecutionEnvironment.getExecutionEnvironment
 
     val dataSet = env.fromCollection(data)
-    val scaler = StandardScaler()
+    val scaler = StandardScaler().setMean(0).setStd(1)
     scaler.fit(dataSet)
     val scaledVectors = scaler.transform(dataSet).collect
 

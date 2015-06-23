@@ -23,6 +23,7 @@ import org.apache.flink.ml.common.{Parameter, ParameterMap}
 import org.apache.flink.ml.pipeline.{PredictOperation, FitOperation, Predictor}
 import org.apache.flink.ml.common.LabeledVector
 import org.apache.flink.ml.math.{Vector, DenseMatrix}
+import org.apache.flink.ml.regression.SimpleLeastSquaresRegression.Regularization
 
 /**
  * Simple Least Squares Regression
@@ -61,6 +62,11 @@ class SimpleLeastSquaresRegressionAlg(val C: Double) extends Serializable {
 
 class SimpleLeastSquaresRegression extends Predictor[SimpleLeastSquaresRegression] {
   var weights: Option[DataSet[Vector]] = None
+
+  def setRegularization(c: Double): SimpleLeastSquaresRegression = {
+    parameters.add(Regularization, c)
+    this
+  }
 }
 
 object SimpleLeastSquaresRegression {
@@ -106,4 +112,8 @@ object SimpleLeastSquaresRegression {
         value.dot(model)
       }
     }
+
+  def apply(): SimpleLeastSquaresRegression ={
+    new SimpleLeastSquaresRegression
+  }
 }

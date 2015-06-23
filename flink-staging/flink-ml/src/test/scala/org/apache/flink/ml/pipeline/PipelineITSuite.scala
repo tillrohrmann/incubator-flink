@@ -50,7 +50,7 @@ class PipelineITSuite extends FlatSpec with Matchers with FlinkTestBase {
       LabeledVector(2.0, DenseVector(1.0, -1.0, -3.0, 1.0, 3.0, 9.0, 1.0, -1.0, -3.0))
     )
 
-    val scaler = StandardScaler()
+    val scaler = StandardScaler().setMean(0).setStd(1)
     val polyFeatures = PolynomialFeatures().setDegree(2)
 
     val pipeline = scaler.chainTransformer(polyFeatures)
@@ -170,7 +170,9 @@ class PipelineITSuite extends FlatSpec with Matchers with FlinkTestBase {
     
     val pipeline = chainedScalers5.chainPredictor(predictor)
 
-    pipeline.fit(trainingData)
+    val parameters = ParameterMap().add(StandardScaler.Mean, 0.0).add(StandardScaler.Std, 1.0)
+
+    pipeline.fit(trainingData, parameters)
 
     val weightVector = predictor.weightsOption.get.collect().head
 

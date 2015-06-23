@@ -94,11 +94,11 @@ object StandardScaler {
   // ====================================== Parameters =============================================
 
   case object Mean extends Parameter[Double] {
-    override val defaultValue: Option[Double] = Some(0.0)
+    override val defaultValue: Option[Double] = None
   }
 
   case object Std extends Parameter[Double] {
-    override val defaultValue: Option[Double] = Some(1.0)
+    override val defaultValue: Option[Double] = None
   }
 
   // ==================================== Factory methods ==========================================
@@ -201,15 +201,15 @@ object StandardScaler {
         T,
         T] {
 
-    var mean: Double = _
-    var std: Double = _
+    var meanOpt: Option[Double] = None
+    var stdOpt: Option[Double] = None
 
     override def getModel(
       instance: StandardScaler,
       transformParameters: ParameterMap)
     : DataSet[(linalg.Vector[Double], linalg.Vector[Double])] = {
-      mean = transformParameters(Mean)
-      std = transformParameters(Std)
+      meanOpt = transformParameters.get(Mean)
+      stdOpt = transformParameters.get(Std)
 
       instance.metricsOption match {
         case Some(metrics) => metrics
@@ -225,9 +225,28 @@ object StandardScaler {
     : V = {
       val (broadcastMean, broadcastStd) = model
       var myVector = vector.asBreeze
-      myVector -= broadcastMean
-      myVector :/= broadcastStd
-      myVector = (myVector :* std) + mean
+      
+      stdOpt match {
+        case Some(std) =>
+          meanOpt match {
+            case Some(mean) =>
+              myVector -= broadcastMean
+              myVector :/= broadcastStd
+              myVector = (myVector :* std) + mean
+            case None =>
+              myVector -= broadcastMean
+              myVector :/= broadcastStd
+              myVector = (myVector :* std) + broadcastMean
+          }
+        case None =>
+          meanOpt match {
+            case Some(mean) =>
+              myVector -= broadcastMean
+              myVector += mean
+            case None =>
+          }
+      }
+
       myVector.fromBreeze
     }
   }
