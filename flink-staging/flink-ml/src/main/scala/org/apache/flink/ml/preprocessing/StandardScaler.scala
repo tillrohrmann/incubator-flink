@@ -21,12 +21,14 @@ package org.apache.flink.ml.preprocessing
 import breeze.linalg
 import breeze.numerics.sqrt
 import breeze.numerics.sqrt._
+import org.apache.flink.api.common.functions.RichMapFunction
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
+import org.apache.flink.configuration.Configuration
 import org.apache.flink.ml.common.{LabeledVector, Parameter, ParameterMap}
 import org.apache.flink.ml.math.Breeze._
 import org.apache.flink.ml.math.{DenseVector, BreezeVectorConverter, Vector}
-import org.apache.flink.ml.pipeline.{TransformOperation, FitOperation,
+import org.apache.flink.ml.pipeline.{TransformDataSetOperation, TransformOperation, FitOperation,
 Transformer}
 import org.apache.flink.ml.preprocessing.StandardScaler.{Mean, Std}
 
@@ -63,6 +65,8 @@ class StandardScaler extends Transformer[StandardScaler] {
   private[preprocessing] var metricsOption: Option[
       DataSet[(linalg.Vector[Double], linalg.Vector[Double])]
     ] = None
+
+  private[preprocessing] var labelMetricsOption: Option[DataSet[(Double, Double)]] = None
 
   /** Sets the target mean of the transformed data
     *
@@ -137,10 +141,22 @@ object StandardScaler {
           fitParameters: ParameterMap,
           input: DataSet[LabeledVector])
         : Unit = {
-        val vectorDS = input.map(x => DenseVector(x.label +: x.vector.toDenseVector.data))
+        val vectorDS = input.map(_.vector)
         val metrics = extractFeatureMetrics(vectorDS)
 
+        val labelDS = input.map(_.label)
+
+        val labelMetrics = labelDS.map(x => (x, x*x, 1)).reduce{
+          (left, right) => (left._1 + right._1, left._2 + right._2, left._3 + right._3)
+        }.map{
+          x =>
+            val mean = x._1/x._3
+            val std = math.sqrt(x._2/x._3 - mean * mean)
+            (mean, std)
+        }
+
         instance.metricsOption = Some(metrics)
+        instance.labelMetricsOption = Some(labelMetrics)
       }
     }
   }
@@ -225,7 +241,7 @@ object StandardScaler {
     : V = {
       val (broadcastMean, broadcastStd) = model
       var myVector = vector.asBreeze
-      
+
       stdOpt match {
         case Some(std) =>
           meanOpt match {
@@ -287,19 +303,108 @@ object StandardScaler {
   /** [[TransformOperation]] to transform [[LabeledVector]].
     *
     */
-  implicit val transformLabeledVector = new StandardScalerTransformOperation[LabeledVector] {
-    override def transform(
-        element: LabeledVector,
-        model: (linalg.Vector[Double], linalg.Vector[Double]))
-      : LabeledVector = {
-      val LabeledVector(label, vector) = element
+  implicit val transformLabeledVector = new TransformDataSetOperation[
+      StandardScaler,
+      LabeledVector,
+      LabeledVector] {
+    override def transformDataSet(instance: StandardScaler, transformParameters: ParameterMap,
+      input: DataSet[LabeledVector]): DataSet[LabeledVector] = {
 
-      val combinedVector = DenseVector(label +: vector.toDenseVector.data)
-      val scaledCombinedVector = scale(vector, model)
+      val metricsValue = instance.metricsOption match {
+        case Some(m) => m
+        case None => throw new RuntimeException("StandardScaler was not trained")
+      }
 
-      val scaledVector = DenseVector(scaledCombinedVector.toDenseVector.data.tail)
+      val effectiveParameters = instance.parameters ++ transformParameters
 
-      LabeledVector(scaledCombinedVector(0), scaledVector)
+      val stdOpt = effectiveParameters.get(Std)
+      val meanOpt = effectiveParameters.get(Mean)
+
+      instance.labelMetricsOption match {
+        case Some(lm) =>
+          input.map {
+            new RichMapFunction[LabeledVector, LabeledVector] {
+              var model: (breeze.linalg.Vector[Double], breeze.linalg.Vector[Double]) = _
+              var labelModel: (Double, Double) = _
+
+              override def open(config: Configuration): Unit = {
+                model = this.getRuntimeContext.getBroadcastVariable[
+                  (breeze.linalg.Vector[Double], breeze.linalg.Vector[Double])]("metrics").get(0)
+
+                labelModel = this.getRuntimeContext.getBroadcastVariable[
+                  (Double, Double)]("labelMetrics").get(0)
+              }
+
+              override def map(element: LabeledVector): LabeledVector = {
+                var myVector = element.vector.asBreeze
+                var label = element.label
+                val (broadcastMean, broadcastStd) = model
+                val (labelMean, labelStd) = labelModel
+                stdOpt match {
+                  case Some(std) =>
+                    meanOpt match {
+                      case Some(mean) =>
+                        myVector -= broadcastMean
+                        myVector :/= broadcastStd
+                        myVector = (myVector :* std) + mean
+                        label -= labelMean
+                        label /= labelStd
+                        label = (label * std) + mean
+                      case None =>
+                        myVector -= broadcastMean
+                        myVector :/= broadcastStd
+                        myVector = (myVector :* std) + broadcastMean
+                        label -= labelMean
+                        label /= labelStd
+                        label = (label * std) + labelMean
+                    }
+                  case None =>
+                    meanOpt match {
+                      case Some(mean) =>
+                        myVector -= broadcastMean
+                        myVector += mean
+                        label -= labelMean
+                        label += mean
+                      case None =>
+                    }
+                }
+
+                LabeledVector(label, myVector.fromBreeze)
+              }
+            }
+          }.withBroadcastSet(metricsValue, "metrics").withBroadcastSet(lm, "labelMetrics")
+        case None =>
+          import org.apache.flink.ml._
+          input.mapWithBcVariable(metricsValue){
+            (element, model) => {
+              var myVector = element.vector.asBreeze
+              val (broadcastMean, broadcastStd) = model
+              stdOpt match {
+                case Some(std) =>
+                  meanOpt match {
+                    case Some(mean) =>
+                      myVector -= broadcastMean
+                      myVector :/= broadcastStd
+                      myVector = (myVector :* std) + mean
+                    case None =>
+                      myVector -= broadcastMean
+                      myVector :/= broadcastStd
+                      myVector = (myVector :* std) + broadcastMean
+                  }
+                case None =>
+                  meanOpt match {
+                    case Some(mean) =>
+                      myVector -= broadcastMean
+                      myVector += mean
+                    case None =>
+                  }
+              }
+
+              LabeledVector(element.label, myVector.fromBreeze)
+            }
+          }
+      }
+
     }
   }
 

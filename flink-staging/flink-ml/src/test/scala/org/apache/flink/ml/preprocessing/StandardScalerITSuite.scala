@@ -21,6 +21,7 @@ import breeze.linalg
 import breeze.numerics.sqrt
 import breeze.numerics.sqrt._
 import org.apache.flink.api.scala._
+import org.apache.flink.ml.common.LabeledVector
 import org.apache.flink.ml.math.{Vector, DenseVector}
 import org.apache.flink.test.util.FlinkTestBase
 import org.apache.flink.ml.math.Breeze._
@@ -101,6 +102,24 @@ class StandardScalerITSuite
       scaledMean(i) should be(10.0 +- (0.0000000000001))
       scaledStd(i) should be(2.0 +- (0.0000000000001))
     }
+  }
+
+  it should "scale labeled vectors" in {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+
+    val inputData = Seq(
+    LabeledVector(1.0, DenseVector(2.0)),
+    LabeledVector(1.0, DenseVector(3.0)),
+    LabeledVector(1.0, DenseVector(4.0))
+    )
+
+    val inputDataDS = env.fromCollection(inputData)
+
+    val ss = StandardScaler().setMean(0)
+
+    ss.fit(inputDataDS)
+
+    val result = ss.transform(inputDataDS).collect()
   }
 }
 
