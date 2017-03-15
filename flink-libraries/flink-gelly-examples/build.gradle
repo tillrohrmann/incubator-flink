@@ -1,0 +1,10 @@
+
+description = 'flink-gelly-examples'
+dependencies {
+  compile project(':flink-java')
+  compile project(':flink-clients_2.10')
+  compile project(':flink-scala_2.10')
+  compile project(':flink-libraries:flink-gelly_2.10')
+  compile project(':flink-libraries:flink-gelly-scala_2.10')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+}

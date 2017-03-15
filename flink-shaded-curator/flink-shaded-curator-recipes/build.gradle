@@ -1,0 +1,6 @@
+
+description = 'flink-shaded-curator-recipes'
+dependencies {
+    compile group: 'org.apache.curator', name: 'curator-recipes', version:'2.8.0'
+    compile group: 'com.google.guava', name: 'guava', version:'18.0'
+}

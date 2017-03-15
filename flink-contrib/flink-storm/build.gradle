@@ -1,0 +1,35 @@
+
+description = 'flink-storm'
+dependencies {
+    compile(group: 'org.apache.storm', name: 'storm-core', version:'1.0.0') {
+exclude(module: 'log4j-over-slf4j')
+exclude(module: 'log4j-slf4j-impl')
+exclude(module: 'slf4j-log4j12')
+exclude(module: 'servlet-api')
+exclude(module: 'junit')
+exclude(module: 'mockito-all')
+exclude(module: 'mockito-all')
+exclude(module: 'curator-test')
+exclude(module: 'kryo')
+exclude(module: 'ring-core')
+exclude(module: 'ring-devel')
+exclude(module: 'ring-servlet')
+exclude(module: 'ring-jetty-adapter')
+exclude(module: 'jetty')
+exclude(module: 'jgrapht-core')
+exclude(module: 'compojure')
+exclude(module: 'chill-java')
+exclude(module: 'commons-fileupload')
+exclude(module: 'servlet-api')
+exclude(module: 'clout')
+exclude(module: 'hiccup')
+    }
+    compile group: 'com.googlecode.json-simple', name: 'json-simple', version:'1.1'
+  testCompile project(':flink-runtime_2.10')
+    compile(group: 'com.esotericsoftware.kryo', name: 'kryo', version:'2.24.0') {
+       /* This dependency was originally in the Maven provided scope, but the project was not of type war.
+       This behavior is not yet supported by Gradle, so this dependency has been converted to a compile dependency.
+       Please review and delete this closure when resolved. */
+    }
+  providedCompile project(':flink-streaming-java_2.10')
+}

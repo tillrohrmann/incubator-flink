@@ -1,0 +1,10 @@
+
+description = 'flink-avro'
+dependencies {
+    compile group: 'org.apache.avro', name: 'avro', version:'1.7.7'
+  testCompile project(':flink-test-utils-parent:flink-test-utils-junit')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-clients_2.10')
+  testCompile project(':flink-core')
+  providedCompile project(':flink-java')
+}

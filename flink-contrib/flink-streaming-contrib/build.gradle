@@ -1,0 +1,8 @@
+
+description = 'flink-streaming-contrib'
+dependencies {
+  compile project(':flink-streaming-java_2.10')
+  compile project(':flink-streaming-scala_2.10')
+  compile project(':flink-clients_2.10')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+}

@@ -1,0 +1,15 @@
+
+description = 'flink-scala'
+dependencies {
+  compile project(':flink-core')
+  compile project(':flink-java')
+    compile group: 'org.scala-lang', name: 'scala-reflect', version:'2.10.4'
+    compile group: 'org.scala-lang', name: 'scala-library', version:'2.10.4'
+    compile group: 'org.scala-lang', name: 'scala-compiler', version:'2.10.4'
+    compile group: 'org.ow2.asm', name: 'asm', version:'5.0.4'
+    compile group: 'com.google.guava', name: 'guava', version:'18.0'
+    compile group: 'org.scalamacros', name: 'quasiquotes_2.10', version:'2.0.1'
+    testCompile group: 'org.scalatest', name: 'scalatest_2.10', version:'2.2.2'
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-core')
+}

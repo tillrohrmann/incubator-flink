@@ -1,0 +1,21 @@
+
+description = 'flink-connector-kafka-0.10'
+dependencies {
+  compile project(':flink-connectors:flink-connector-kafka-0.9_2.10')
+    compile group: 'org.apache.kafka', name: 'kafka-clients', version:'0.10.0.1'
+  testCompile project(':flink-streaming-java_2.10')
+  testCompile project(':flink-connectors:flink-connector-kafka-0.9_2.10')
+  testCompile project(':flink-connectors:flink-connector-kafka-base_2.10')
+    testCompile group: 'org.apache.kafka', name: 'kafka_2.10', version:'0.10.0.1'
+  testCompile project(':flink-tests_2.10')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-runtime_2.10')
+  testCompile project(':flink-metrics:flink-metrics-jmx')
+  providedCompile project(':flink-libraries:flink-table_2.10')
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests

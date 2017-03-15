@@ -1,0 +1,10 @@
+
+description = 'flink-connector-elasticsearch2'
+dependencies {
+  compile project(':flink-connectors:flink-connector-elasticsearch-base_2.10')
+    compile group: 'org.elasticsearch', name: 'elasticsearch', version:'2.3.5'
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-streaming-java_2.10')
+  testCompile project(':flink-connectors:flink-connector-elasticsearch-base_2.10')
+  providedCompile project(':flink-streaming-java_2.10')
+}

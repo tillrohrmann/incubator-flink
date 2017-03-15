@@ -1,0 +1,146 @@
+rootProject.name = 'flink-parent'
+include ':flink-annotations'
+include ':flink-shaded-hadoop:flink-shaded-hadoop2'
+include ':flink-shaded-hadoop'
+include ':flink-shaded-curator:flink-shaded-curator-recipes'
+include ':flink-shaded-curator:flink-shaded-curator-test'
+include ':flink-shaded-curator'
+include ':flink-core'
+include ':flink-java'
+include ':flink-scala_2.10'
+include ':flink-runtime_2.10'
+include ':flink-runtime-web_2.10'
+include ':flink-optimizer_2.10'
+include ':flink-streaming-java_2.10'
+include ':flink-streaming-scala_2.10'
+include ':flink-connectors:flink-avro_2.10'
+include ':flink-connectors:flink-jdbc'
+include ':flink-connectors:flink-hadoop-compatibility_2.10'
+include ':flink-connectors:flink-hbase_2.10'
+include ':flink-connectors:flink-hcatalog'
+include ':flink-connectors:flink-connector-kafka-base_2.10'
+include ':flink-connectors:flink-connector-kafka-0.8_2.10'
+include ':flink-connectors:flink-connector-kafka-0.9_2.10'
+include ':flink-connectors:flink-connector-kafka-0.10_2.10'
+include ':flink-connectors:flink-connector-elasticsearch-base_2.10'
+include ':flink-connectors:flink-connector-elasticsearch_2.10'
+include ':flink-connectors:flink-connector-elasticsearch2_2.10'
+include ':flink-connectors:flink-connector-rabbitmq_2.10'
+include ':flink-connectors:flink-connector-twitter_2.10'
+include ':flink-connectors:flink-connector-nifi_2.10'
+include ':flink-connectors:flink-connector-cassandra_2.10'
+include ':flink-connectors:flink-connector-filesystem_2.10'
+include ':flink-connectors:flink-connector-elasticsearch5_2.10'
+include ':flink-connectors'
+include ':flink-examples_2.10:flink-examples-batch_2.10'
+include ':flink-examples_2.10:flink-examples-streaming_2.10'
+include ':flink-examples_2.10'
+include ':flink-clients_2.10'
+include ':flink-tests_2.10'
+include ':flink-test-utils-parent:flink-test-utils-junit'
+include ':flink-test-utils-parent:flink-test-utils_2.10'
+include ':flink-test-utils-parent'
+include ':flink-libraries:flink-gelly_2.10'
+include ':flink-libraries:flink-gelly-scala_2.10'
+include ':flink-libraries:flink-gelly-examples_2.10'
+include ':flink-libraries:flink-python_2.10'
+include ':flink-libraries:flink-table_2.10'
+include ':flink-libraries:flink-ml_2.10'
+include ':flink-libraries:flink-cep_2.10'
+include ':flink-libraries:flink-cep-scala_2.10'
+include ':flink-libraries'
+include ':flink-scala-shell_2.10'
+include ':flink-quickstart:flink-quickstart-java'
+include ':flink-quickstart:flink-quickstart-scala'
+include ':flink-quickstart'
+include ':flink-contrib:flink-storm_2.10'
+include ':flink-contrib:flink-storm-examples_2.10'
+include ':flink-contrib:flink-streaming-contrib_2.10'
+include ':flink-contrib:flink-tweet-inputformat_2.10'
+include ':flink-contrib:flink-connector-wikiedits_2.10'
+include ':flink-contrib:flink-statebackend-rocksdb_2.10'
+include ':flink-contrib'
+include ':flink-dist_2.10'
+include ':flink-mesos_2.10'
+include ':flink-metrics:flink-metrics-core'
+include ':flink-metrics:flink-metrics-dropwizard'
+include ':flink-metrics:flink-metrics-ganglia'
+include ':flink-metrics:flink-metrics-graphite'
+include ':flink-metrics:flink-metrics-jmx'
+include ':flink-metrics:flink-metrics-statsd'
+include ':flink-metrics'
+include ':flink-yarn_2.10'
+include ':flink-fs-tests_2.10'
+
+project(':flink-annotations').projectDir = "$rootDir/flink-annotations" as File
+project(':flink-shaded-hadoop:flink-shaded-hadoop2').projectDir = "$rootDir/flink-shaded-hadoop/flink-shaded-hadoop2" as File
+project(':flink-shaded-hadoop').projectDir = "$rootDir/flink-shaded-hadoop" as File
+project(':flink-shaded-curator:flink-shaded-curator-recipes').projectDir = "$rootDir/flink-shaded-curator/flink-shaded-curator-recipes" as File
+project(':flink-shaded-curator:flink-shaded-curator-test').projectDir = "$rootDir/flink-shaded-curator/flink-shaded-curator-test" as File
+project(':flink-shaded-curator').projectDir = "$rootDir/flink-shaded-curator" as File
+project(':flink-core').projectDir = "$rootDir/flink-core" as File
+project(':flink-java').projectDir = "$rootDir/flink-java" as File
+project(':flink-scala_2.10').projectDir = "$rootDir/flink-scala" as File
+project(':flink-runtime_2.10').projectDir = "$rootDir/flink-runtime" as File
+project(':flink-runtime-web_2.10').projectDir = "$rootDir/flink-runtime-web" as File
+project(':flink-optimizer_2.10').projectDir = "$rootDir/flink-optimizer" as File
+project(':flink-streaming-java_2.10').projectDir = "$rootDir/flink-streaming-java" as File
+project(':flink-streaming-scala_2.10').projectDir = "$rootDir/flink-streaming-scala" as File
+project(':flink-connectors:flink-avro_2.10').projectDir = "$rootDir/flink-connectors/flink-avro" as File
+project(':flink-connectors:flink-jdbc').projectDir = "$rootDir/flink-connectors/flink-jdbc" as File
+project(':flink-connectors:flink-hadoop-compatibility_2.10').projectDir = "$rootDir/flink-connectors/flink-hadoop-compatibility" as File
+project(':flink-connectors:flink-hbase_2.10').projectDir = "$rootDir/flink-connectors/flink-hbase" as File
+project(':flink-connectors:flink-hcatalog').projectDir = "$rootDir/flink-connectors/flink-hcatalog" as File
+project(':flink-connectors:flink-connector-kafka-base_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-kafka-base" as File
+project(':flink-connectors:flink-connector-kafka-0.8_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-kafka-0.8" as File
+project(':flink-connectors:flink-connector-kafka-0.9_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-kafka-0.9" as File
+project(':flink-connectors:flink-connector-kafka-0.10_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-kafka-0.10" as File
+project(':flink-connectors:flink-connector-elasticsearch-base_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-elasticsearch-base" as File
+project(':flink-connectors:flink-connector-elasticsearch_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-elasticsearch" as File
+project(':flink-connectors:flink-connector-elasticsearch2_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-elasticsearch2" as File
+project(':flink-connectors:flink-connector-rabbitmq_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-rabbitmq" as File
+project(':flink-connectors:flink-connector-twitter_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-twitter" as File
+project(':flink-connectors:flink-connector-nifi_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-nifi" as File
+project(':flink-connectors:flink-connector-cassandra_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-cassandra" as File
+project(':flink-connectors:flink-connector-filesystem_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-filesystem" as File
+project(':flink-connectors:flink-connector-elasticsearch5_2.10').projectDir = "$rootDir/flink-connectors/flink-connector-elasticsearch5" as File
+project(':flink-connectors').projectDir = "$rootDir/flink-connectors" as File
+project(':flink-examples_2.10:flink-examples-batch_2.10').projectDir = "$rootDir/flink-examples/flink-examples-batch" as File
+project(':flink-examples_2.10:flink-examples-streaming_2.10').projectDir = "$rootDir/flink-examples/flink-examples-streaming" as File
+project(':flink-examples_2.10').projectDir = "$rootDir/flink-examples" as File
+project(':flink-clients_2.10').projectDir = "$rootDir/flink-clients" as File
+project(':flink-tests_2.10').projectDir = "$rootDir/flink-tests" as File
+project(':flink-test-utils-parent:flink-test-utils-junit').projectDir = "$rootDir/flink-test-utils-parent/flink-test-utils-junit" as File
+project(':flink-test-utils-parent:flink-test-utils_2.10').projectDir = "$rootDir/flink-test-utils-parent/flink-test-utils" as File
+project(':flink-test-utils-parent').projectDir = "$rootDir/flink-test-utils-parent" as File
+project(':flink-libraries:flink-gelly_2.10').projectDir = "$rootDir/flink-libraries/flink-gelly" as File
+project(':flink-libraries:flink-gelly-scala_2.10').projectDir = "$rootDir/flink-libraries/flink-gelly-scala" as File
+project(':flink-libraries:flink-gelly-examples_2.10').projectDir = "$rootDir/flink-libraries/flink-gelly-examples" as File
+project(':flink-libraries:flink-python_2.10').projectDir = "$rootDir/flink-libraries/flink-python" as File
+project(':flink-libraries:flink-table_2.10').projectDir = "$rootDir/flink-libraries/flink-table" as File
+project(':flink-libraries:flink-ml_2.10').projectDir = "$rootDir/flink-libraries/flink-ml" as File
+project(':flink-libraries:flink-cep_2.10').projectDir = "$rootDir/flink-libraries/flink-cep" as File
+project(':flink-libraries:flink-cep-scala_2.10').projectDir = "$rootDir/flink-libraries/flink-cep-scala" as File
+project(':flink-libraries').projectDir = "$rootDir/flink-libraries" as File
+project(':flink-scala-shell_2.10').projectDir = "$rootDir/flink-scala-shell" as File
+project(':flink-quickstart:flink-quickstart-java').projectDir = "$rootDir/flink-quickstart/flink-quickstart-java" as File
+project(':flink-quickstart:flink-quickstart-scala').projectDir = "$rootDir/flink-quickstart/flink-quickstart-scala" as File
+project(':flink-quickstart').projectDir = "$rootDir/flink-quickstart" as File
+project(':flink-contrib:flink-storm_2.10').projectDir = "$rootDir/flink-contrib/flink-storm" as File
+project(':flink-contrib:flink-storm-examples_2.10').projectDir = "$rootDir/flink-contrib/flink-storm-examples" as File
+project(':flink-contrib:flink-streaming-contrib_2.10').projectDir = "$rootDir/flink-contrib/flink-streaming-contrib" as File
+project(':flink-contrib:flink-tweet-inputformat_2.10').projectDir = "$rootDir/flink-contrib/flink-tweet-inputformat" as File
+project(':flink-contrib:flink-connector-wikiedits_2.10').projectDir = "$rootDir/flink-contrib/flink-connector-wikiedits" as File
+project(':flink-contrib:flink-statebackend-rocksdb_2.10').projectDir = "$rootDir/flink-contrib/flink-statebackend-rocksdb" as File
+project(':flink-contrib').projectDir = "$rootDir/flink-contrib" as File
+project(':flink-dist_2.10').projectDir = "$rootDir/flink-dist" as File
+project(':flink-mesos_2.10').projectDir = "$rootDir/flink-mesos" as File
+project(':flink-metrics:flink-metrics-core').projectDir = "$rootDir/flink-metrics/flink-metrics-core" as File
+project(':flink-metrics:flink-metrics-dropwizard').projectDir = "$rootDir/flink-metrics/flink-metrics-dropwizard" as File
+project(':flink-metrics:flink-metrics-ganglia').projectDir = "$rootDir/flink-metrics/flink-metrics-ganglia" as File
+project(':flink-metrics:flink-metrics-graphite').projectDir = "$rootDir/flink-metrics/flink-metrics-graphite" as File
+project(':flink-metrics:flink-metrics-jmx').projectDir = "$rootDir/flink-metrics/flink-metrics-jmx" as File
+project(':flink-metrics:flink-metrics-statsd').projectDir = "$rootDir/flink-metrics/flink-metrics-statsd" as File
+project(':flink-metrics').projectDir = "$rootDir/flink-metrics" as File
+project(':flink-yarn_2.10').projectDir = "$rootDir/flink-yarn" as File
+project(':flink-fs-tests_2.10').projectDir = "$rootDir/flink-fs-tests" as File

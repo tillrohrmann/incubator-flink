@@ -1,0 +1,10 @@
+
+description = 'flink-metrics-ganglia'
+dependencies {
+  compile project(':flink-metrics:flink-metrics-dropwizard')
+    compile group: 'info.ganglia.gmetric4j', name: 'gmetric4j', version:'1.0.7'
+    compile group: 'io.dropwizard.metrics', name: 'metrics-core', version:'3.1.0'
+    compile group: 'io.dropwizard.metrics', name: 'metrics-ganglia', version:'3.1.0'
+  providedCompile project(':flink-annotations')
+  providedCompile project(':flink-metrics:flink-metrics-core')
+}

@@ -1,0 +1,8 @@
+
+description = 'flink-connector-rabbitmq'
+dependencies {
+    compile group: 'com.rabbitmq', name: 'amqp-client', version:'3.3.1'
+  testCompile project(':flink-streaming-java_2.10')
+  testCompile project(':flink-runtime_2.10')
+  providedCompile project(':flink-streaming-java_2.10')
+}

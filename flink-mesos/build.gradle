@@ -1,0 +1,23 @@
+
+description = 'flink-mesos'
+dependencies {
+  compile project(':flink-runtime_2.10')
+  compile project(':flink-clients_2.10')
+  compile project(':flink-shaded-hadoop:flink-shaded-hadoop2')
+  compile project(':flink-shaded-curator:flink-shaded-curator-recipes')
+    compile group: 'com.data-artisans', name: 'flakka-actor_2.10', version:'2.3-custom'
+    compile(group: 'com.data-artisans', name: 'flakka-remote_2.10', version:'2.3-custom') {
+exclude(module: 'protobuf-java')
+    }
+    compile group: 'com.data-artisans', name: 'flakka-slf4j_2.10', version:'2.3-custom'
+    compile group: 'org.apache.mesos', name: 'mesos', version:'1.0.1'
+    compile(group: 'com.netflix.fenzo', name: 'fenzo-core', version:'0.9.3') {
+exclude(module: 'mesos')
+    }
+    compile group: 'tv.cntt', name: 'netty-router', version:'1.10'
+    testCompile group: 'org.scalatest', name: 'scalatest_2.10', version:'2.2.2'
+    testCompile group: 'org.apache.curator', name: 'curator-test', version:'2.8.0'
+    testCompile group: 'com.data-artisans', name: 'flakka-testkit_2.10', version:'2.3-custom'
+  testCompile project(':flink-runtime_2.10')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+}

@@ -1,0 +1,8 @@
+
+description = 'flink-jdbc'
+dependencies {
+  testCompile project(':flink-clients_2.10')
+    testCompile group: 'org.apache.derby', name: 'derby', version:'10.10.1.1'
+  providedCompile project(':flink-libraries:flink-table_2.10')
+  providedCompile project(':flink-java')
+}

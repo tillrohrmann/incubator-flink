@@ -1,0 +1,15 @@
+
+description = 'flink-optimizer'
+dependencies {
+  compile project(':flink-core')
+  compile project(':flink-runtime_2.10')
+  compile project(':flink-java')
+    compile group: 'com.google.guava', name: 'guava', version:'18.0'
+  testCompile project(':flink-test-utils-parent:flink-test-utils-junit')
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests

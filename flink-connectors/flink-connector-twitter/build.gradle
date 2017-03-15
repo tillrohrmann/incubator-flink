@@ -1,0 +1,12 @@
+
+description = 'flink-connector-twitter'
+dependencies {
+  compile project(':flink-streaming-java_2.10')
+    compile group: 'com.twitter', name: 'hbc-core', version:'2.2.0'
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests

@@ -1,0 +1,22 @@
+
+description = 'flink-yarn'
+dependencies {
+  compile project(':flink-runtime_2.10')
+  compile project(':flink-clients_2.10')
+  compile project(':flink-shaded-hadoop:flink-shaded-hadoop2')
+    compile group: 'com.data-artisans', name: 'flakka-actor_2.10', version:'2.3-custom'
+    compile group: 'com.data-artisans', name: 'flakka-remote_2.10', version:'2.3-custom'
+    compile group: 'com.data-artisans', name: 'flakka-camel_2.10', version:'2.3-custom'
+    compile group: 'com.google.guava', name: 'guava', version:'18.0'
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+    testCompile group: 'com.data-artisans', name: 'flakka-testkit_2.10', version:'2.3-custom'
+  testCompile project(':flink-runtime_2.10')
+    testCompile group: 'org.apache.hadoop', name: 'hadoop-hdfs', version:'2.3.0'
+    testCompile group: 'org.apache.hadoop', name: 'hadoop-common', version:'2.3.0'
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests

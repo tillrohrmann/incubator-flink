@@ -1,0 +1,19 @@
+
+description = 'flink-runtime-web'
+dependencies {
+  compile project(':flink-runtime_2.10')
+  compile project(':flink-clients_2.10')
+    compile group: 'tv.cntt', name: 'netty-router', version:'1.10'
+    compile group: 'org.javassist', name: 'javassist', version:'3.18.2-GA'
+    compile group: 'com.google.guava', name: 'guava', version:'18.0'
+  testCompile project(':flink-test-utils-parent:flink-test-utils-junit')
+    testCompile group: 'org.apache.curator', name: 'curator-test', version:'2.8.0'
+    testCompile group: 'com.data-artisans', name: 'flakka-testkit_2.10', version:'2.3-custom'
+  testCompile project(':flink-runtime_2.10')
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests

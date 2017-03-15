@@ -1,0 +1,6 @@
+
+description = 'flink-examples-batch'
+dependencies {
+  compile project(':flink-java')
+  compile project(':flink-scala_2.10')
+}

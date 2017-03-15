@@ -1,0 +1,8 @@
+
+description = 'flink-python'
+dependencies {
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  providedCompile project(':flink-core')
+  providedCompile project(':flink-java')
+  providedCompile project(':flink-runtime_2.10')
+}

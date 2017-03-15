@@ -1,0 +1,15 @@
+
+description = 'flink-connector-filesystem'
+dependencies {
+  testCompile project(':flink-test-utils-parent:flink-test-utils-junit')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-connectors:flink-hadoop-compatibility_2.10')
+  testCompile project(':flink-streaming-java_2.10')
+  testCompile project(':flink-tests_2.10')
+  testCompile project(':flink-runtime_2.10')
+    testCompile group: 'org.apache.hadoop', name: 'hadoop-hdfs', version:'2.3.0'
+    testCompile group: 'org.apache.hadoop', name: 'hadoop-common', version:'2.3.0'
+    testCompile group: 'org.apache.hadoop', name: 'hadoop-minikdc', version:'2.7.2'
+  providedCompile project(':flink-streaming-java_2.10')
+  providedCompile project(':flink-shaded-hadoop:flink-shaded-hadoop2')
+}

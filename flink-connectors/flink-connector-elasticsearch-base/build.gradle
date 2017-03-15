@@ -1,0 +1,15 @@
+
+description = 'flink-connector-elasticsearch-base'
+dependencies {
+    compile group: 'org.elasticsearch', name: 'elasticsearch', version:'1.7.1'
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-runtime_2.10')
+  testCompile project(':flink-streaming-java_2.10')
+  providedCompile project(':flink-streaming-java_2.10')
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests

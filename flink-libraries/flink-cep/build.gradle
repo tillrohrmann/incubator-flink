@@ -1,0 +1,17 @@
+
+description = 'flink-cep'
+dependencies {
+    compile group: 'com.google.guava', name: 'guava', version:'18.0'
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-streaming-java_2.10')
+  testCompile project(':flink-runtime_2.10')
+  testCompile project(':flink-contrib:flink-statebackend-rocksdb_2.10')
+  providedCompile project(':flink-core')
+  providedCompile project(':flink-streaming-java_2.10')
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests

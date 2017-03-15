@@ -1,0 +1,10 @@
+
+description = 'flink-hadoop-compatibility'
+dependencies {
+  compile project(':flink-shaded-hadoop:flink-shaded-hadoop2')
+  testCompile project(':flink-java')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-core')
+  providedCompile project(':flink-java')
+  providedCompile project(':flink-scala_2.10')
+}

@@ -1,0 +1,9 @@
+
+description = 'flink-connector-nifi'
+dependencies {
+    compile group: 'org.apache.nifi', name: 'nifi-site-to-site-client', version:'0.6.1'
+  testCompile project(':flink-streaming-java_2.10')
+  testCompile project(':flink-tests_2.10')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  providedCompile project(':flink-streaming-java_2.10')
+}

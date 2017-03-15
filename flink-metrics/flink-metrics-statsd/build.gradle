@@ -1,0 +1,8 @@
+
+description = 'flink-metrics-statsd'
+dependencies {
+  testCompile project(':flink-runtime_2.10')
+  testCompile project(':flink-test-utils-parent:flink-test-utils-junit')
+  providedCompile project(':flink-annotations')
+  providedCompile project(':flink-metrics:flink-metrics-core')
+}

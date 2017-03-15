@@ -1,0 +1,21 @@
+
+description = 'flink-table'
+dependencies {
+  compile project(':flink-streaming-scala_2.10')
+    compile group: 'org.codehaus.janino', name: 'janino', version:'3.0.6'
+    compile(group: 'org.apache.calcite', name: 'calcite-core', version:'1.11.0') {
+exclude(module: 'avatica-metrics')
+exclude(module: 'jackson-core')
+exclude(module: 'jackson-annotations')
+exclude(module: 'jackson-databind')
+exclude(module: 'protobuf-java')
+exclude(module: 'httpclient')
+exclude(module: 'httpcore')
+exclude(module: 'commons-dbcp')
+exclude(module: 'pentaho-aggdesigner-algorithm')
+    }
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-tests_2.10')
+  testCompile project(':flink-core')
+  testCompile project(':flink-contrib:flink-statebackend-rocksdb_2.10')
+}

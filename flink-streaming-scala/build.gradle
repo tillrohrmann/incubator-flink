@@ -1,0 +1,22 @@
+
+description = 'flink-streaming-scala'
+dependencies {
+  compile project(':flink-streaming-java_2.10')
+  compile project(':flink-scala_2.10')
+    compile group: 'org.scala-lang', name: 'scala-reflect', version:'2.10.4'
+    compile group: 'org.scala-lang', name: 'scala-library', version:'2.10.4'
+    compile group: 'org.scala-lang', name: 'scala-compiler', version:'2.10.4'
+    compile group: 'org.ow2.asm', name: 'asm', version:'5.0.4'
+    compile group: 'com.google.guava', name: 'guava', version:'18.0'
+    testCompile group: 'org.scalatest', name: 'scalatest_2.10', version:'2.2.2'
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-streaming-java_2.10')
+  testCompile project(':flink-tests_2.10')
+  testCompile project(':flink-runtime_2.10')
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests

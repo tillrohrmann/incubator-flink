@@ -1,0 +1,6 @@
+
+description = 'flink-connector-wikiedits'
+dependencies {
+  compile project(':flink-streaming-java_2.10')
+    compile group: 'org.schwering', name: 'irclib', version:'1.10'
+}

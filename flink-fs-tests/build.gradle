@@ -1,0 +1,12 @@
+
+description = 'flink-fs-tests'
+dependencies {
+  testCompile project(':flink-shaded-hadoop:flink-shaded-hadoop2')
+  testCompile project(':flink-streaming-java_2.10')
+  testCompile project(':flink-examples_2.10:flink-examples-batch_2.10')
+  testCompile project(':flink-connectors:flink-avro_2.10')
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+  testCompile project(':flink-runtime_2.10')
+    testCompile group: 'org.apache.hadoop', name: 'hadoop-hdfs', version:'2.3.0'
+    testCompile group: 'org.apache.hadoop', name: 'hadoop-common', version:'2.3.0'
+}

@@ -1,0 +1,16 @@
+
+description = 'flink-scala-shell'
+dependencies {
+    compile(group: 'com.github.scopt', name: 'scopt_2.10', version:'3.5.0') {
+exclude(module: 'scala-library')
+    }
+  compile project(':flink-clients_2.10')
+  compile project(':flink-scala_2.10')
+  compile project(':flink-streaming-scala_2.10')
+    compile group: 'org.scala-lang', name: 'scala-compiler', version:'2.10.4'
+    compile group: 'org.scala-lang', name: 'scala-library', version:'2.10.4'
+    compile group: 'org.scala-lang', name: 'scala-reflect', version:'2.10.4'
+    compile group: 'org.scalamacros', name: 'quasiquotes_2.10', version:'2.0.1'
+    compile group: 'org.scala-lang', name: 'jline', version:'2.10.4'
+  testCompile project(':flink-test-utils-parent:flink-test-utils_2.10')
+}
