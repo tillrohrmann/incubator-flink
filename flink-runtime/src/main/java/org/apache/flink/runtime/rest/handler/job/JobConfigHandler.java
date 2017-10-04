@@ -19,17 +19,13 @@
 package org.apache.flink.runtime.rest.handler.job;
 
 import org.apache.flink.api.common.ArchivedExecutionConfig;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
 import org.apache.flink.runtime.rest.handler.legacy.ExecutionGraphCache;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.JobConfigInfo;
 import org.apache.flink.runtime.rest.messages.JobMessageParameters;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
-import org.apache.flink.runtime.webmonitor.RestfulGateway;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
@@ -38,17 +34,11 @@ import java.util.concurrent.Executor;
 public class JobConfigHandler extends AbstractExecutionGraphHandler<JobConfigInfo> {
 
 	public JobConfigHandler(
-			CompletableFuture<String> localRestAddress,
-			GatewayRetriever<? extends RestfulGateway> leaderRetriever,
-			Time timeout,
 			MessageHeaders<EmptyRequestBody, JobConfigInfo, JobMessageParameters> messageHeaders,
 			ExecutionGraphCache executionGraphCache,
 			Executor executor) {
 
 		super(
-			localRestAddress,
-			leaderRetriever,
-			timeout,
 			messageHeaders,
 			executionGraphCache,
 			executor);

@@ -33,8 +33,8 @@ import org.apache.flink.runtime.rest.messages.JobIDPathParameter;
 import org.apache.flink.runtime.rest.messages.JobTerminationMessageParameters;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
 import org.apache.flink.runtime.rest.messages.TerminationModeQueryParameter;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
@@ -48,12 +48,14 @@ import java.util.concurrent.TimeoutException;
  */
 public class JobTerminationHandler extends AbstractRestHandler<DispatcherGateway, EmptyRequestBody, EmptyResponseBody, JobTerminationMessageParameters> {
 
+	private final Time timeout;
+
 	public JobTerminationHandler(
-			CompletableFuture<String> localRestAddress,
-			GatewayRetriever<DispatcherGateway> leaderRetriever,
-			Time timeout,
-			MessageHeaders<EmptyRequestBody, EmptyResponseBody, JobTerminationMessageParameters> messageHeaders) {
-		super(localRestAddress, leaderRetriever, timeout, messageHeaders);
+			MessageHeaders<EmptyRequestBody, EmptyResponseBody, JobTerminationMessageParameters> messageHeaders,
+			Time timeout) {
+		super(messageHeaders);
+
+		this.timeout = Preconditions.checkNotNull(timeout);
 	}
 
 	@Override

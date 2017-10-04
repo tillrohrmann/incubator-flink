@@ -18,11 +18,16 @@
 
 package org.apache.flink.runtime.webmonitor.utils;
 
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
+import org.apache.flink.configuration.WebOptions;
+import org.apache.flink.runtime.jobmaster.JobManagerGateway;
 import org.apache.flink.runtime.net.SSLUtils;
+import org.apache.flink.runtime.rest.handler.RedirectHandler;
 import org.apache.flink.runtime.webmonitor.HttpRequestHandler;
 import org.apache.flink.runtime.webmonitor.PipelineErrorHandler;
+import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.netty4.io.netty.bootstrap.ServerBootstrap;
@@ -40,6 +45,7 @@ import org.apache.flink.shaded.netty4.io.netty.handler.stream.ChunkedWriteHandle
 
 import org.slf4j.Logger;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 
@@ -47,6 +53,7 @@ import java.io.File;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * This classes encapsulates the boot-strapping of netty for the web-frontend.
@@ -67,11 +74,25 @@ public class WebFrontendBootstrap {
 			SSLContext sslContext,
 			String configuredAddress,
 			int configuredPort,
-			final Configuration config) throws InterruptedException, UnknownHostException {
+			final Configuration config,
+			@Nullable GatewayRetriever<JobManagerGateway> gatewayRetriever) throws InterruptedException, UnknownHostException {
 		this.router = Preconditions.checkNotNull(router);
 		this.log = Preconditions.checkNotNull(log);
 		this.uploadDir = directory;
 		this.serverSSLContext = sslContext;
+
+		final CompletableFuture<String> restAddressFuture = new CompletableFuture<>();
+
+		final RedirectHandler<JobManagerGateway> redirectHandler;
+
+		if (gatewayRetriever == null) {
+			redirectHandler = null;
+		} else {
+			redirectHandler = new RedirectHandler<>(
+				restAddressFuture,
+				gatewayRetriever,
+				Time.milliseconds(config.getLong(WebOptions.TIMEOUT)));
+		}
 
 		ChannelInitializer<SocketChannel> initializer = new ChannelInitializer<SocketChannel>() {
 
@@ -90,7 +111,13 @@ public class WebFrontendBootstrap {
 				ch.pipeline()
 					.addLast(new HttpServerCodec())
 					.addLast(new ChunkedWriteHandler())
-					.addLast(new HttpRequestHandler(uploadDir))
+					.addLast(new HttpRequestHandler(uploadDir));
+
+				if (redirectHandler != null) {
+					ch.pipeline().addLast(redirectHandler);
+				}
+
+				ch.pipeline()
 					.addLast(handler.name(), handler)
 					.addLast(new PipelineErrorHandler(WebFrontendBootstrap.this.log));
 			}
@@ -131,6 +158,8 @@ public class WebFrontendBootstrap {
 		final String protocol = serverSSLContext != null ? "https://" : "http://";
 
 		this.restAddress = protocol + address + ':' + port;
+
+		restAddressFuture.complete(restAddress);
 	}
 
 	public ServerBootstrap getBootstrap() {

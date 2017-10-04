@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.rest.handler.job.checkpoints;
 
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
 import org.apache.flink.runtime.jobgraph.tasks.CheckpointCoordinatorConfiguration;
 import org.apache.flink.runtime.jobgraph.tasks.ExternalizedCheckpointSettings;
@@ -29,12 +28,9 @@ import org.apache.flink.runtime.rest.messages.CheckpointConfigInfo;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.JobMessageParameters;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
-import org.apache.flink.runtime.webmonitor.RestfulGateway;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
@@ -43,16 +39,10 @@ import java.util.concurrent.Executor;
 public class CheckpointConfigHandler extends AbstractExecutionGraphHandler<CheckpointConfigInfo> {
 
 	public CheckpointConfigHandler(
-			CompletableFuture<String> localRestAddress,
-			GatewayRetriever<? extends RestfulGateway> leaderRetriever,
-			Time timeout,
 			MessageHeaders<EmptyRequestBody, CheckpointConfigInfo, JobMessageParameters> messageHeaders,
 			ExecutionGraphCache executionGraphCache,
 			Executor executor) {
 		super(
-			localRestAddress,
-			leaderRetriever,
-			timeout,
 			messageHeaders,
 			executionGraphCache,
 			executor);

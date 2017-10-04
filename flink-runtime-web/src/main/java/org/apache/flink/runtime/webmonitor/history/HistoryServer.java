@@ -237,7 +237,7 @@ public class HistoryServer {
 
 			archiveFetcher.start();
 
-			netty = new WebFrontendBootstrap(router, LOG, webDir, serverSSLContext, webAddress, webPort, config);
+			netty = new WebFrontendBootstrap(router, LOG, webDir, serverSSLContext, webAddress, webPort, config, null);
 		}
 	}
 

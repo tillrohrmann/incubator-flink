@@ -18,13 +18,11 @@
 
 package org.apache.flink.runtime.rest.handler;
 
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.rest.messages.EmptyRequestBody;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
 import org.apache.flink.runtime.rest.messages.MessageParameters;
 import org.apache.flink.runtime.rest.messages.ResponseBody;
 import org.apache.flink.runtime.webmonitor.RestfulGateway;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nonnull;
@@ -43,12 +41,9 @@ public class LegacyRestHandlerAdapter<T extends RestfulGateway, R extends Respon
 	private final LegacyRestHandler<T, R, M> legacyRestHandler;
 
 	public LegacyRestHandlerAdapter(
-			CompletableFuture<String> localRestAddress,
-			GatewayRetriever<T> leaderRetriever,
-			Time timeout,
 			MessageHeaders<EmptyRequestBody, R, M> messageHeaders,
 			LegacyRestHandler<T, R, M> legacyRestHandler) {
-		super(localRestAddress, leaderRetriever, timeout, messageHeaders);
+		super(messageHeaders);
 
 		this.legacyRestHandler = Preconditions.checkNotNull(legacyRestHandler);
 	}

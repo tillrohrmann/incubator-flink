@@ -31,6 +31,7 @@ import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
 import org.apache.flink.runtime.jobmaster.JobManagerGateway;
 import org.apache.flink.runtime.testingUtils.TestingUtils;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
@@ -59,13 +60,11 @@ import static org.powermock.api.mockito.PowerMockito.when;
 /**
  * Tests for the TaskManagersLogHandler.
  */
-public class TaskManagerLogHandlerTest {
+public class TaskManagerLogHandlerTest extends TestLogger {
 	@Test
 	public void testGetPaths() {
 		TaskManagerLogHandler handlerLog = new TaskManagerLogHandler(
-			mock(GatewayRetriever.class),
 			Executors.directExecutor(),
-			CompletableFuture.completedFuture("/jm/address"),
 			TestingUtils.TIMEOUT(),
 			TaskManagerLogHandler.FileMode.LOG,
 			new Configuration(),
@@ -75,9 +74,7 @@ public class TaskManagerLogHandlerTest {
 		Assert.assertEquals("/taskmanagers/:taskmanagerid/log", pathsLog[0]);
 
 		TaskManagerLogHandler handlerOut = new TaskManagerLogHandler(
-			mock(GatewayRetriever.class),
 			Executors.directExecutor(),
-			CompletableFuture.completedFuture("/jm/address"),
 			TestingUtils.TIMEOUT(),
 			TaskManagerLogHandler.FileMode.STDOUT,
 			new Configuration(),
@@ -116,9 +113,7 @@ public class TaskManagerLogHandlerTest {
 			.thenReturn(Optional.of(jobManagerGateway));
 
 		TaskManagerLogHandler handler = new TaskManagerLogHandler(
-			retriever,
 			Executors.directExecutor(),
-			CompletableFuture.completedFuture("/jm/address"),
 			TestingUtils.TIMEOUT(),
 			TaskManagerLogHandler.FileMode.LOG,
 			new Configuration(),

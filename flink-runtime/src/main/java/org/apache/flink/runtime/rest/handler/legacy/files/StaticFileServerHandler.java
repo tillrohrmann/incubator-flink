@@ -27,10 +27,9 @@ package org.apache.flink.runtime.rest.handler.legacy.files;
  *****************************************************************************/
 
 import org.apache.flink.api.common.time.Time;
-import org.apache.flink.runtime.rest.handler.RedirectHandler;
+import org.apache.flink.runtime.rest.handler.LeaderChannelInboundHandler;
 import org.apache.flink.runtime.rest.handler.util.MimeTypes;
 import org.apache.flink.runtime.webmonitor.RestfulGateway;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
@@ -68,7 +67,6 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.Locale;
 import java.util.TimeZone;
-import java.util.concurrent.CompletableFuture;
 
 import static org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpHeaders.Names.CACHE_CONTROL;
 import static org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpHeaders.Names.CONNECTION;
@@ -92,7 +90,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * example.</p>
  */
 @ChannelHandler.Sharable
-public class StaticFileServerHandler<T extends RestfulGateway> extends RedirectHandler<T> {
+public class StaticFileServerHandler<T extends RestfulGateway> extends LeaderChannelInboundHandler<T> {
 
 	/** Timezone in which this server answers its "if-modified" requests. */
 	private static final TimeZone GMT_TIMEZONE = TimeZone.getTimeZone("GMT");
@@ -105,17 +103,16 @@ public class StaticFileServerHandler<T extends RestfulGateway> extends RedirectH
 
 	// ------------------------------------------------------------------------
 
+	private final Time timeout;
+
 	/** The path in which the static documents are. */
 	private final File rootPath;
 
 	public StaticFileServerHandler(
-			GatewayRetriever<T> retriever,
-			CompletableFuture<String> localJobManagerAddressFuture,
 			Time timeout,
 			File rootPath) throws IOException {
 
-		super(localJobManagerAddressFuture, retriever, timeout);
-
+		this.timeout = checkNotNull(timeout);
 		this.rootPath = checkNotNull(rootPath).getCanonicalFile();
 	}
 
@@ -169,7 +166,7 @@ public class StaticFileServerHandler<T extends RestfulGateway> extends RedirectH
 							// Check that we don't load anything from outside of the
 							// expected scope.
 							if (!rootURI.relativize(requestedURI).equals(requestedURI)) {
-								logger.debug("Loading missing file from classloader: {}", requestPath);
+								log.debug("Loading missing file from classloader: {}", requestPath);
 								// ensure that directory to file exists.
 								file.getParentFile().mkdirs();
 								Files.copy(resourceStream, file.toPath());
@@ -179,10 +176,10 @@ public class StaticFileServerHandler<T extends RestfulGateway> extends RedirectH
 						}
 					}
 				} catch (Throwable t) {
-					logger.error("error while responding", t);
+					log.error("error while responding", t);
 				} finally {
 					if (!success) {
-						logger.debug("Unable to load requested file {} from classloader", requestPath);
+						log.debug("Unable to load requested file {} from classloader", requestPath);
 						sendError(ctx, NOT_FOUND);
 						return;
 					}
@@ -211,8 +208,8 @@ public class StaticFileServerHandler<T extends RestfulGateway> extends RedirectH
 			long ifModifiedSinceDateSeconds = ifModifiedSinceDate.getTime() / 1000;
 			long fileLastModifiedSeconds = file.lastModified() / 1000;
 			if (ifModifiedSinceDateSeconds == fileLastModifiedSeconds) {
-				if (logger.isDebugEnabled()) {
-					logger.debug("Responding 'NOT MODIFIED' for file '" + file.getAbsolutePath() + '\'');
+				if (log.isDebugEnabled()) {
+					log.debug("Responding 'NOT MODIFIED' for file '" + file.getAbsolutePath() + '\'');
 				}
 
 				sendNotModified(ctx);
@@ -220,8 +217,8 @@ public class StaticFileServerHandler<T extends RestfulGateway> extends RedirectH
 			}
 		}
 
-		if (logger.isDebugEnabled()) {
-			logger.debug("Responding with file '" + file.getAbsolutePath() + '\'');
+		if (log.isDebugEnabled()) {
+			log.debug("Responding with file '" + file.getAbsolutePath() + '\'');
 		}
 
 		// Don't need to close this manually. Netty's DefaultFileRegion will take care of it.
@@ -269,7 +266,7 @@ public class StaticFileServerHandler<T extends RestfulGateway> extends RedirectH
 			}
 		} catch (Exception e) {
 			raf.close();
-			logger.error("Failed to serve file.", e);
+			log.error("Failed to serve file.", e);
 			sendError(ctx, INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -277,7 +274,7 @@ public class StaticFileServerHandler<T extends RestfulGateway> extends RedirectH
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
 		if (ctx.channel().isActive()) {
-			logger.error("Caught exception", cause);
+			log.error("Caught exception", cause);
 			sendError(ctx, INTERNAL_SERVER_ERROR);
 		}
 	}

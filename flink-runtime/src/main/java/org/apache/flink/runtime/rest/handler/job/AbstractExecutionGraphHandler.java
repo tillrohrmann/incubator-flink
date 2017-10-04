@@ -19,7 +19,6 @@
 package org.apache.flink.runtime.rest.handler.job;
 
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
 import org.apache.flink.runtime.rest.handler.AbstractRestHandler;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
@@ -31,7 +30,6 @@ import org.apache.flink.runtime.rest.messages.JobMessageParameters;
 import org.apache.flink.runtime.rest.messages.MessageHeaders;
 import org.apache.flink.runtime.rest.messages.ResponseBody;
 import org.apache.flink.runtime.webmonitor.RestfulGateway;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nonnull;
@@ -52,13 +50,10 @@ public abstract class AbstractExecutionGraphHandler<R extends ResponseBody> exte
 	private final Executor executor;
 
 	protected AbstractExecutionGraphHandler(
-			CompletableFuture<String> localRestAddress,
-			GatewayRetriever<? extends RestfulGateway> leaderRetriever,
-			Time timeout,
 			MessageHeaders<EmptyRequestBody, R, JobMessageParameters> messageHeaders,
 			ExecutionGraphCache executionGraphCache,
 			Executor executor) {
-		super(localRestAddress, leaderRetriever, timeout, messageHeaders);
+		super(messageHeaders);
 
 		this.executionGraphCache = Preconditions.checkNotNull(executionGraphCache);
 		this.executor = Preconditions.checkNotNull(executor);

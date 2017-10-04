@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.rest.handler;
 
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.rest.handler.util.HandlerUtils;
 import org.apache.flink.runtime.rest.messages.ErrorResponseBody;
@@ -28,7 +27,6 @@ import org.apache.flink.runtime.rest.messages.RequestBody;
 import org.apache.flink.runtime.rest.messages.ResponseBody;
 import org.apache.flink.runtime.rest.util.RestMapperUtils;
 import org.apache.flink.runtime.webmonitor.RestfulGateway;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.ExceptionUtils;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
@@ -59,7 +57,7 @@ import java.util.concurrent.CompletableFuture;
  * @param <P> type of outgoing responses
  */
 @ChannelHandler.Sharable
-public abstract class AbstractRestHandler<T extends RestfulGateway, R extends RequestBody, P extends ResponseBody, M extends MessageParameters> extends RedirectHandler<T> {
+public abstract class AbstractRestHandler<T extends RestfulGateway, R extends RequestBody, P extends ResponseBody, M extends MessageParameters> extends LeaderChannelInboundHandler<T> {
 	protected final Logger log = LoggerFactory.getLogger(getClass());
 
 	private static final ObjectMapper mapper = RestMapperUtils.getStrictObjectMapper();
@@ -67,11 +65,7 @@ public abstract class AbstractRestHandler<T extends RestfulGateway, R extends Re
 	private final MessageHeaders<R, P, M> messageHeaders;
 
 	protected AbstractRestHandler(
-			CompletableFuture<String> localRestAddress,
-			GatewayRetriever<? extends T> leaderRetriever,
-			Time timeout,
 			MessageHeaders<R, P, M> messageHeaders) {
-		super(localRestAddress, leaderRetriever, timeout);
 		this.messageHeaders = messageHeaders;
 	}
 
@@ -80,7 +74,7 @@ public abstract class AbstractRestHandler<T extends RestfulGateway, R extends Re
 	}
 
 	@Override
-	protected void respondAsLeader(final ChannelHandlerContext ctx, Routed routed, T gateway) throws Exception {
+	protected void respondAsLeader(ChannelHandlerContext ctx, Routed routed, T gateway) throws Exception {
 		if (log.isDebugEnabled()) {
 			log.debug("Received request " + routed.request().getUri() + '.');
 		}
@@ -91,7 +85,7 @@ public abstract class AbstractRestHandler<T extends RestfulGateway, R extends Re
 			if (!(httpRequest instanceof FullHttpRequest)) {
 				// The RestServerEndpoint defines a HttpObjectAggregator in the pipeline that always returns
 				// FullHttpRequests.
-				log.error("Implementation error: Received a request that wasn't a FullHttpRequest.");
+				log.error("Implementation error: The wrapped HttpRequest was not of type FullHttpRequest.");
 				HandlerUtils.sendErrorResponse(ctx, httpRequest, new ErrorResponseBody("Bad request received."), HttpResponseStatus.BAD_REQUEST);
 				return;
 			}

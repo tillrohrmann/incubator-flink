@@ -24,6 +24,7 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.rest.handler.AbstractRestHandler;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
+import org.apache.flink.runtime.rest.handler.LeaderChannelInboundHandler;
 import org.apache.flink.runtime.rest.handler.RestHandlerException;
 import org.apache.flink.runtime.rest.handler.RestHandlerSpecification;
 import org.apache.flink.runtime.rest.messages.ConversionException;
@@ -34,7 +35,6 @@ import org.apache.flink.runtime.rest.messages.MessageQueryParameter;
 import org.apache.flink.runtime.rest.messages.RequestBody;
 import org.apache.flink.runtime.rest.messages.ResponseBody;
 import org.apache.flink.runtime.rest.util.RestClientException;
-import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.testingUtils.TestingUtils;
 import org.apache.flink.runtime.webmonitor.RestfulGateway;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
@@ -42,7 +42,6 @@ import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TestLogger;
 
-import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -75,7 +74,7 @@ public class RestEndpointITCase extends TestLogger {
 	private static final String JOB_ID_KEY = "jobid";
 	private static final Time timeout = Time.seconds(10L);
 
-	private RestServerEndpoint serverEndpoint;
+	private RestServerEndpoint<RestfulGateway> serverEndpoint;
 	private RestClient clientEndpoint;
 
 	@Before
@@ -85,21 +84,20 @@ public class RestEndpointITCase extends TestLogger {
 		RestServerEndpointConfiguration serverConfig = RestServerEndpointConfiguration.fromConfiguration(config);
 		RestClientConfiguration clientConfig = RestClientConfiguration.fromConfiguration(config);
 
-		final String restAddress = "http://localhost:1234";
+		final CompletableFuture<String> addressFuture = new CompletableFuture<>();
 		RestfulGateway mockRestfulGateway = mock(RestfulGateway.class);
-		when(mockRestfulGateway.requestRestAddress(any(Time.class))).thenReturn(CompletableFuture.completedFuture(restAddress));
+		when(mockRestfulGateway.requestRestAddress(any(Time.class))).thenReturn(addressFuture);
 		GatewayRetriever<RestfulGateway> mockGatewayRetriever = mock(GatewayRetriever.class);
 		when(mockGatewayRetriever.getNow()).thenReturn(Optional.of(mockRestfulGateway));
 
-		TestHandler testHandler = new TestHandler(
-			CompletableFuture.completedFuture(restAddress),
-			mockGatewayRetriever,
-			RpcUtils.INF_TIMEOUT);
+		TestHandler testHandler = new TestHandler();
 
-		serverEndpoint = new TestRestServerEndpoint(serverConfig, testHandler);
+		serverEndpoint = new TestRestServerEndpoint(serverConfig, mockGatewayRetriever, testHandler);
 		clientEndpoint = new TestRestClient(clientConfig);
 
 		serverEndpoint.start();
+
+		addressFuture.complete(serverEndpoint.getRestAddress());
 	}
 
 	@After
@@ -194,18 +192,21 @@ public class RestEndpointITCase extends TestLogger {
 		}
 	}
 
-	private static class TestRestServerEndpoint extends RestServerEndpoint {
+	private static class TestRestServerEndpoint extends RestServerEndpoint<RestfulGateway> {
 
 		private final TestHandler testHandler;
 
-		TestRestServerEndpoint(RestServerEndpointConfiguration configuration, TestHandler testHandler) {
-			super(configuration);
+		TestRestServerEndpoint(
+				RestServerEndpointConfiguration configuration,
+				GatewayRetriever<RestfulGateway> leaderRetriever,
+				TestHandler testHandler) {
+			super(configuration, leaderRetriever);
 
 			this.testHandler = Preconditions.checkNotNull(testHandler);
 		}
 
 		@Override
-		protected Collection<Tuple2<RestHandlerSpecification, ChannelInboundHandler>> initializeHandlers(CompletableFuture<String> restAddressFuture) {
+		protected Collection<Tuple2<RestHandlerSpecification, LeaderChannelInboundHandler<? super RestfulGateway>>> initializeHandlers(CompletableFuture<String> restAddressFuture) {
 			return Collections.singleton(Tuple2.of(new TestHeaders(), testHandler));
 		}
 	}
@@ -214,15 +215,8 @@ public class RestEndpointITCase extends TestLogger {
 
 		public static final Object LOCK = new Object();
 
-		TestHandler(
-			CompletableFuture<String> localAddressFuture,
-			GatewayRetriever<RestfulGateway> leaderRetriever,
-			Time timeout) {
-			super(
-				localAddressFuture,
-				leaderRetriever,
-				timeout,
-				new TestHeaders());
+		TestHandler() {
+			super(new TestHeaders());
 		}
 
 		@Override

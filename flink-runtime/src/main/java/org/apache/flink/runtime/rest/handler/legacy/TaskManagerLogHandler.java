@@ -35,9 +35,8 @@ import org.apache.flink.runtime.blob.BlobView;
 import org.apache.flink.runtime.instance.Instance;
 import org.apache.flink.runtime.instance.InstanceID;
 import org.apache.flink.runtime.jobmaster.JobManagerGateway;
-import org.apache.flink.runtime.rest.handler.RedirectHandler;
+import org.apache.flink.runtime.rest.handler.LeaderChannelInboundHandler;
 import org.apache.flink.runtime.rest.handler.WebHandler;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.StringUtils;
@@ -91,7 +90,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * example.</p>
  */
 @ChannelHandler.Sharable
-public class TaskManagerLogHandler extends RedirectHandler<JobManagerGateway> implements WebHandler {
+public class TaskManagerLogHandler extends LeaderChannelInboundHandler<JobManagerGateway> implements WebHandler {
 	private static final Logger LOG = LoggerFactory.getLogger(TaskManagerLogHandler.class);
 
 	private static final String TASKMANAGER_LOG_REST_PATH = "/taskmanagers/:taskmanagerid/log";
@@ -113,6 +112,8 @@ public class TaskManagerLogHandler extends RedirectHandler<JobManagerGateway> im
 
 	private final Executor executor;
 
+	private final Time timeout;
+
 	private final BlobView blobView;
 
 	/** Used to control whether this handler serves the .log or .out file. */
@@ -122,16 +123,14 @@ public class TaskManagerLogHandler extends RedirectHandler<JobManagerGateway> im
 	}
 
 	public TaskManagerLogHandler(
-		GatewayRetriever<JobManagerGateway> retriever,
 		Executor executor,
-		CompletableFuture<String> localJobManagerAddressPromise,
 		Time timeout,
 		FileMode fileMode,
 		Configuration config,
 		BlobView blobView) {
-		super(localJobManagerAddressPromise, retriever, timeout);
 
 		this.executor = checkNotNull(executor);
+		this.timeout = checkNotNull(timeout);
 		this.config = config;
 		this.fileMode = fileMode;
 
@@ -154,6 +153,7 @@ public class TaskManagerLogHandler extends RedirectHandler<JobManagerGateway> im
 	 */
 	@Override
 	protected void respondAsLeader(final ChannelHandlerContext ctx, final Routed routed, final JobManagerGateway jobManagerGateway) {
+
 		if (cache == null) {
 			CompletableFuture<Integer> blobPortFuture = jobManagerGateway.requestBlobServerPort(timeout);
 			cache = blobPortFuture.thenApplyAsync(
@@ -274,7 +274,7 @@ public class TaskManagerLogHandler extends RedirectHandler<JobManagerGateway> im
 						if (ctx.pipeline().get(SslHandler.class) == null) {
 							ctx.write(
 								new DefaultFileRegion(fc, 0, fileLength), ctx.newProgressivePromise())
-									.addListener(completionListener);
+								.addListener(completionListener);
 							lastContentFuture = ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
 
 						} else {

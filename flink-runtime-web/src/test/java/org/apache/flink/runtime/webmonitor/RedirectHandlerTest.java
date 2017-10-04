@@ -21,6 +21,8 @@ package org.apache.flink.runtime.webmonitor;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.concurrent.FutureUtils;
+import org.apache.flink.runtime.jobmaster.JobManagerGateway;
+import org.apache.flink.runtime.rest.handler.LeaderChannelInboundHandler;
 import org.apache.flink.runtime.rest.handler.RedirectHandler;
 import org.apache.flink.runtime.rest.handler.util.HandlerRedirectUtils;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
@@ -37,8 +39,6 @@ import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.router.Router;
 
 import org.junit.Assert;
 import org.junit.Test;
-
-import javax.annotation.Nonnull;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -66,28 +66,24 @@ public class RedirectHandlerTest extends TestLogger {
 	@Test
 	public void testRedirectHandler() throws Exception {
 		final String restPath = "/testing";
-		final String correctAddress = "foobar:21345";
+		final CompletableFuture<String> correctAddressFuture = new CompletableFuture<>();
 		final String redirectionAddress = "http://foobar:12345";
 		final String expectedRedirection = redirectionAddress + restPath;
 
 		final Configuration configuration = new Configuration();
 		final Router router = new Router();
 		final Time timeout = Time.seconds(10L);
-		final CompletableFuture<String> localAddressFuture = new CompletableFuture<>();
-		final GatewayRetriever<RestfulGateway> gatewayRetriever = mock(GatewayRetriever.class);
+		final GatewayRetriever<JobManagerGateway> gatewayRetriever = mock(GatewayRetriever.class);
 
-		final RestfulGateway redirectionGateway = mock(RestfulGateway.class);
+		final JobManagerGateway redirectionGateway = mock(JobManagerGateway.class);
 		when(redirectionGateway.requestRestAddress(any(Time.class))).thenReturn(CompletableFuture.completedFuture(redirectionAddress));
 
-		final RestfulGateway localGateway = mock(RestfulGateway.class);
-		when(localGateway.requestRestAddress(any(Time.class))).thenReturn(CompletableFuture.completedFuture(correctAddress));
+		final JobManagerGateway localGateway = mock(JobManagerGateway.class);
+		when(localGateway.requestRestAddress(any(Time.class))).thenReturn(correctAddressFuture);
 
 		when(gatewayRetriever.getNow()).thenReturn(Optional.empty(), Optional.of(redirectionGateway), Optional.of(localGateway));
 
-		final TestingHandler testingHandler = new TestingHandler(
-			localAddressFuture,
-			gatewayRetriever,
-			timeout);
+		final TestingHandler testingHandler = new TestingHandler();
 
 		router.GET(restPath, testingHandler);
 		WebFrontendBootstrap bootstrap = new WebFrontendBootstrap(
@@ -97,22 +93,16 @@ public class RedirectHandlerTest extends TestLogger {
 			null,
 			"localhost",
 			0,
-			configuration);
+			configuration,
+			gatewayRetriever);
+
+		correctAddressFuture.complete(bootstrap.getRestAddress());
 
 		try (HttpTestClient httpClient = new HttpTestClient("localhost", bootstrap.getServerPort())) {
-			// 1. without completed local address future --> Internal server error
+			// 1. no leader gateway available --> Service unavailable
 			httpClient.sendGetRequest(restPath, FutureUtils.toFiniteDuration(timeout));
 
 			HttpTestClient.SimpleHttpResponse response = httpClient.getNextResponse(FutureUtils.toFiniteDuration(timeout));
-
-			Assert.assertEquals(HttpResponseStatus.INTERNAL_SERVER_ERROR, response.getStatus());
-
-			// 2. with completed local address future but no leader gateway available --> Service unavailable
-			localAddressFuture.complete(correctAddress);
-
-			httpClient.sendGetRequest(restPath, FutureUtils.toFiniteDuration(timeout));
-
-			response = httpClient.getNextResponse(FutureUtils.toFiniteDuration(timeout));
 
 			Assert.assertEquals(HttpResponseStatus.SERVICE_UNAVAILABLE, response.getStatus());
 
@@ -137,14 +127,7 @@ public class RedirectHandlerTest extends TestLogger {
 		}
 	}
 
-	private static class TestingHandler extends RedirectHandler<RestfulGateway> {
-
-		protected TestingHandler(
-				@Nonnull CompletableFuture<String> localAddressFuture,
-				@Nonnull GatewayRetriever<RestfulGateway> leaderRetriever,
-				@Nonnull Time timeout) {
-			super(localAddressFuture, leaderRetriever, timeout);
-		}
+	private static class TestingHandler extends LeaderChannelInboundHandler<RestfulGateway> {
 
 		@Override
 		protected void respondAsLeader(ChannelHandlerContext channelHandlerContext, Routed routed, RestfulGateway gateway) throws Exception {

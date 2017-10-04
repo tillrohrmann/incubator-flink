@@ -24,6 +24,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.messages.webmonitor.MultipleJobsDetails;
 import org.apache.flink.runtime.rest.RestServerEndpoint;
 import org.apache.flink.runtime.rest.RestServerEndpointConfiguration;
+import org.apache.flink.runtime.rest.handler.LeaderChannelInboundHandler;
 import org.apache.flink.runtime.rest.handler.LegacyRestHandlerAdapter;
 import org.apache.flink.runtime.rest.handler.RestHandlerConfiguration;
 import org.apache.flink.runtime.rest.handler.RestHandlerSpecification;
@@ -55,8 +56,6 @@ import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.FileUtils;
 import org.apache.flink.util.Preconditions;
 
-import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -68,9 +67,8 @@ import java.util.concurrent.Executor;
 /**
  * REST endpoint for the {@link Dispatcher} component.
  */
-public class DispatcherRestEndpoint extends RestServerEndpoint {
+public class DispatcherRestEndpoint extends RestServerEndpoint<DispatcherGateway> {
 
-	private final GatewayRetriever<DispatcherGateway> leaderRetriever;
 	private final Configuration clusterConfiguration;
 	private final RestHandlerConfiguration restConfiguration;
 	private final Executor executor;
@@ -83,8 +81,7 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 			Configuration clusterConfiguration,
 			RestHandlerConfiguration restConfiguration,
 			Executor executor) {
-		super(endpointConfiguration);
-		this.leaderRetriever = Preconditions.checkNotNull(leaderRetriever);
+		super(endpointConfiguration, leaderRetriever);
 		this.clusterConfiguration = Preconditions.checkNotNull(clusterConfiguration);
 		this.restConfiguration = Preconditions.checkNotNull(restConfiguration);
 		this.executor = Preconditions.checkNotNull(executor);
@@ -95,33 +92,24 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 	}
 
 	@Override
-	protected Collection<Tuple2<RestHandlerSpecification, ChannelInboundHandler>> initializeHandlers(CompletableFuture<String> restAddressFuture) {
-		ArrayList<Tuple2<RestHandlerSpecification, ChannelInboundHandler>> handlers = new ArrayList<>(3);
+	protected Collection<Tuple2<RestHandlerSpecification, LeaderChannelInboundHandler<? super DispatcherGateway>>> initializeHandlers(CompletableFuture<String> restAddressFuture) {
+		ArrayList<Tuple2<RestHandlerSpecification, LeaderChannelInboundHandler<? super DispatcherGateway>>> handlers = new ArrayList<>(3);
 
 		final Time timeout = restConfiguration.getTimeout();
 
 		LegacyRestHandlerAdapter<DispatcherGateway, StatusOverviewWithVersion, EmptyMessageParameters> clusterOverviewHandler = new LegacyRestHandlerAdapter<>(
-			restAddressFuture,
-			leaderRetriever,
-			timeout,
 			ClusterOverviewHeaders.getInstance(),
 			new ClusterOverviewHandler(
 				executor,
 				timeout));
 
 		LegacyRestHandlerAdapter<DispatcherGateway, DashboardConfiguration, EmptyMessageParameters> dashboardConfigurationHandler = new LegacyRestHandlerAdapter<>(
-			restAddressFuture,
-			leaderRetriever,
-			timeout,
 			DashboardConfigurationHeaders.getInstance(),
 			new DashboardConfigHandler(
 				executor,
 				restConfiguration.getRefreshInterval()));
 
 		LegacyRestHandlerAdapter<DispatcherGateway, MultipleJobsDetails, EmptyMessageParameters> currentJobsOverviewHandler = new LegacyRestHandlerAdapter<>(
-			restAddressFuture,
-			leaderRetriever,
-			timeout,
 			CurrentJobsOverviewHandlerHeaders.getInstance(),
 			new CurrentJobsOverviewHandler(
 				executor,
@@ -130,40 +118,26 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 				true));
 
 		LegacyRestHandlerAdapter<DispatcherGateway, ClusterConfigurationInfo, EmptyMessageParameters> clusterConfigurationHandler = new LegacyRestHandlerAdapter<>(
-			restAddressFuture,
-			leaderRetriever,
-			timeout,
 			ClusterConfigurationInfoHeaders.getInstance(),
 			new ClusterConfigHandler(
 				executor,
 				clusterConfiguration));
 
 		JobTerminationHandler jobTerminationHandler = new JobTerminationHandler(
-			restAddressFuture,
-			leaderRetriever,
-			timeout,
-			JobTerminationHeaders.getInstance());
+			JobTerminationHeaders.getInstance(),
+			timeout);
 
 		JobConfigHandler jobConfigHandler = new JobConfigHandler(
-			restAddressFuture,
-			leaderRetriever,
-			timeout,
 			JobConfigHeaders.getInstance(),
 			executionGraphCache,
 			executor);
 
 		CheckpointConfigHandler checkpointConfigHandler = new CheckpointConfigHandler(
-			restAddressFuture,
-			leaderRetriever,
-			timeout,
 			CheckpointConfigHeaders.getInstance(),
 			executionGraphCache,
 			executor);
 
 		CheckpointStatisticsHandler checkpointStatisticsHandler = new CheckpointStatisticsHandler(
-			restAddressFuture,
-			leaderRetriever,
-			timeout,
 			CheckpointStatisticsHeaders.getInstance(),
 			executionGraphCache,
 			executor);
@@ -174,8 +148,6 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 
 		try {
 			optWebContent = WebMonitorUtils.tryLoadWebContent(
-				leaderRetriever,
-				restAddressFuture,
 				timeout,
 				tmpDir);
 		} catch (IOException e) {

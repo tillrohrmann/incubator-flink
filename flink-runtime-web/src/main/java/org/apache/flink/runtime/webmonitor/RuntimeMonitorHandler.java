@@ -18,16 +18,15 @@
 
 package org.apache.flink.runtime.webmonitor;
 
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.jobmaster.JobManagerGateway;
 import org.apache.flink.runtime.rest.NotFoundException;
-import org.apache.flink.runtime.rest.handler.RedirectHandler;
+import org.apache.flink.runtime.rest.handler.LeaderChannelInboundHandler;
 import org.apache.flink.runtime.rest.handler.WebHandler;
 import org.apache.flink.runtime.rest.handler.legacy.RequestHandler;
 import org.apache.flink.runtime.rest.handler.util.HandlerRedirectUtils;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandler;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
@@ -57,7 +56,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * proper codes, like OK, NOT_FOUND, or SERVER_ERROR.
  */
 @ChannelHandler.Sharable
-public class RuntimeMonitorHandler extends RedirectHandler<JobManagerGateway> implements WebHandler {
+public class RuntimeMonitorHandler extends LeaderChannelInboundHandler<JobManagerGateway> implements WebHandler {
 
 	private static final Logger LOG = LoggerFactory.getLogger(RuntimeMonitorHandler.class);
 
@@ -67,16 +66,17 @@ public class RuntimeMonitorHandler extends RedirectHandler<JobManagerGateway> im
 
 	private final String allowOrigin;
 
+	private final CompletableFuture<String> localJobManagerAddressFuture;
+
 	public RuntimeMonitorHandler(
 			WebMonitorConfig cfg,
 			RequestHandler handler,
-			GatewayRetriever<JobManagerGateway> retriever,
-			CompletableFuture<String> localJobManagerAddressFuture,
-			Time timeout) {
+			CompletableFuture<String> localJobManagerAddressFuture) {
 
-		super(localJobManagerAddressFuture, retriever, timeout);
 		this.handler = checkNotNull(handler);
 		this.allowOrigin = cfg.getAllowOrigin();
+
+		this.localJobManagerAddressFuture = Preconditions.checkNotNull(localJobManagerAddressFuture);
 	}
 
 	public String[] getPaths() {
@@ -99,7 +99,7 @@ public class RuntimeMonitorHandler extends RedirectHandler<JobManagerGateway> im
 				pathParams.put(key, URLDecoder.decode(routed.pathParams().get(key), ENCODING.toString()));
 			}
 
-			queryParams.put(WEB_MONITOR_ADDRESS_KEY, localAddressFuture.get());
+			queryParams.put(WEB_MONITOR_ADDRESS_KEY, localJobManagerAddressFuture.get());
 
 			responseFuture = handler.handleRequest(pathParams, queryParams, jobManagerGateway);
 

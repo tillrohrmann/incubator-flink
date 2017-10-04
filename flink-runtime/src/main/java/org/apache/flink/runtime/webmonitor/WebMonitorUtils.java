@@ -35,7 +35,6 @@ import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.rest.handler.legacy.files.StaticFileServerHandler;
 import org.apache.flink.runtime.webmonitor.history.JsonArchivist;
-import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
 import org.apache.flink.runtime.webmonitor.retriever.LeaderGatewayRetriever;
 import org.apache.flink.runtime.webmonitor.retriever.MetricQueryServiceRetriever;
 
@@ -55,7 +54,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Utilities for the web runtime monitor. This class contains for example methods to build
@@ -179,8 +177,6 @@ public final class WebMonitorUtils {
 	 * Checks whether the flink-runtime-web dependency is available and if so returns a
 	 * StaticFileServerHandler which can serve the static file contents.
 	 *
-	 * @param leaderRetriever to be used by the StaticFileServerHandler
-	 * @param restAddressFuture of the underlying REST server endpoint
 	 * @param timeout for lookup requests
 	 * @param tmpDir to be used by the StaticFileServerHandler to store temporary files
 	 * @param <T> type of the gateway to retrieve
@@ -188,8 +184,6 @@ public final class WebMonitorUtils {
 	 * @throws IOException if we cannot create the StaticFileServerHandler
 	 */
 	public static <T extends RestfulGateway> Optional<StaticFileServerHandler<T>> tryLoadWebContent(
-			GatewayRetriever<T> leaderRetriever,
-			CompletableFuture<String> restAddressFuture,
 			Time timeout,
 			File tmpDir) throws IOException {
 
@@ -199,8 +193,6 @@ public final class WebMonitorUtils {
 			Class.forName(classname).asSubclass(WebMonitor.class);
 
 			return Optional.of(new StaticFileServerHandler<>(
-				leaderRetriever,
-				restAddressFuture,
 				timeout,
 				tmpDir));
 		} catch (ClassNotFoundException ignored) {

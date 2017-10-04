@@ -56,5 +56,8 @@ public class PipelineErrorHandler extends SimpleChannelInboundHandler<HttpReques
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
 		logger.warn("Unhandled exception", cause);
+
+		// close the connection
+		ctx.close();
 	}
 }

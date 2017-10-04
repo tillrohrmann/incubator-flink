@@ -292,18 +292,14 @@ public class WebRuntimeMonitor implements WebMonitor {
 		get(router, new TaskManagersHandler(scheduledExecutor, DEFAULT_REQUEST_TIMEOUT, metricFetcher));
 		get(router,
 			new TaskManagerLogHandler(
-				retriever,
 				scheduledExecutor,
-				localRestAddress,
 				timeout,
 				TaskManagerLogHandler.FileMode.LOG,
 				config,
 				blobView));
 		get(router,
 			new TaskManagerLogHandler(
-				retriever,
 				scheduledExecutor,
-				localRestAddress,
 				timeout,
 				TaskManagerLogHandler.FileMode.STDOUT,
 				config,
@@ -314,13 +310,11 @@ public class WebRuntimeMonitor implements WebMonitor {
 			// log and stdout
 			.GET("/jobmanager/log", logFiles.logFile == null ? new ConstantTextHandler("(log file unavailable)") :
 				new StaticFileServerHandler<>(
-					retriever,
-					localRestAddress,
 					timeout,
 					logFiles.logFile))
 
 			.GET("/jobmanager/stdout", logFiles.stdOutFile == null ? new ConstantTextHandler("(stdout file unavailable)") :
-				new StaticFileServerHandler<>(retriever, localRestAddress, timeout, logFiles.stdOutFile));
+				new StaticFileServerHandler<>(timeout, logFiles.stdOutFile));
 
 		get(router, new JobManagerMetricsHandler(scheduledExecutor, metricFetcher));
 
@@ -371,8 +365,6 @@ public class WebRuntimeMonitor implements WebMonitor {
 
 		// this handler serves all the static contents
 		router.GET("/:*", new StaticFileServerHandler<>(
-			retriever,
-			localRestAddress,
 			timeout,
 			webRootDir));
 
@@ -392,7 +384,7 @@ public class WebRuntimeMonitor implements WebMonitor {
 			LOG.warn("Error while adding shutdown hook", t);
 		}
 
-		this.netty = new WebFrontendBootstrap(router, LOG, uploadDir, serverSSLContext, configuredAddress, configuredPort, config);
+		this.netty = new WebFrontendBootstrap(router, LOG, uploadDir, serverSSLContext, configuredAddress, configuredPort, config, retriever);
 
 		localRestAddress.complete(netty.getRestAddress());
 	}
@@ -551,7 +543,7 @@ public class WebRuntimeMonitor implements WebMonitor {
 	// ------------------------------------------------------------------------
 
 	private RuntimeMonitorHandler handler(RequestHandler handler) {
-		return new RuntimeMonitorHandler(cfg, handler, retriever, localRestAddress, timeout);
+		return new RuntimeMonitorHandler(cfg, handler, localRestAddress);
 	}
 
 	File getBaseDir(Configuration configuration) {
