@@ -44,6 +44,7 @@ public class HandlerRequest<R extends RequestBody, M extends MessageParameters> 
 
 	public HandlerRequest(R requestBody, M messageParameters, Map<String, String> receivedPathParameters, Map<String, List<String>> receivedQueryParameters) throws HandlerRequestException {
 		this.requestBody = Preconditions.checkNotNull(requestBody);
+
 		Preconditions.checkNotNull(messageParameters);
 		Preconditions.checkNotNull(receivedQueryParameters);
 		Preconditions.checkNotNull(receivedPathParameters);

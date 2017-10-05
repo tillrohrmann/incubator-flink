@@ -28,6 +28,7 @@ import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFutureListener;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
+import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.DefaultFullHttpResponse;
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.DefaultHttpResponse;
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpHeaders;
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpRequest;
@@ -137,5 +138,33 @@ public class HandlerUtils {
 		if (!HttpHeaders.isKeepAlive(httpRequest)) {
 			lastContentFuture.addListener(ChannelFutureListener.CLOSE);
 		}
+	}
+
+	public static <P extends ResponseBody> DefaultFullHttpResponse createJsonResponse(
+			final HttpResponseStatus statusCode,
+			final P response) {
+
+		final StringWriter stringWriter = new StringWriter();
+
+		String marshalledResponse;
+		HttpResponseStatus actualStatusCode;
+
+		try {
+			mapper.writeValue(stringWriter, response);
+			marshalledResponse = stringWriter.toString();
+			actualStatusCode = statusCode;
+		} catch (IOException e) {
+			marshalledResponse = "Internal server error. Could not map error response to JSON.";
+			actualStatusCode = HttpResponseStatus.INTERNAL_SERVER_ERROR;
+		}
+
+		byte[] buffer = marshalledResponse.getBytes(ConfigConstants.DEFAULT_CHARSET);
+		ByteBuf content = Unpooled.copiedBuffer(buffer);
+
+		final DefaultFullHttpResponse fullHttpResponse = new DefaultFullHttpResponse(HTTP_1_1, actualStatusCode, content);
+
+		fullHttpResponse.headers().set(CONTENT_TYPE, "application/json");
+
+		return fullHttpResponse;
 	}
 }

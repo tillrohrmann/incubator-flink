@@ -20,7 +20,8 @@ package org.apache.flink.runtime.rest;
 
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.runtime.rest.handler.LeaderChannelInboundHandler;
+import org.apache.flink.runtime.dispatcher.DispatcherGateway;
+import org.apache.flink.runtime.rest.handler.LeaderHandlerRequest;
 import org.apache.flink.runtime.rest.handler.PipelineErrorHandler;
 import org.apache.flink.runtime.rest.handler.RedirectHandler;
 import org.apache.flink.runtime.rest.handler.RestHandlerSpecification;
@@ -32,7 +33,9 @@ import org.apache.flink.util.Preconditions;
 import org.apache.flink.shaded.netty4.io.netty.bootstrap.ServerBootstrap;
 import org.apache.flink.shaded.netty4.io.netty.channel.Channel;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
+import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInitializer;
+import org.apache.flink.shaded.netty4.io.netty.channel.SimpleChannelInboundHandler;
 import org.apache.flink.shaded.netty4.io.netty.channel.nio.NioEventLoopGroup;
 import org.apache.flink.shaded.netty4.io.netty.channel.socket.SocketChannel;
 import org.apache.flink.shaded.netty4.io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -97,7 +100,7 @@ public abstract class RestServerEndpoint<T extends RestfulGateway> {
 	 * @param restAddressFuture future rest address of the RestServerEndpoint
 	 * @return Collection of AbstractRestHandler which are added to the server endpoint
 	 */
-	protected abstract Collection<Tuple2<RestHandlerSpecification, LeaderChannelInboundHandler<? super T>>> initializeHandlers(CompletableFuture<String> restAddressFuture);
+	protected abstract Collection<Tuple2<RestHandlerSpecification, ChannelInboundHandler>> initializeHandlers(CompletableFuture<String> restAddressFuture);
 
 	/**
 	 * Starts this REST server endpoint.
@@ -265,7 +268,7 @@ public abstract class RestServerEndpoint<T extends RestfulGateway> {
 		}
 	}
 
-	private void registerHandler(Router router, Tuple2<RestHandlerSpecification, LeaderChannelInboundHandler<? super T>> specificationHandler) {
+	private void registerHandler(Router router, Tuple2<RestHandlerSpecification, ChannelInboundHandler> specificationHandler) {
 		switch (specificationHandler.f0.getHttpMethod()) {
 			case GET:
 				router.GET(specificationHandler.f0.getTargetRestEndpointURL(), specificationHandler.f1);

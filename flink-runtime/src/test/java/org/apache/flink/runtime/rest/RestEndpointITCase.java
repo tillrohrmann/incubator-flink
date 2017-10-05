@@ -24,7 +24,6 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.rest.handler.AbstractRestHandler;
 import org.apache.flink.runtime.rest.handler.HandlerRequest;
-import org.apache.flink.runtime.rest.handler.LeaderChannelInboundHandler;
 import org.apache.flink.runtime.rest.handler.RestHandlerException;
 import org.apache.flink.runtime.rest.handler.RestHandlerSpecification;
 import org.apache.flink.runtime.rest.messages.ConversionException;
@@ -42,6 +41,7 @@ import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TestLogger;
 
+import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandler;
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseStatus;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -206,7 +206,7 @@ public class RestEndpointITCase extends TestLogger {
 		}
 
 		@Override
-		protected Collection<Tuple2<RestHandlerSpecification, LeaderChannelInboundHandler<? super RestfulGateway>>> initializeHandlers(CompletableFuture<String> restAddressFuture) {
+		protected Collection<Tuple2<RestHandlerSpecification, ChannelInboundHandler>> initializeHandlers(CompletableFuture<String> restAddressFuture) {
 			return Collections.singleton(Tuple2.of(new TestHeaders(), testHandler));
 		}
 	}
