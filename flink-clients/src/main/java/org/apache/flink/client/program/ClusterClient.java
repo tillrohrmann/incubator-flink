@@ -18,7 +18,6 @@
 
 package org.apache.flink.client.program;
 
-import akka.actor.ActorSystem;
 import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobSubmissionResult;
@@ -41,6 +40,7 @@ import org.apache.flink.runtime.client.JobClient;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.client.JobListeningContext;
 import org.apache.flink.runtime.client.JobRetrievalException;
+import org.apache.flink.runtime.clusterframework.BootstrapTools;
 import org.apache.flink.runtime.clusterframework.messages.GetClusterStatusResponse;
 import org.apache.flink.runtime.concurrent.Executors;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
@@ -59,13 +59,10 @@ import org.apache.flink.runtime.util.LeaderRetrievalUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.SerializedValue;
+
+import akka.actor.ActorSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Option;
-import scala.Tuple2;
-import scala.concurrent.Await;
-import scala.concurrent.Future;
-import scala.concurrent.duration.FiniteDuration;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -74,6 +71,10 @@ import java.net.URL;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import scala.concurrent.Await;
+import scala.concurrent.Future;
+import scala.concurrent.duration.FiniteDuration;
 
 /**
  * Encapsulates the functionality necessary to submit a program to a remote cluster.
@@ -223,9 +224,11 @@ public abstract class ClusterClient {
 				}
 
 				try {
-					actorSystem = AkkaUtils.createActorSystem(
+					actorSystem = BootstrapTools.startActorSystem(
 						configuration,
-						Option.apply(new Tuple2<String, Object>(ownHostname.getCanonicalHostName(), 0)));
+						ownHostname.getCanonicalHostName(),
+						0,
+						LOG);
 				} catch (Exception e) {
 					throw new FlinkException("Could not start the ActorSystem lazily.", e);
 				}
