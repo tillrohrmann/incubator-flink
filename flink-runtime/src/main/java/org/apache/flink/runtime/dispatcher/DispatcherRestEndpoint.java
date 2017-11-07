@@ -138,14 +138,14 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 		final Time timeout = restConfiguration.getTimeout();
 		final Map<String, String> responseHeaders = restConfiguration.getResponseHeaders();
 
-		ClusterOverviewHandler<DispatcherGateway> clusterOverviewHandler = new ClusterOverviewHandler<>(
+		ClusterOverviewHandler clusterOverviewHandler = new ClusterOverviewHandler(
 			restAddressFuture,
 			leaderRetriever,
 			timeout,
 			responseHeaders,
 			ClusterOverviewHeaders.getInstance());
 
-		DashboardConfigHandler<DispatcherGateway> dashboardConfigHandler = new DashboardConfigHandler<>(
+		DashboardConfigHandler dashboardConfigHandler = new DashboardConfigHandler(
 			restAddressFuture,
 			leaderRetriever,
 			timeout,
@@ -153,14 +153,14 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 			DashboardConfigurationHeaders.getInstance(),
 			restConfiguration.getRefreshInterval());
 
-		JobsOverviewHandler<DispatcherGateway> jobsOverviewHandler = new JobsOverviewHandler<>(
+		JobsOverviewHandler jobsOverviewHandler = new JobsOverviewHandler(
 			restAddressFuture,
 			leaderRetriever,
 			timeout,
 			responseHeaders,
 			JobsOverviewHeaders.getInstance());
 
-		ClusterConfigHandler<DispatcherGateway> clusterConfigurationHandler = new ClusterConfigHandler<>(
+		ClusterConfigHandler clusterConfigurationHandler = new ClusterConfigHandler(
 			restAddressFuture,
 			leaderRetriever,
 			timeout,
@@ -261,7 +261,7 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 			timeout,
 			responseHeaders);
 
-		TaskManagersHandler<DispatcherGateway> taskManagersHandler = new TaskManagersHandler<>(
+		TaskManagersHandler taskManagersHandler = new TaskManagersHandler(
 			restAddressFuture,
 			leaderRetriever,
 			timeout,
@@ -269,7 +269,7 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 			TaskManagersHeaders.getInstance(),
 			resourceManagerRetriever);
 
-		TaskManagerDetailsHandler<DispatcherGateway> taskManagerDetailsHandler = new TaskManagerDetailsHandler<>(
+		TaskManagerDetailsHandler taskManagerDetailsHandler = new TaskManagerDetailsHandler(
 			restAddressFuture,
 			leaderRetriever,
 			timeout,
@@ -340,6 +340,7 @@ public class DispatcherRestEndpoint extends RestServerEndpoint {
 		handlers.add(Tuple2.of(jobSubmitHandler.getMessageHeaders(), jobSubmitHandler));
 		handlers.add(Tuple2.of(TaskManagersHeaders.getInstance(), taskManagersHandler));
 		handlers.add(Tuple2.of(TaskManagerDetailsHeaders.getInstance(), taskManagerDetailsHandler));
+		handlers.add(Tuple2.of(SubtasksTimesHeaders.getInstance(), subtasksTimesHandler));
 
 		// This handler MUST be added last, as it otherwise masks all subsequent GET handlers
 		optWebContent.ifPresent(
