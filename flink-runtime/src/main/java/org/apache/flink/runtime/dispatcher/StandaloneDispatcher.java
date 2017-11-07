@@ -33,6 +33,8 @@ import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
 
+import javax.annotation.Nullable;
+
 import java.util.Optional;
 
 /**
@@ -51,7 +53,7 @@ public class StandaloneDispatcher extends Dispatcher {
 			HeartbeatServices heartbeatServices,
 			MetricRegistry metricRegistry,
 			FatalErrorHandler fatalErrorHandler,
-			Optional<String> restAddress) throws Exception {
+			@Nullable String restAddress) throws Exception {
 		super(
 			rpcService,
 			endpointId,
