@@ -90,6 +90,7 @@ public class StandaloneDispatcher extends Dispatcher {
 			jobManagerServices,
 			metricRegistry,
 			onCompleteActions,
-			fatalErrorHandler);
+			fatalErrorHandler,
+			restAddress);
 	}
 }
