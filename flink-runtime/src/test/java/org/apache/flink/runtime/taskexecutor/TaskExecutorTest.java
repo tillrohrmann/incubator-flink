@@ -849,7 +849,7 @@ public class TaskExecutorTest extends TestLogger {
 		when(jobMasterGateway.getHostname()).thenReturn(jobManagerAddress);
 		when(jobMasterGateway.offerSlots(
 			any(ResourceID.class),
-			any(Iterable.class),
+			any(Collection.class),
 			any(Time.class))).thenReturn(mock(CompletableFuture.class, RETURNS_MOCKS));
 
 		rpc.registerGateway(resourceManagerAddress, resourceManagerGateway);
@@ -901,7 +901,7 @@ public class TaskExecutorTest extends TestLogger {
 			// the job leader should get the allocation id offered
 			verify(jobMasterGateway, Mockito.timeout(timeout.toMilliseconds())).offerSlots(
 					any(ResourceID.class),
-					(Iterable<SlotOffer>)Matchers.argThat(contains(slotOffer)),
+					(Collection<SlotOffer>)Matchers.argThat(contains(slotOffer)),
 					any(Time.class));
 
 			// check if a concurrent error occurred
@@ -972,7 +972,7 @@ public class TaskExecutorTest extends TestLogger {
 		when(jobMasterGateway.getHostname()).thenReturn(jobManagerAddress);
 
 		when(jobMasterGateway.offerSlots(
-				any(ResourceID.class), any(Iterable.class), any(Time.class)))
+				any(ResourceID.class), any(Collection.class), any(Time.class)))
 			.thenReturn(CompletableFuture.completedFuture((Collection<SlotOffer>)Collections.singleton(offer1)));
 
 		rpc.registerGateway(resourceManagerAddress, resourceManagerGateway);
@@ -1312,7 +1312,7 @@ public class TaskExecutorTest extends TestLogger {
 			when(
 				jobMasterGateway.offerSlots(
 					any(ResourceID.class),
-					any(Iterable.class),
+					any(Collection.class),
 					any(Time.class)))
 				.thenReturn(offerResultFuture);
 
@@ -1320,7 +1320,7 @@ public class TaskExecutorTest extends TestLogger {
 			// been properly started. This will also offer the slots to the job master
 			jobLeaderService.addJob(jobId, jobManagerAddress);
 
-			verify(jobMasterGateway, Mockito.timeout(timeout.toMilliseconds())).offerSlots(any(ResourceID.class), any(Iterable.class), any(Time.class));
+			verify(jobMasterGateway, Mockito.timeout(timeout.toMilliseconds())).offerSlots(any(ResourceID.class), any(Collection.class), any(Time.class));
 
 			// submit the task without having acknowledge the offered slots
 			tmGateway.submitTask(tdd, jobMasterId, timeout);

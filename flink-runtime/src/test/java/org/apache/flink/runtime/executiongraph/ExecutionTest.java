@@ -79,7 +79,6 @@ public class ExecutionTest extends TestLogger {
 		final TestingSlotOwner slotOwner = new TestingSlotOwner();
 
 		final SimpleSlot slot = new SimpleSlot(
-			new JobID(),
 			slotOwner,
 			new LocalTaskManagerLocation(),
 			0,
@@ -119,7 +118,6 @@ public class ExecutionTest extends TestLogger {
 		final TestingSlotOwner slotOwner = new TestingSlotOwner();
 
 		final SimpleSlot slot = new SimpleSlot(
-			new JobID(),
 			slotOwner,
 			new LocalTaskManagerLocation(),
 			0,
@@ -169,7 +167,6 @@ public class ExecutionTest extends TestLogger {
 		final TestingSlotOwner slotOwner = new TestingSlotOwner();
 
 		final SimpleSlot slot = new SimpleSlot(
-			new JobID(),
 			slotOwner,
 			new LocalTaskManagerLocation(),
 			0,

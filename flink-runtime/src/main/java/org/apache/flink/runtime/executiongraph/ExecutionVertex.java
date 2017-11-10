@@ -829,7 +829,7 @@ public class ExecutionVertex implements AccessExecutionVertex, Archiveable<Archi
 			serializedJobInformation,
 			serializedTaskInformation,
 			executionId,
-			targetSlot.getAllocatedSlot().getSlotAllocationId(),
+			targetSlot.getSlotContext().getAllocationId(),
 			subTaskIndex,
 			attemptNumber,
 			targetSlot.getRoot().getSlotNumber(),

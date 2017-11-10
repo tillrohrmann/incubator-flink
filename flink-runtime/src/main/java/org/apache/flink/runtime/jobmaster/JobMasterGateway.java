@@ -194,7 +194,7 @@ public interface JobMasterGateway extends CheckpointCoordinatorGateway, FencedRp
 	 */
 	CompletableFuture<Collection<SlotOffer>> offerSlots(
 			final ResourceID taskManagerId,
-			final Iterable<SlotOffer> slots,
+			final Collection<SlotOffer> slots,
 			@RpcTimeout final Time timeout);
 
 	/**

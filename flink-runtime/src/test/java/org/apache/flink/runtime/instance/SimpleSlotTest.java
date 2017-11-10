@@ -18,20 +18,24 @@
 
 package org.apache.flink.runtime.instance;
 
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
+import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.executiongraph.Execution;
+import org.apache.flink.runtime.jobmanager.slots.ActorTaskManagerGateway;
+import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+
+import org.junit.Test;
+import org.mockito.Matchers;
 
 import java.net.InetAddress;
 
-import org.apache.flink.runtime.clusterframework.types.ResourceID;
-import org.apache.flink.runtime.executiongraph.Execution;
-import org.apache.flink.api.common.JobID;
-
-import org.apache.flink.runtime.jobmanager.slots.ActorTaskManagerGateway;
-import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
-import org.junit.Test;
-
-import org.mockito.Matchers;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class SimpleSlotTest {
 
@@ -157,6 +161,6 @@ public class SimpleSlotTest {
 			hardwareDescription,
 			1);
 
-		return instance.allocateSimpleSlot(new JobID());
+		return instance.allocateSimpleSlot();
 	}
 }
