@@ -37,7 +37,7 @@ public class SlotsTestImplContext {
 		SlotPool.AllocatedSlots allocatedSlots = new SlotPool.AllocatedSlots();
 
 		final AllocationID allocation1 = new AllocationID();
-		final SlotPoolGateway.SlotRequestID slotRequestID = new SlotPoolGateway.SlotRequestID();
+		final SlotRequestID slotRequestID = new SlotRequestID();
 		final ResourceID resource1 = new ResourceID("resource1");
 		final AllocatedSlot slot1 = createSlot(allocation1);
 
@@ -51,7 +51,7 @@ public class SlotsTestImplContext {
 		assertEquals(1, allocatedSlots.size());
 
 		final AllocationID allocation2 = new AllocationID();
-		final SlotPoolGateway.SlotRequestID slotRequestID2 = new SlotPoolGateway.SlotRequestID();
+		final SlotRequestID slotRequestID2 = new SlotRequestID();
 		final AllocatedSlot slot2 = createSlot(allocation2);
 
 		allocatedSlots.add(slotRequestID2, slot2);
@@ -66,7 +66,7 @@ public class SlotsTestImplContext {
 		assertEquals(2, allocatedSlots.size());
 
 		final AllocationID allocation3 = new AllocationID();
-		final SlotPoolGateway.SlotRequestID slotRequestID3 = new SlotPoolGateway.SlotRequestID();
+		final SlotRequestID slotRequestID3 = new SlotRequestID();
 		final ResourceID resource2 = new ResourceID("resource2");
 		final AllocatedSlot slot3 = createSlot(allocation3);
 

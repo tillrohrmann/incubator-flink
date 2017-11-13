@@ -39,7 +39,7 @@ import org.apache.flink.runtime.jobgraph.JobStatus;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmanager.scheduler.ScheduledUnit;
 import org.apache.flink.runtime.jobmanager.scheduler.Scheduler;
-import org.apache.flink.runtime.instance.AllocatedSlot;
+import org.apache.flink.runtime.jobmanager.slots.SlotContext;
 import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
@@ -102,8 +102,8 @@ public class ExecutionGraphMetricsTest extends TestLogger {
 
 			Slot rootSlot = mock(Slot.class);
 
-			AllocatedSlot mockAllocatedSlot = mock(AllocatedSlot.class);
-			when(mockAllocatedSlot.getAllocationId()).thenReturn(new AllocationID());
+			SlotContext mockSlotContext = mock(SlotContext.class);
+			when(mockSlotContext.getAllocationId()).thenReturn(new AllocationID());
 
 			SimpleSlot simpleSlot = mock(SimpleSlot.class);
 			when(simpleSlot.isAlive()).thenReturn(true);
@@ -112,7 +112,7 @@ public class ExecutionGraphMetricsTest extends TestLogger {
 			when(simpleSlot.getTaskManagerGateway()).thenReturn(taskManagerGateway);
 			when(simpleSlot.setExecutedVertex(Matchers.any(Execution.class))).thenReturn(true);
 			when(simpleSlot.getRoot()).thenReturn(rootSlot);
-			when(simpleSlot.getSlotContext()).thenReturn(mockAllocatedSlot);
+			when(simpleSlot.getSlotContext()).thenReturn(mockSlotContext);
 
 			CompletableFuture<SimpleSlot> future = new CompletableFuture<>();
 			future.complete(simpleSlot);

@@ -92,6 +92,7 @@ public class SimpleSlot extends Slot {
 			parent != null ?
 				parent.getSlotContext() :
 				new SimpleSlotContext(
+					NO_SLOT_REQUEST_ID,
 					NO_ALLOCATION_ID,
 					location,
 					slotNumber,
