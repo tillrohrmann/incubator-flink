@@ -41,9 +41,11 @@ import org.apache.flink.runtime.jobgraph.ScheduleMode;
 import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 import org.apache.flink.runtime.jobgraph.tasks.CheckpointCoordinatorConfiguration;
 import org.apache.flink.runtime.jobgraph.tasks.JobCheckpointingSettings;
+import org.apache.flink.runtime.jobgraph.tasks.OperatorRescalingPolicySettings;
 import org.apache.flink.runtime.jobmanager.scheduler.CoLocationGroup;
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.operators.util.TaskConfig;
+import org.apache.flink.runtime.rescaling.OperatorRescalingPolicy;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.checkpoint.WithMasterCheckpointHook;
@@ -51,6 +53,7 @@ import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.operators.AbstractUdfStreamOperator;
 import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.StreamOperator;
+import org.apache.flink.streaming.api.rescaling.WithRescalingPolicy;
 import org.apache.flink.streaming.runtime.partitioner.ForwardPartitioner;
 import org.apache.flink.streaming.runtime.partitioner.RescalePartitioner;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
@@ -63,6 +66,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -72,6 +77,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.function.BiFunction;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The StreamingJobGraphGenerator converts a {@link StreamGraph} into a {@link JobGraph}.
@@ -154,7 +162,7 @@ public class StreamingJobGraphGenerator {
 
 		setSlotSharing();
 
-		configureCheckpointing();
+		configureJobSettings();
 
 		// add registered cache file into job configuration
 		for (Tuple2<String, DistributedCache.DistributedCacheEntry> e : streamGraph.getEnvironment().getCachedFiles()) {
@@ -565,7 +573,7 @@ public class StreamingJobGraphGenerator {
 
 	}
 
-	private void configureCheckpointing() {
+	private void configureJobSettings() {
 		CheckpointConfig cfg = streamGraph.getCheckpointConfig();
 
 		long interval = cfg.getCheckpointInterval();
@@ -639,18 +647,11 @@ public class StreamingJobGraphGenerator {
 
 		//  --- configure the master-side checkpoint hooks ---
 
-		final ArrayList<MasterTriggerRestoreHook.Factory> hooks = new ArrayList<>();
-
-		for (StreamNode node : streamGraph.getStreamNodes()) {
-			StreamOperator<?> op = node.getOperator();
-			if (op instanceof AbstractUdfStreamOperator) {
-				Function f = ((AbstractUdfStreamOperator<?, ?>) op).getUserFunction();
-
-				if (f instanceof WithMasterCheckpointHook) {
-					hooks.add(new FunctionMasterCheckpointHookFactory((WithMasterCheckpointHook<?>) f));
-				}
-			}
-		}
+		final List<FunctionMasterCheckpointHookFactory> hooks = traverseUdfStreamOperators(
+			WithMasterCheckpointHook.class,
+			(StreamNode streamNode, WithMasterCheckpointHook withMasterCheckpointHook) ->
+				new FunctionMasterCheckpointHookFactory(withMasterCheckpointHook))
+			.collect(Collectors.toList());
 
 		// because the hooks can have user-defined code, they need to be stored as
 		// eagerly serialized values
@@ -700,5 +701,62 @@ public class StreamingJobGraphGenerator {
 			serializedHooks);
 
 		jobGraph.setSnapshotSettings(settings);
+
+		final OperatorRescalingPolicySettings operatorRescalingSettings;
+		try {
+			operatorRescalingSettings = createOperatorRescalingPolicySettings();
+		} catch (IOException e) {
+			throw new FlinkRuntimeException("Could not create the OperatorRescalingPolicySettings.", e);
+		}
+
+		jobGraph.setOperatorRescalingPolicySettings(operatorRescalingSettings);
+	}
+
+	@Nonnull
+	private OperatorRescalingPolicySettings createOperatorRescalingPolicySettings() throws IOException {
+		final Map<JobVertexID, OperatorRescalingPolicy.Factory> operatorRescalingPolicies = extractOperatorRescalingPolicies();
+
+		final SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> serializedOperatorRescalingPolicies = new SerializedValue<>(operatorRescalingPolicies);
+
+		return new OperatorRescalingPolicySettings(serializedOperatorRescalingPolicies);
+	}
+
+	@Nonnull
+	private Map<JobVertexID, OperatorRescalingPolicy.Factory> extractOperatorRescalingPolicies() {
+		return traverseUdfStreamOperators(
+			WithRescalingPolicy.class,
+			(StreamNode streamNode, WithRescalingPolicy withRescalingPolicy) -> {
+				final JobVertex jobVertex = jobVertices.get(streamNode.getId());
+				final JobVertexID jobVertexId = jobVertex.getID();
+
+				return Tuple2.of(
+					jobVertexId,
+					new UserFunctionOperatorRescalingPolicyFactory(withRescalingPolicy));
+			}).collect(Collectors.toMap(tuple2 -> tuple2.f0, tuple2 -> tuple2.f1));
+	}
+
+	@Nonnull
+	private <T, U> Stream<T> traverseUdfStreamOperators(@Nonnull Class<U> userFunctionClass, @Nonnull BiFunction<StreamNode, U, T> visitor) {
+		return streamGraph.getStreamNodes()
+			.stream()
+			.filter(
+				(StreamNode streamNode) -> {
+					final StreamOperator<?> operator = streamNode.getOperator();
+
+					if (operator instanceof AbstractUdfStreamOperator) {
+						final Function userFunction = ((AbstractUdfStreamOperator<?, ?>) operator).getUserFunction();
+
+						return userFunctionClass.isInstance(userFunction);
+					} else {
+						return false;
+					}
+				})
+			.map(
+				(StreamNode streamNode) -> {
+					final StreamOperator<?> operator = streamNode.getOperator();
+					final Function userFunction = ((AbstractUdfStreamOperator<?, ?>) operator).getUserFunction();
+
+					return visitor.apply(streamNode, userFunctionClass.cast(userFunction));
+				});
 	}
 }

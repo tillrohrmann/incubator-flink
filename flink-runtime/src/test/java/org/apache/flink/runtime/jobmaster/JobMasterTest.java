@@ -46,6 +46,7 @@ import org.apache.flink.runtime.jobgraph.tasks.CheckpointCoordinatorConfiguratio
 import org.apache.flink.runtime.jobgraph.tasks.JobCheckpointingSettings;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.jobmaster.factories.UnregisteredJobManagerJobMetricGroupFactory;
+import org.apache.flink.runtime.jobmaster.rescaling.NoOpOperatorRescalingCoordinator;
 import org.apache.flink.runtime.leaderretrieval.SettableLeaderRetrievalService;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.registration.RegistrationResponse;
@@ -412,6 +413,7 @@ public class JobMasterTest extends TestLogger {
 			fastHeartbeatServices,
 			blobServer,
 			UnregisteredJobManagerJobMetricGroupFactory.INSTANCE,
+			NoOpOperatorRescalingCoordinator.INSTANCE,
 			new NoOpOnCompletionActions(),
 			testingFatalErrorHandler,
 			JobMasterTest.class.getClassLoader());

@@ -31,8 +31,11 @@ import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.highavailability.RunningJobsRegistry;
 import org.apache.flink.runtime.highavailability.RunningJobsRegistry.JobSchedulingStatus;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.tasks.OperatorRescalingPolicySettings;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
+import org.apache.flink.runtime.jobmaster.rescaling.OperatorRescalingCoordinator;
+import org.apache.flink.runtime.jobmaster.rescaling.OperatorRescalingCoordinatorImpl;
 import org.apache.flink.runtime.leaderelection.LeaderContender;
 import org.apache.flink.runtime.leaderelection.LeaderElectionService;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -46,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -147,6 +151,10 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 
 			this.leaderGatewayFuture = new CompletableFuture<>();
 
+			final OperatorRescalingCoordinator operatorRescalingCoordinator = createOperatorRescalingCoordinator(
+				jobGraph.getOperatorRescalingPolicySettings(),
+				userCodeLoader);
+
 			// now start the JobManager
 			this.jobMaster = new JobMaster(
 				rpcService,
@@ -158,6 +166,7 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 				heartbeatServices,
 				blobServer,
 				jobManagerJobMetricGroupFactory,
+				operatorRescalingCoordinator,
 				this,
 				fatalErrorHandler,
 				userCodeLoader);
@@ -168,6 +177,10 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 
 			throw new JobExecutionException(jobGraph.getJobID(), "Could not set up JobManager", t);
 		}
+	}
+
+	private OperatorRescalingCoordinator createOperatorRescalingCoordinator(OperatorRescalingPolicySettings operatorRescalingPolicySettings, ClassLoader userCodeClassLoader) {
+		return new OperatorRescalingCoordinatorImpl(Collections.emptyMap());
 	}
 
 	//----------------------------------------------------------------------------------------------

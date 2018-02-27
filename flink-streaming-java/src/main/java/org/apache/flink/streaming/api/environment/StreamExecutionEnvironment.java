@@ -49,6 +49,7 @@ import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.runtime.rescaling.OperatorRescalingPolicy;
 import org.apache.flink.runtime.state.AbstractStateBackend;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.state.StateBackend;
@@ -79,6 +80,8 @@ import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.SplittableIterator;
 
 import com.esotericsoftware.kryo.Serializer;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -142,6 +145,9 @@ public abstract class StreamExecutionEnvironment {
 	private TimeCharacteristic timeCharacteristic = DEFAULT_TIME_CHARACTERISTIC;
 
 	protected final List<Tuple2<String, DistributedCache.DistributedCacheEntry>> cacheFile = new ArrayList<>();
+
+	@Nullable
+	private OperatorRescalingPolicy.Factory jobRescalingPolicyFactory;
 
 
 	// --------------------------------------------------------------------------------------------

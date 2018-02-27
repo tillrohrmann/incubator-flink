@@ -69,6 +69,7 @@ import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
 import org.apache.flink.runtime.jobmaster.exceptions.JobModificationException;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
 import org.apache.flink.runtime.jobmaster.message.ClassloadingProps;
+import org.apache.flink.runtime.jobmaster.rescaling.OperatorRescalingCoordinator;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPool;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPoolGateway;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalListener;
@@ -188,6 +189,10 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private final BackPressureStatsTracker backPressureStatsTracker;
 
+	// --------- Job rescaling policy --------
+
+	private final OperatorRescalingCoordinator operatorRescalingCoordinator;
+
 	// --------- ResourceManager --------
 
 	private LeaderRetrievalService resourceManagerLeaderRetriever;
@@ -224,6 +229,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			HeartbeatServices heartbeatServices,
 			BlobServer blobServer,
 			JobManagerJobMetricGroupFactory jobMetricGroupFactory,
+			OperatorRescalingCoordinator operatorRescalingCoordinator,
 			OnCompletionActions jobCompletionActions,
 			FatalErrorHandler fatalErrorHandler,
 			ClassLoader userCodeLoader) throws Exception {
@@ -282,7 +288,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			jobMasterConfiguration.getSlotIdleTimeout());
 
 		this.slotPoolGateway = slotPool.getSelfGateway(SlotPoolGateway.class);
-
 		this.registeredTaskManagers = new HashMap<>(4);
 
 		this.backPressureStatsTracker = checkNotNull(jobManagerSharedServices.getBackPressureStatsTracker());
@@ -291,6 +296,8 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		this.jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
 		this.executionGraph = createAndRestoreExecutionGraph(jobManagerJobMetricGroup);
 		this.jobStatusListener = null;
+
+		this.operatorRescalingCoordinator = Preconditions.checkNotNull(operatorRescalingCoordinator);
 	}
 
 	//----------------------------------------------------------------------------------------------

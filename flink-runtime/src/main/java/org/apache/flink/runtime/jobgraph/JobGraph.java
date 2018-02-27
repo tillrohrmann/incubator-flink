@@ -26,7 +26,12 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.blob.BlobClient;
 import org.apache.flink.runtime.blob.PermanentBlobKey;
 import org.apache.flink.runtime.jobgraph.tasks.JobCheckpointingSettings;
+import org.apache.flink.runtime.jobgraph.tasks.OperatorRescalingPolicySettings;
+import org.apache.flink.runtime.rescaling.OperatorRescalingPolicy;
+import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.SerializedValue;
+
+import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -104,6 +109,9 @@ public class JobGraph implements Serializable {
 	/** List of classpaths required to run this job. */
 	private List<URL> classpaths = Collections.emptyList();
 
+	@Nonnull
+	private OperatorRescalingPolicySettings operatorRescalingPolicySettings;
+
 	// --------------------------------------------------------------------------------------------
 
 	/**
@@ -134,6 +142,15 @@ public class JobGraph implements Serializable {
 			// this should never happen, since an empty execution config is always serializable
 			throw new RuntimeException("bug, empty execution config is not serializable");
 		}
+
+		final SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> serializedOperatorRescalingPolicies;
+		try {
+			serializedOperatorRescalingPolicies = new SerializedValue<>(Collections.emptyMap());
+		} catch (IOException e) {
+			throw new FlinkRuntimeException("Could not serialize an empty map.", e);
+		}
+
+		this.operatorRescalingPolicySettings = new OperatorRescalingPolicySettings(serializedOperatorRescalingPolicies);
 	}
 
 	/**
@@ -245,6 +262,15 @@ public class JobGraph implements Serializable {
 
 	public ScheduleMode getScheduleMode() {
 		return scheduleMode;
+	}
+
+	public void setOperatorRescalingPolicySettings(OperatorRescalingPolicySettings operatorRescalingPolicySettings) {
+		this.operatorRescalingPolicySettings = checkNotNull(operatorRescalingPolicySettings);
+	}
+
+	@Nonnull
+	public OperatorRescalingPolicySettings getOperatorRescalingPolicySettings() {
+		return operatorRescalingPolicySettings;
 	}
 
 	/**
