@@ -34,8 +34,8 @@ public enum NoOpOperatorRescalingCoordinator implements OperatorRescalingCoordin
 		}
 
 		@Override
-		public JobRescalingResult checkRescalingPolicies(AccessExecutionGraph accessExecutionGraph) {
-			return new JobRescalingResult(Collections.emptyList());
+		public JobRescalingTarget checkRescalingPolicies(AccessExecutionGraph accessExecutionGraph) {
+			return new JobRescalingTarget(Collections.emptyList());
 		}
 	}
 }

@@ -18,18 +18,26 @@
 
 package org.apache.flink.runtime.jobmaster.rescaling;
 
-import org.apache.flink.runtime.rescaling.OperatorRescalingResult;
+import org.apache.flink.runtime.rescaling.OperatorParallelism;
 
 import javax.annotation.Nonnull;
 
 import java.util.Collection;
 
-public class JobRescalingResult {
+/**
+ * TODO.
+ */
+public class JobRescalingTarget {
 
 	@Nonnull
-	private final Collection<OperatorRescalingResult> operatorRescalingResults;
+	private final Collection<OperatorParallelism> operatorsToRescale;
 
-	public JobRescalingResult(@Nonnull Collection<OperatorRescalingResult> operatorRescalingResults) {
-		this.operatorRescalingResults = operatorRescalingResults;
+	public JobRescalingTarget(@Nonnull Collection<OperatorParallelism> operatorsToRescale) {
+		this.operatorsToRescale = operatorsToRescale;
+	}
+
+	@Nonnull
+	public Collection<OperatorParallelism> getOperatorsToRescale() {
+		return operatorsToRescale;
 	}
 }

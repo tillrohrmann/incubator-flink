@@ -18,7 +18,6 @@
 
 package org.apache.flink.streaming.api.rescaling;
 
-import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.rescaling.OperatorRescalingPolicy;
 import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -30,6 +29,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * Integration test for the {@link WithRescalingPolicy} interface.
@@ -68,7 +68,7 @@ public class WithRescalingPolicyTest extends TestLogger {
 					ctx.collect(42);
 				}
 
-				Thread.sleep(50L);
+				Thread.sleep(100L);
 			}
 		}
 
@@ -78,22 +78,24 @@ public class WithRescalingPolicyTest extends TestLogger {
 		}
 
 		@Override
-		public OperatorRescalingPolicy createOperatorRescalingPolicy(
-			OperatorRescalingPolicy.OperatorRescalingContext operatorRescalingContext, ScheduledExecutor scheduledExecutor) throws Exception {
-			return new FixedRescalingPolicy(scheduledExecutor, 2);
+		public OperatorRescalingPolicy createOperatorRescalingPolicy(ScheduledExecutorService scheduledExecutorService) {
+			return new FixedRescalingPolicy(scheduledExecutorService, 2);
 		}
 	}
 
 	private static class FixedRescalingPolicy implements OperatorRescalingPolicy {
 
+		private final int newParallelism;
+
 		public FixedRescalingPolicy(
-				ScheduledExecutor scheduledExecutor,
+				ScheduledExecutorService scheduledExecutorService,
 				int newParallelism) {
+			this.newParallelism = newParallelism;
 		}
 
 		@Override
 		public int rescaleTo(OperatorRescalingContext rescalingContext) {
-			return 0;
+			return newParallelism;
 		}
 
 		@Override

@@ -18,11 +18,11 @@
 
 package org.apache.flink.runtime.rescaling;
 
-import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.jobmaster.JobMaster;
 import org.apache.flink.util.AutoCloseableAsync;
 
 import java.io.Serializable;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * A {@link OperatorRescalingPolicy} allows to trigger rescaling of operators.
@@ -49,8 +49,6 @@ public interface OperatorRescalingPolicy extends AutoCloseableAsync {
 	 * Factory.
 	 */
 	interface Factory extends Serializable {
-		OperatorRescalingPolicy create(
-			OperatorRescalingContext rescalingContext,
-			ScheduledExecutor scheduledExecutor) throws Exception;
+		OperatorRescalingPolicy create(ScheduledExecutorService scheduledExecutorService) throws Exception;
 	}
 }

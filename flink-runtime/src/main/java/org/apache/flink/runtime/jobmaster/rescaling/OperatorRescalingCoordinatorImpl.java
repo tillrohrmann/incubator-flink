@@ -22,9 +22,9 @@ import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
 import org.apache.flink.runtime.executiongraph.AccessExecutionJobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.rescaling.OperatorParallelism;
 import org.apache.flink.runtime.rescaling.OperatorRescalingContextImpl;
 import org.apache.flink.runtime.rescaling.OperatorRescalingPolicy;
-import org.apache.flink.runtime.rescaling.OperatorRescalingResult;
 
 import javax.annotation.Nonnull;
 
@@ -55,8 +55,8 @@ public class OperatorRescalingCoordinatorImpl implements OperatorRescalingCoordi
 	}
 
 	@Override
-	public JobRescalingResult checkRescalingPolicies(AccessExecutionGraph accessExecutionGraph) {
-		final List<OperatorRescalingResult> operatorRescalingResults = operatorRescalingPolicies
+	public JobRescalingTarget checkRescalingPolicies(AccessExecutionGraph accessExecutionGraph) {
+		final List<OperatorParallelism> operatorRescalingResults = operatorRescalingPolicies
 			.entrySet()
 			.stream()
 			.map((Map.Entry<JobVertexID, OperatorRescalingPolicy> mapEntry) -> {
@@ -66,13 +66,13 @@ public class OperatorRescalingCoordinatorImpl implements OperatorRescalingCoordi
 			})
 			.collect(Collectors.toList());
 
-		return new JobRescalingResult(operatorRescalingResults);
+		return new JobRescalingTarget(operatorRescalingResults);
 	}
 
-	private OperatorRescalingResult checkRescalingPolicy(AccessExecutionJobVertex jobVertex, OperatorRescalingPolicy operatorRescalingPolicy) {
+	private OperatorParallelism checkRescalingPolicy(AccessExecutionJobVertex jobVertex, OperatorRescalingPolicy operatorRescalingPolicy) {
 		final JobVertexID jobVertexId = jobVertex.getJobVertexId();
 		final OperatorRescalingContextImpl rescalingContext = new OperatorRescalingContextImpl(jobVertex);
-		return new OperatorRescalingResult(jobVertexId, operatorRescalingPolicy.rescaleTo(rescalingContext));
+		return new OperatorParallelism(jobVertexId, operatorRescalingPolicy.rescaleTo(rescalingContext));
 	}
 
 	@Override

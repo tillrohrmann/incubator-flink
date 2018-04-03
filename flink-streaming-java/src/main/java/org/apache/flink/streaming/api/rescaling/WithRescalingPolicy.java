@@ -22,6 +22,7 @@ import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.rescaling.OperatorRescalingPolicy;
 
 import java.io.Serializable;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * Interface for operators which want to register a {@link OperatorRescalingPolicy}.
@@ -31,11 +32,9 @@ public interface WithRescalingPolicy extends Serializable {
 	/**
 	 * Create a {@link OperatorRescalingPolicy} with the given {@link ScheduledExecutor}.
 	 *
-	 * @param scheduledExecutor to schedule delayed modification calls
+	 * @param scheduledExecutorService to schedule delayed modification calls
 	 * @return JobRescalingPolicy
 	 * @throws Exception if the JobRescalingPolicy could not be created
 	 */
-	OperatorRescalingPolicy createOperatorRescalingPolicy(
-		OperatorRescalingPolicy.OperatorRescalingContext operatorRescalingContext,
-		ScheduledExecutor scheduledExecutor) throws Exception;
+	OperatorRescalingPolicy createOperatorRescalingPolicy(ScheduledExecutorService scheduledExecutorService) throws Exception;
 }

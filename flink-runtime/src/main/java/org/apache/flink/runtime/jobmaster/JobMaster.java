@@ -69,6 +69,7 @@ import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
 import org.apache.flink.runtime.jobmaster.exceptions.JobModificationException;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
 import org.apache.flink.runtime.jobmaster.message.ClassloadingProps;
+import org.apache.flink.runtime.jobmaster.rescaling.JobRescalingTarget;
 import org.apache.flink.runtime.jobmaster.rescaling.OperatorRescalingCoordinator;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPool;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPoolGateway;
@@ -193,6 +194,8 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private final OperatorRescalingCoordinator operatorRescalingCoordinator;
 
+	private Time operatorRescalingInterval = Time.seconds(5L);
+
 	// --------- ResourceManager --------
 
 	private LeaderRetrievalService resourceManagerLeaderRetriever;
@@ -297,7 +300,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		this.executionGraph = createAndRestoreExecutionGraph(jobManagerJobMetricGroup);
 		this.jobStatusListener = null;
 
-		this.operatorRescalingCoordinator = Preconditions.checkNotNull(operatorRescalingCoordinator);
+		this.operatorRescalingCoordinator = checkNotNull(operatorRescalingCoordinator);
 	}
 
 	//----------------------------------------------------------------------------------------------
@@ -1111,6 +1114,16 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		catch (Throwable t) {
 			executionGraph.failGlobal(t);
 		}
+
+		scheduleRunAsync(this::checkJobRescaling, operatorRescalingInterval);
+	}
+
+	private void checkJobRescaling() {
+		final JobRescalingTarget jobRescalingTarget = operatorRescalingCoordinator.checkRescalingPolicies(executionGraph);
+
+		rescaleOperators(jobRescalingTarget.getOperatorsToRescale(), RescalingBehaviour.RELAXED, rpcTimeout);
+
+		scheduleRunAsync(this::checkJobRescaling, operatorRescalingInterval);
 	}
 
 	private ExecutionGraph createAndRestoreExecutionGraph(JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws Exception {

@@ -18,11 +18,12 @@
 
 package org.apache.flink.streaming.api.graph;
 
-import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.rescaling.OperatorRescalingPolicy;
 import org.apache.flink.streaming.api.rescaling.WithRescalingPolicy;
 
 import javax.annotation.Nonnull;
+
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * {@link OperatorRescalingPolicy.Factory} implementation to wrap a {@link WithRescalingPolicy}.
@@ -38,7 +39,7 @@ public class UserFunctionOperatorRescalingPolicyFactory implements OperatorResca
 	}
 
 	@Override
-	public OperatorRescalingPolicy create(OperatorRescalingPolicy.OperatorRescalingContext rescalingContext, ScheduledExecutor scheduledExecutor) throws Exception {
-		return withRescalingPolicy.createOperatorRescalingPolicy(rescalingContext, scheduledExecutor);
+	public OperatorRescalingPolicy create(ScheduledExecutorService scheduledExecutorService) throws Exception {
+		return withRescalingPolicy.createOperatorRescalingPolicy(scheduledExecutorService);
 	}
 }

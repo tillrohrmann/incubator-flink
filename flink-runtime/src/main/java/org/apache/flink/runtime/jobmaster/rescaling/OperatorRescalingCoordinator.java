@@ -27,5 +27,5 @@ import org.apache.flink.util.AutoCloseableAsync;
  */
 public interface OperatorRescalingCoordinator extends AutoCloseableAsync {
 
-	JobRescalingResult checkRescalingPolicies(AccessExecutionGraph accessExecutionGraph);
+	JobRescalingTarget checkRescalingPolicies(AccessExecutionGraph accessExecutionGraph);
 }

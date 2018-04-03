@@ -34,14 +34,14 @@ public class OperatorRescalingPolicySettings implements Serializable {
 	private static final long serialVersionUID = -5896997245870740345L;
 
 	@Nonnull
-	final SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> serializedOperatorRescalingPolicies;
+	final SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> serializedOperatorRescalingPolicyFactories;
 
-	public OperatorRescalingPolicySettings(@Nonnull SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> serializedOperatorRescalingPolicies) {
-		this.serializedOperatorRescalingPolicies = serializedOperatorRescalingPolicies;
+	public OperatorRescalingPolicySettings(@Nonnull SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> serializedOperatorRescalingPolicyFactories) {
+		this.serializedOperatorRescalingPolicyFactories = serializedOperatorRescalingPolicyFactories;
 	}
 
 	@Nonnull
-	public SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> getSerializedOperatorRescalingPolicies() {
-		return serializedOperatorRescalingPolicies;
+	public SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> getSerializedOperatorRescalingPolicyFactories() {
+		return serializedOperatorRescalingPolicyFactories;
 	}
 }

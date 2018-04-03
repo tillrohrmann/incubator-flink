@@ -24,6 +24,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.blob.BlobServer;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
@@ -31,6 +32,7 @@ import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.highavailability.RunningJobsRegistry;
 import org.apache.flink.runtime.highavailability.RunningJobsRegistry.JobSchedulingStatus;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.tasks.OperatorRescalingPolicySettings;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
@@ -39,19 +41,25 @@ import org.apache.flink.runtime.jobmaster.rescaling.OperatorRescalingCoordinator
 import org.apache.flink.runtime.leaderelection.LeaderContender;
 import org.apache.flink.runtime.leaderelection.LeaderElectionService;
 import org.apache.flink.runtime.messages.Acknowledge;
+import org.apache.flink.runtime.rescaling.OperatorRescalingPolicy;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.util.AutoCloseableAsync;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.SerializedValue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
+
 import java.io.IOException;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -89,6 +97,8 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 	private final CompletableFuture<ArchivedExecutionGraph> resultFuture;
 
 	private final CompletableFuture<Void> terminationFuture;
+
+	private final OperatorRescalingCoordinator operatorRescalingCoordinator;
 
 	/** flag marking the runner as shut down. */
 	private volatile boolean shutdown;
@@ -151,9 +161,10 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 
 			this.leaderGatewayFuture = new CompletableFuture<>();
 
-			final OperatorRescalingCoordinator operatorRescalingCoordinator = createOperatorRescalingCoordinator(
+			this.operatorRescalingCoordinator = createOperatorRescalingCoordinator(
 				jobGraph.getOperatorRescalingPolicySettings(),
-				userCodeLoader);
+				userCodeLoader,
+				jobManagerSharedServices.getScheduledExecutorService());
 
 			// now start the JobManager
 			this.jobMaster = new JobMaster(
@@ -179,8 +190,40 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 		}
 	}
 
-	private OperatorRescalingCoordinator createOperatorRescalingCoordinator(OperatorRescalingPolicySettings operatorRescalingPolicySettings, ClassLoader userCodeClassLoader) {
-		return new OperatorRescalingCoordinatorImpl(Collections.emptyMap());
+	@Nonnull
+	private OperatorRescalingCoordinator createOperatorRescalingCoordinator(
+			OperatorRescalingPolicySettings operatorRescalingPolicySettings,
+			ClassLoader userCodeClassLoader,
+			ScheduledExecutorService scheduledExecutorService) throws Exception {
+		final SerializedValue<Map<JobVertexID, OperatorRescalingPolicy.Factory>> serializedOperatorRescalingPolicyFactories = operatorRescalingPolicySettings.getSerializedOperatorRescalingPolicyFactories();
+
+		final Map<JobVertexID, OperatorRescalingPolicy.Factory> operatorRescalingPolicyFactories = serializedOperatorRescalingPolicyFactories.deserializeValue(userCodeClassLoader);
+
+		final Map<JobVertexID, OperatorRescalingPolicy> operatorRescalingPolicies = createOperatorRescalingPolicies(scheduledExecutorService, operatorRescalingPolicyFactories);
+
+		return new OperatorRescalingCoordinatorImpl(operatorRescalingPolicies);
+	}
+
+	@Nonnull
+	private Map<JobVertexID, OperatorRescalingPolicy> createOperatorRescalingPolicies(ScheduledExecutorService scheduledExecutorService, Map<JobVertexID, OperatorRescalingPolicy.Factory> operatorRescalingPolicyFactories) throws Exception {
+		final Map<JobVertexID, OperatorRescalingPolicy> operatorRescalingPolicies = new HashMap<>(operatorRescalingPolicyFactories.size());
+
+		try {
+			for (Map.Entry<JobVertexID, OperatorRescalingPolicy.Factory> jobVertexIDFactoryEntry : operatorRescalingPolicyFactories.entrySet()) {
+				final OperatorRescalingPolicy.Factory operatorRescalingFactory = jobVertexIDFactoryEntry.getValue();
+				final OperatorRescalingPolicy operatorRescalingPolicy = operatorRescalingFactory.create(scheduledExecutorService);
+
+				operatorRescalingPolicies.put(jobVertexIDFactoryEntry.getKey(), operatorRescalingPolicy);
+			}
+		} catch (Exception e) {
+			for (OperatorRescalingPolicy operatorRescalingPolicy : operatorRescalingPolicies.values()) {
+				operatorRescalingPolicy.closeAsync();
+			}
+
+			throw e;
+		}
+
+		return operatorRescalingPolicies;
 	}
 
 	//----------------------------------------------------------------------------------------------
@@ -224,7 +267,11 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 				jobMaster.shutDown();
 				final CompletableFuture<Void> jobManagerTerminationFuture = jobMaster.getTerminationFuture();
 
-				jobManagerTerminationFuture.whenComplete(
+				final CompletableFuture<Void> operatorRescalingCoordinatorTerminationFuture = FutureUtils.composeAfterwards(
+					jobManagerTerminationFuture,
+					operatorRescalingCoordinator::closeAsync);
+
+				operatorRescalingCoordinatorTerminationFuture.whenComplete(
 					(Void ignored, Throwable throwable) -> {
 						try {
 							leaderElectionService.stop();
