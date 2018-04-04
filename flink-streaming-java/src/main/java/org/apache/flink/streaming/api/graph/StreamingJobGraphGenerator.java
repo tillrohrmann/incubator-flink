@@ -539,7 +539,17 @@ public class StreamingJobGraphGenerator {
 					headOperator.getChainingStrategy() == ChainingStrategy.ALWAYS)
 				&& (edge.getPartitioner() instanceof ForwardPartitioner)
 				&& upStreamVertex.getParallelism() == downStreamVertex.getParallelism()
-				&& streamGraph.isChainingEnabled();
+				&& streamGraph.isChainingEnabled()
+				&& !hasRescalingPolicy(headOperator);
+	}
+
+	private static boolean hasRescalingPolicy(StreamOperator<?> headOperator) {
+		if (headOperator instanceof AbstractUdfStreamOperator) {
+			final Function userFunction = ((AbstractUdfStreamOperator<?, ?>) headOperator).getUserFunction();
+			return userFunction instanceof WithRescalingPolicy;
+		}
+
+		return false;
 	}
 
 	private void setSlotSharing() {
