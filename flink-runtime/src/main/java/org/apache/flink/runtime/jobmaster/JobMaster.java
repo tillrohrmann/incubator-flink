@@ -194,7 +194,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private final OperatorRescalingCoordinator operatorRescalingCoordinator;
 
-	private Time operatorRescalingInterval = Time.seconds(5L);
+	private final Time operatorRescalingInterval;
 
 	// --------- ResourceManager --------
 
@@ -252,6 +252,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		this.fatalErrorHandler = checkNotNull(fatalErrorHandler);
 		this.userCodeLoader = checkNotNull(userCodeLoader);
 		this.jobMetricGroupFactory = checkNotNull(jobMetricGroupFactory);
+		this.operatorRescalingInterval = jobMasterConfiguration.getOperatorRescalingInterval();
 
 		this.taskManagerHeartbeatManager = heartbeatServices.createHeartbeatManagerSender(
 			resourceId,

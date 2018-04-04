@@ -40,18 +40,21 @@ public class JobMasterConfiguration {
 	private final String tmpDirectory;
 
 	private final Configuration configuration;
+	private final Time operatorRescalingInterval;
 
 	public JobMasterConfiguration(
 			Time rpcTimeout,
 			Time slotRequestTimeout,
 			Time slotIdleTimeout,
 			String tmpDirectory,
-			Configuration configuration) {
+			Configuration configuration,
+			Time operatorRescalingInterval) {
 		this.rpcTimeout = Preconditions.checkNotNull(rpcTimeout);
 		this.slotRequestTimeout = Preconditions.checkNotNull(slotRequestTimeout);
 		this.slotIdleTimeout = Preconditions.checkNotNull(slotIdleTimeout);
 		this.tmpDirectory = Preconditions.checkNotNull(tmpDirectory);
 		this.configuration = Preconditions.checkNotNull(configuration);
+		this.operatorRescalingInterval = operatorRescalingInterval;
 	}
 
 	public Time getRpcTimeout() {
@@ -89,11 +92,18 @@ public class JobMasterConfiguration {
 
 		final String tmpDirectory = ConfigurationUtils.parseTempDirectories(configuration)[0];
 
+		final Time operatorRescalingInterval = Time.milliseconds(configuration.getLong(JobManagerOptions.OPERATOR_RESCALING_INTERVAL));
+
 		return new JobMasterConfiguration(
 			rpcTimeout,
 			slotRequestTimeout,
 			slotIdleTimeout,
 			tmpDirectory,
-			configuration);
+			configuration,
+			operatorRescalingInterval);
+	}
+
+	public Time getOperatorRescalingInterval() {
+		return operatorRescalingInterval;
 	}
 }

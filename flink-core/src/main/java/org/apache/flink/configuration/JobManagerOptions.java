@@ -143,6 +143,11 @@ public class JobManagerOptions {
 			.defaultValue(10L * 1000L)
 			.withDescription("The timeout in milliseconds for a idle slot in Slot Pool.");
 
+	public static final ConfigOption<Long> OPERATOR_RESCALING_INTERVAL =
+		key("jobmanager.operator-rescaling-interval")
+		.defaultValue(10000L)
+		.withDescription("Interval for rescaling the operators of a Flink job.");
+
 	// ---------------------------------------------------------------------------------------------
 
 	private JobManagerOptions() {
