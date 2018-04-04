@@ -20,30 +20,44 @@ package org.apache.flink.runtime.jobmaster;
 
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.util.FlinkException;
-import org.apache.flink.util.function.BiConsumerWithException;
+import org.apache.flink.util.function.BiFunctionWithException;
+
+import javax.annotation.Nonnull;
 
 /**
  * Definition of the rescaling behaviour.
  */
-public enum RescalingBehaviour implements BiConsumerWithException<JobVertex, Integer, FlinkException> {
+public enum RescalingBehaviour implements BiFunctionWithException<JobVertex, Integer, Boolean, FlinkException> {
 	// rescaling is only executed if the operator can be set to the given parallelism
 	STRICT {
 		@Override
-		public void acceptWithException(JobVertex jobVertex, Integer newParallelism) throws FlinkException {
+		public Boolean applyWithException(JobVertex jobVertex, Integer newParallelism) throws FlinkException {
 			if (jobVertex.getMaxParallelism() < newParallelism) {
 				throw new FlinkException("Cannot rescale vertex " + jobVertex.getName() +
 					" because its maximum parallelism " + jobVertex.getMaxParallelism() +
 					" is smaller than the new parallelism " + newParallelism + '.');
 			} else {
-				jobVertex.setParallelism(newParallelism);
+				return RescalingBehaviour.setParallelismIfDifferent(jobVertex, newParallelism);
 			}
 		}
 	},
 	// the new parallelism will be the minimum of the given parallelism and the maximum parallelism
 	RELAXED {
 		@Override
-		public void acceptWithException(JobVertex jobVertex, Integer newParallelism) {
-			jobVertex.setParallelism(Math.min(jobVertex.getMaxParallelism(), newParallelism));
+		public Boolean applyWithException(JobVertex jobVertex, Integer newParallelism) {
+			final int effectiveNewParallelism = Math.min(jobVertex.getMaxParallelism(), newParallelism);
+
+			return setParallelismIfDifferent(jobVertex, effectiveNewParallelism);
+		}
+	};
+
+	@Nonnull
+	private static Boolean setParallelismIfDifferent(JobVertex jobVertex, int newParallelism) {
+		if (newParallelism == jobVertex.getParallelism()) {
+			return false;
+		} else {
+			jobVertex.setParallelism(newParallelism);
+			return true;
 		}
 	}
 }

@@ -36,6 +36,7 @@ import org.apache.flink.runtime.jobmaster.message.ClassloadingProps;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.registration.RegistrationResponse;
+import org.apache.flink.runtime.rescaling.OperatorParallelism;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStatsResponse;
 import org.apache.flink.runtime.rpc.FencedRpcGateway;
@@ -91,15 +92,13 @@ public interface JobMasterGateway extends
 	/**
 	 * Triggers rescaling of the given set of operators.
 	 *
-	 * @param operators set of operators which shall be rescaled
-	 * @param newParallelism new parallelism of the given set of operators
+	 * @param operatorsToRescale set of operators with their new parallelism which shall be rescaled
 	 * @param rescalingBehaviour defining how strict the rescaling has to be executed
 	 * @param timeout of this operation
 	 * @return Future which is completed with {@link Acknowledge} once the rescaling was successful
 	 */
 	CompletableFuture<Acknowledge> rescaleOperators(
-		Collection<JobVertexID> operators,
-		int newParallelism,
+		Collection<OperatorParallelism> operatorsToRescale,
 		RescalingBehaviour rescalingBehaviour,
 		@RpcTimeout Time timeout);
 

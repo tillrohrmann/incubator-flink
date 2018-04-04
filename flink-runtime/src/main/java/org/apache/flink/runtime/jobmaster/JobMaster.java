@@ -85,6 +85,7 @@ import org.apache.flink.runtime.query.UnknownKvStateLocation;
 import org.apache.flink.runtime.registration.RegisteredRpcConnection;
 import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.registration.RetryingRegistration;
+import org.apache.flink.runtime.rescaling.OperatorParallelism;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
@@ -401,35 +402,34 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			int newParallelism,
 			RescalingBehaviour rescalingBehaviour,
 			Time timeout) {
-		final ArrayList<JobVertexID> allOperators = new ArrayList<>(jobGraph.getNumberOfVertices());
+		final ArrayList<OperatorParallelism> allOperators = new ArrayList<>(jobGraph.getNumberOfVertices());
 
 		for (JobVertex jobVertex : jobGraph.getVertices()) {
-			allOperators.add(jobVertex.getID());
+			allOperators.add(new OperatorParallelism(jobVertex.getID(), newParallelism));
 		}
 
-		return rescaleOperators(allOperators, newParallelism, rescalingBehaviour, timeout);
+		return rescaleOperators(allOperators, rescalingBehaviour, timeout);
 	}
 
 	@Override
 	public CompletableFuture<Acknowledge> rescaleOperators(
-			Collection<JobVertexID> operators,
-			int newParallelism,
+			Collection<OperatorParallelism> operatorsToRescale,
 			RescalingBehaviour rescalingBehaviour,
 			Time timeout) {
 
-		if (newParallelism <= 0) {
-			return FutureUtils.completedExceptionally(
-				new JobModificationException("The target parallelism of a rescaling operation must be larger than 0."));
-		}
-
 		// 1. Check whether we can rescale the job & rescale the respective vertices
+		final boolean rescaledJobGraph;
 		try {
-			rescaleJobGraph(operators, newParallelism, rescalingBehaviour);
+			rescaledJobGraph = rescaleJobGraph(operatorsToRescale, rescalingBehaviour);
 		} catch (FlinkException e) {
 			final String msg = String.format("Cannot rescale job %s.", jobGraph.getName());
 
 			log.info(msg, e);
 			return FutureUtils.completedExceptionally(new JobModificationException(msg, e));
+		}
+
+		if (!rescaledJobGraph) {
+			return CompletableFuture.completedFuture(Acknowledge.get());
 		}
 
 		final ExecutionGraph currentExecutionGraph = executionGraph;
@@ -1421,24 +1421,29 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	 * Rescales the given operators of the {@link JobGraph} of this {@link JobMaster} with respect to given
 	 * parallelism and {@link RescalingBehaviour}.
 	 *
-	 * @param operators to rescale
-	 * @param newParallelism new parallelism for these operators
+	 * @param operatorsToRescale set of operators to rescale to a new parallelism
 	 * @param rescalingBehaviour of the rescaling operation
+	 * @return true if the job graph was rescaled, otherwise false
 	 * @throws FlinkException if the {@link JobGraph} could not be rescaled
 	 */
-	private void rescaleJobGraph(Collection<JobVertexID> operators, int newParallelism, RescalingBehaviour rescalingBehaviour) throws FlinkException {
-		for (JobVertexID jobVertexId : operators) {
+	private boolean rescaleJobGraph(Collection<OperatorParallelism> operatorsToRescale, RescalingBehaviour rescalingBehaviour) throws FlinkException {
+		boolean rescaled = false;
+
+		for (OperatorParallelism operatorParallelism : operatorsToRescale) {
+			final JobVertexID jobVertexId = operatorParallelism.getJobVertexId();
 			final JobVertex jobVertex = jobGraph.findVertexByID(jobVertexId);
 
 			// update max parallelism in case that it has not been configured
 			final ExecutionJobVertex executionJobVertex = executionGraph.getJobVertex(jobVertexId);
-
 			if (executionJobVertex != null) {
 				jobVertex.setMaxParallelism(executionJobVertex.getMaxParallelism());
 			}
 
-			rescalingBehaviour.acceptWithException(jobVertex, newParallelism);
+			final int newParallelism = operatorParallelism.getNewParallelism();
+			rescaled |= rescalingBehaviour.applyWithException(jobVertex, newParallelism);
 		}
+
+		return rescaled;
 	}
 
 	//----------------------------------------------------------------------------------------------
