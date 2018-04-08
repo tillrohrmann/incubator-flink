@@ -50,7 +50,7 @@ import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
-import org.apache.flink.runtime.metrics.MetricRegistry;
+import org.apache.flink.runtime.metrics.groups.JobManagerMetricGroup;
 import org.apache.flink.runtime.resourcemanager.JobLeaderIdService;
 import org.apache.flink.runtime.resourcemanager.ResourceManager;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerConfiguration;
@@ -148,7 +148,7 @@ public class MesosResourceManager extends ResourceManager<RegisteredMesosWorkerN
 			HighAvailabilityServices highAvailabilityServices,
 			HeartbeatServices heartbeatServices,
 			SlotManager slotManager,
-			MetricRegistry metricRegistry,
+			JobManagerMetricGroup jobManagerMetricGroup,
 			JobLeaderIdService jobLeaderIdService,
 			ClusterInformation clusterInformation,
 			FatalErrorHandler fatalErrorHandler,
@@ -166,7 +166,7 @@ public class MesosResourceManager extends ResourceManager<RegisteredMesosWorkerN
 			highAvailabilityServices,
 			heartbeatServices,
 			slotManager,
-			metricRegistry,
+			jobManagerMetricGroup,
 			jobLeaderIdService,
 			clusterInformation,
 			fatalErrorHandler);

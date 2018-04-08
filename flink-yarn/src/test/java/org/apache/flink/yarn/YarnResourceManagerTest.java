@@ -37,6 +37,8 @@ import org.apache.flink.runtime.instance.HardwareDescription;
 import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 import org.apache.flink.runtime.metrics.NoOpMetricRegistry;
+import org.apache.flink.runtime.metrics.groups.JobManagerMetricGroup;
+import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.resourcemanager.JobLeaderIdService;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerConfiguration;
@@ -147,7 +149,7 @@ public class YarnResourceManagerTest extends TestLogger {
 				HighAvailabilityServices highAvailabilityServices,
 				HeartbeatServices heartbeatServices,
 				SlotManager slotManager,
-				MetricRegistry metricRegistry,
+				JobManagerMetricGroup jobManagerMetricGroup,
 				JobLeaderIdService jobLeaderIdService,
 				ClusterInformation clusterInformation,
 				FatalErrorHandler fatalErrorHandler,
@@ -164,7 +166,7 @@ public class YarnResourceManagerTest extends TestLogger {
 				highAvailabilityServices,
 				heartbeatServices,
 				slotManager,
-				metricRegistry,
+				jobManagerMetricGroup,
 				jobLeaderIdService,
 				clusterInformation,
 				fatalErrorHandler,
@@ -240,24 +242,23 @@ public class YarnResourceManagerTest extends TestLogger {
 					Time.seconds(5L),
 					Time.seconds(5L));
 			rmResourceID = ResourceID.generate();
-			resourceManager =
-					new TestingYarnResourceManager(
-							rpcService,
-							RM_ADDRESS,
-							rmResourceID,
-							flinkConfig,
-							env,
-							rmConfiguration,
-							rmServices.highAvailabilityServices,
-							rmServices.heartbeatServices,
-							rmServices.slotManager,
-							rmServices.metricRegistry,
-							rmServices.jobLeaderIdService,
-							new ClusterInformation("localhost", 1234),
-							fatalErrorHandler,
-							null,
-							mockResourceManagerClient,
-							mockNMClient);
+			resourceManager = new TestingYarnResourceManager(
+				rpcService,
+				RM_ADDRESS,
+				rmResourceID,
+				flinkConfig,
+				env,
+				rmConfiguration,
+				rmServices.highAvailabilityServices,
+				rmServices.heartbeatServices,
+				rmServices.slotManager,
+				UnregisteredMetricGroups.createUnregisteredJobManagerMetricGroup(),
+				rmServices.jobLeaderIdService,
+				new ClusterInformation("localhost", 1234),
+				fatalErrorHandler,
+				null,
+				mockResourceManagerClient,
+				mockNMClient);
 		}
 
 		/**

@@ -22,6 +22,7 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.metrics.Gauge;
 import org.apache.flink.runtime.blob.TransientBlobKey;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.clusterframework.messages.InfoMessage;
@@ -46,8 +47,8 @@ import org.apache.flink.runtime.jobmaster.JobMasterRegistrationSuccess;
 import org.apache.flink.runtime.leaderelection.LeaderContender;
 import org.apache.flink.runtime.leaderelection.LeaderElectionService;
 import org.apache.flink.runtime.messages.Acknowledge;
-import org.apache.flink.runtime.metrics.MetricRegistry;
 import org.apache.flink.runtime.metrics.dump.MetricQueryService;
+import org.apache.flink.runtime.metrics.groups.JobManagerMetricGroup;
 import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerException;
 import org.apache.flink.runtime.resourcemanager.exceptions.UnknownTaskExecutorException;
@@ -125,8 +126,8 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 	/** The heartbeat manager with job managers. */
 	private final HeartbeatManager<Void, Void> jobManagerHeartbeatManager;
 
-	/** Registry to use for metrics. */
-	private final MetricRegistry metricRegistry;
+	/** Cluster metric group. */
+	private final JobManagerMetricGroup jobManagerMetricGroup;
 
 	/** Fatal error handler. */
 	private final FatalErrorHandler fatalErrorHandler;
@@ -150,7 +151,7 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 			HighAvailabilityServices highAvailabilityServices,
 			HeartbeatServices heartbeatServices,
 			SlotManager slotManager,
-			MetricRegistry metricRegistry,
+			JobManagerMetricGroup jobManagerMetricGroup,
 			JobLeaderIdService jobLeaderIdService,
 			ClusterInformation clusterInformation,
 			FatalErrorHandler fatalErrorHandler) {
@@ -161,7 +162,7 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 		this.resourceManagerConfiguration = checkNotNull(resourceManagerConfiguration);
 		this.highAvailabilityServices = checkNotNull(highAvailabilityServices);
 		this.slotManager = checkNotNull(slotManager);
-		this.metricRegistry = checkNotNull(metricRegistry);
+		this.jobManagerMetricGroup = checkNotNull(jobManagerMetricGroup);
 		this.jobLeaderIdService = checkNotNull(jobLeaderIdService);
 		this.clusterInformation = checkNotNull(clusterInformation);
 		this.fatalErrorHandler = checkNotNull(fatalErrorHandler);
@@ -182,8 +183,15 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 		this.jmResourceIdRegistrations = new HashMap<>(4);
 		this.taskExecutors = new HashMap<>(8);
 		infoMessageListeners = new ConcurrentHashMap<>(8);
+
+		instantiateMetrics();
 	}
 
+	private void instantiateMetrics() {
+		jobManagerMetricGroup.gauge("numRegisteredTaskManagers", (Gauge<Long>) () -> (long) taskExecutors.size());
+		jobManagerMetricGroup.gauge("taskSlotsTotal", (Gauge<Long>) () -> (long) slotManager.getNumberRegisteredSlots());
+		jobManagerMetricGroup.gauge("taskSlotsAvailable", (Gauge<Long>) () -> (long) slotManager.getNumberFreeSlots());
+	}
 
 
 	// ------------------------------------------------------------------------

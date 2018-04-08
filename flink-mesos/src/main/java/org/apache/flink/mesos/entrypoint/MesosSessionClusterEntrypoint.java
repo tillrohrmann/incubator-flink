@@ -33,7 +33,7 @@ import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.entrypoint.SessionClusterEntrypoint;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
-import org.apache.flink.runtime.metrics.MetricRegistry;
+import org.apache.flink.runtime.metrics.groups.JobManagerMetricGroup;
 import org.apache.flink.runtime.resourcemanager.ResourceManager;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerConfiguration;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerRuntimeServices;
@@ -111,7 +111,7 @@ public class MesosSessionClusterEntrypoint extends SessionClusterEntrypoint {
 			RpcService rpcService,
 			HighAvailabilityServices highAvailabilityServices,
 			HeartbeatServices heartbeatServices,
-			MetricRegistry metricRegistry,
+			JobManagerMetricGroup jobManagerMetricGroup,
 			FatalErrorHandler fatalErrorHandler,
 			ClusterInformation clusterInformation,
 			@Nullable String webInterfaceUrl) throws Exception {
@@ -130,7 +130,7 @@ public class MesosSessionClusterEntrypoint extends SessionClusterEntrypoint {
 			highAvailabilityServices,
 			heartbeatServices,
 			rmRuntimeServices.getSlotManager(),
-			metricRegistry,
+			jobManagerMetricGroup,
 			rmRuntimeServices.getJobLeaderIdService(),
 			clusterInformation,
 			fatalErrorHandler,

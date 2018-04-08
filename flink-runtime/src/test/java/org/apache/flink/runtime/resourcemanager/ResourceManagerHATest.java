@@ -25,7 +25,7 @@ import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServices;
 import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
-import org.apache.flink.runtime.metrics.MetricRegistryImpl;
+import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManagerConfiguration;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.rpc.TestingRpcService;
@@ -33,6 +33,7 @@ import org.apache.flink.runtime.testingUtils.TestingUtils;
 import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.testutils.category.New;
 import org.apache.flink.util.TestLogger;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -82,8 +83,6 @@ public class ResourceManagerHATest extends TestLogger {
 			highAvailabilityServices,
 			rpcService.getScheduledExecutor());
 
-		MetricRegistryImpl metricRegistry = mock(MetricRegistryImpl.class);
-
 		TestingFatalErrorHandler testingFatalErrorHandler = new TestingFatalErrorHandler();
 
 		CompletableFuture<ResourceManagerId> revokedLeaderIdFuture = new CompletableFuture<>();
@@ -97,7 +96,7 @@ public class ResourceManagerHATest extends TestLogger {
 				highAvailabilityServices,
 				heartbeatServices,
 				resourceManagerRuntimeServices.getSlotManager(),
-				metricRegistry,
+				UnregisteredMetricGroups.createUnregisteredJobManagerMetricGroup(),
 				resourceManagerRuntimeServices.getJobLeaderIdService(),
 				new ClusterInformation("localhost", 1234),
 				testingFatalErrorHandler) {

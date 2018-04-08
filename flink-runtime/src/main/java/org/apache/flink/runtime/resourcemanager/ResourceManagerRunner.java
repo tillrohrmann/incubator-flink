@@ -23,7 +23,7 @@ import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
-import org.apache.flink.runtime.metrics.MetricRegistry;
+import org.apache.flink.runtime.metrics.groups.JobManagerMetricGroup;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.util.AutoCloseableAsync;
@@ -55,7 +55,7 @@ public class ResourceManagerRunner implements FatalErrorHandler, AutoCloseableAs
 			final RpcService rpcService,
 			final HighAvailabilityServices highAvailabilityServices,
 			final HeartbeatServices heartbeatServices,
-			final MetricRegistry metricRegistry,
+			final JobManagerMetricGroup jobManagerMetricGroup,
 			final ClusterInformation clusterInformation) throws Exception {
 
 		Preconditions.checkNotNull(resourceId);
@@ -63,7 +63,7 @@ public class ResourceManagerRunner implements FatalErrorHandler, AutoCloseableAs
 		Preconditions.checkNotNull(rpcService);
 		Preconditions.checkNotNull(highAvailabilityServices);
 		Preconditions.checkNotNull(heartbeatServices);
-		Preconditions.checkNotNull(metricRegistry);
+		Preconditions.checkNotNull(jobManagerMetricGroup);
 
 		final ResourceManagerConfiguration resourceManagerConfiguration = ResourceManagerConfiguration.fromConfiguration(configuration);
 
@@ -82,7 +82,7 @@ public class ResourceManagerRunner implements FatalErrorHandler, AutoCloseableAs
 			highAvailabilityServices,
 			heartbeatServices,
 			resourceManagerRuntimeServices.getSlotManager(),
-			metricRegistry,
+			jobManagerMetricGroup,
 			resourceManagerRuntimeServices.getJobLeaderIdService(),
 			clusterInformation,
 			this);

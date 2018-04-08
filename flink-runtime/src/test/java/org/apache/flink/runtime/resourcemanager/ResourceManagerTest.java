@@ -24,7 +24,7 @@ import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServices;
 import org.apache.flink.runtime.instance.HardwareDescription;
 import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
-import org.apache.flink.runtime.metrics.NoOpMetricRegistry;
+import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
 import org.apache.flink.runtime.rest.messages.taskmanager.TaskManagerInfo;
@@ -96,7 +96,7 @@ public class ResourceManagerTest extends TestLogger {
 			highAvailabilityServices,
 			new HeartbeatServices(1000L, 10000L),
 			slotManager,
-			NoOpMetricRegistry.INSTANCE,
+			UnregisteredMetricGroups.createUnregisteredJobManagerMetricGroup(),
 			jobLeaderIdService,
 			testingFatalErrorHandler);
 

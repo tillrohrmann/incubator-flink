@@ -333,18 +333,18 @@ public abstract class ClusterEntrypoint implements FatalErrorHandler {
 			LOG.debug("Starting Dispatcher REST endpoint.");
 			webMonitorEndpoint.start();
 
+			jobManagerMetricGroup = MetricUtils.instantiateJobManagerMetricGroup(metricRegistry, rpcService.getAddress());
+
 			resourceManager = createResourceManager(
 				configuration,
 				ResourceID.generate(),
 				rpcService,
 				highAvailabilityServices,
 				heartbeatServices,
-				metricRegistry,
+				jobManagerMetricGroup,
 				this,
 				clusterInformation,
 				webMonitorEndpoint.getRestBaseUrl());
-
-			jobManagerMetricGroup = MetricUtils.instantiateJobManagerMetricGroup(metricRegistry, rpcService.getAddress());
 
 			dispatcher = createDispatcher(
 				configuration,
@@ -665,7 +665,7 @@ public abstract class ClusterEntrypoint implements FatalErrorHandler {
 		RpcService rpcService,
 		HighAvailabilityServices highAvailabilityServices,
 		HeartbeatServices heartbeatServices,
-		MetricRegistry metricRegistry,
+		JobManagerMetricGroup jobManagerMetricGroup,
 		FatalErrorHandler fatalErrorHandler,
 		ClusterInformation clusterInformation,
 		@Nullable String webInterfaceUrl) throws Exception;

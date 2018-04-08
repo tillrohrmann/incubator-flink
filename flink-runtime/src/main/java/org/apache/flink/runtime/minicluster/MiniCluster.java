@@ -293,13 +293,15 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 
 				heartbeatServices = HeartbeatServices.fromConfiguration(configuration);
 
+				this.jobManagerMetricGroup = MetricUtils.instantiateJobManagerMetricGroup(metricRegistry, "localhost");
+
 				// bring up the ResourceManager(s)
 				LOG.info("Starting ResourceManger");
 				resourceManagerRunner = startResourceManager(
 					configuration,
 					haServices,
 					heartbeatServices,
-					metricRegistry,
+					jobManagerMetricGroup,
 					resourceManagerRpcService,
 					new ClusterInformation("localhost", blobServer.getPort()));
 
@@ -354,8 +356,6 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 
 				// bring up the dispatcher that launches JobManagers when jobs submitted
 				LOG.info("Starting job dispatcher(s) for JobManger");
-
-				this.jobManagerMetricGroup = MetricUtils.instantiateJobManagerMetricGroup(metricRegistry, "localhost");
 
 				dispatcher = new StandaloneDispatcher(
 					jobManagerRpcService,
@@ -749,7 +749,7 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 			Configuration configuration,
 			HighAvailabilityServices haServices,
 			HeartbeatServices heartbeatServices,
-			MetricRegistry metricRegistry,
+			JobManagerMetricGroup jobManagerMetricGroup,
 			RpcService resourceManagerRpcService,
 			ClusterInformation clusterInformation) throws Exception {
 
@@ -760,7 +760,7 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 			resourceManagerRpcService,
 			haServices,
 			heartbeatServices,
-			metricRegistry,
+			jobManagerMetricGroup,
 			clusterInformation);
 
 			resourceManagerRunner.start();
