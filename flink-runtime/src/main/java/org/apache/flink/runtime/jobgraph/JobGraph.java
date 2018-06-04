@@ -582,12 +582,7 @@ public class JobGraph implements Serializable {
 	}
 
 	public void uploadUserArtifacts(InetSocketAddress blobServerAddress, Configuration clientConfig) throws IOException {
-		Map<String, DistributedCache.DistributedCacheEntry> updatedCacheEntries = compressDirectories(userArtifacts);
-
-		userArtifacts.clear();
-		for (Map.Entry<String, DistributedCache.DistributedCacheEntry> modifiedEntry : updatedCacheEntries.entrySet()) {
-			addUserArtifact(modifiedEntry.getKey(), modifiedEntry.getValue());
-		}
+		zipUserArtifacts();
 
 		if (!userArtifacts.isEmpty()) {
 			try (BlobClient blobClient = new BlobClient(blobServerAddress, clientConfig)) {
@@ -606,6 +601,15 @@ public class JobGraph implements Serializable {
 						jobConfiguration);
 				}
 			}
+		}
+	}
+
+	public void zipUserArtifacts() throws IOException {
+		Map<String, DistributedCache.DistributedCacheEntry> updatedCacheEntries = compressDirectories(userArtifacts);
+
+		userArtifacts.clear();
+		for (Map.Entry<String, DistributedCache.DistributedCacheEntry> modifiedEntry : updatedCacheEntries.entrySet()) {
+			addUserArtifact(modifiedEntry.getKey(), modifiedEntry.getValue());
 		}
 	}
 
