@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.rest.handler.job;
 
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.dispatcher.DispatcherGateway;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -57,7 +58,8 @@ public class JobSubmitHandlerTest extends TestLogger {
 			CompletableFuture.completedFuture("http://localhost:1234"),
 			mockGatewayRetriever,
 			RpcUtils.INF_TIMEOUT,
-			Collections.emptyMap());
+			Collections.emptyMap(),
+			new Configuration());
 
 		JobSubmitRequestBody request = new JobSubmitRequestBody(new byte[0]);
 
@@ -79,7 +81,8 @@ public class JobSubmitHandlerTest extends TestLogger {
 			CompletableFuture.completedFuture("http://localhost:1234"),
 			mockGatewayRetriever,
 			RpcUtils.INF_TIMEOUT,
-			Collections.emptyMap());
+			Collections.emptyMap(),
+			new Configuration());
 
 		JobGraph job = new JobGraph("testjob");
 		JobSubmitRequestBody request = new JobSubmitRequestBody(job);
