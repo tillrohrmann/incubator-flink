@@ -16,9 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.flink.kubernetes;
+package org.apache.flink.kubernetes.entrypoint;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.clusterframework.FlinkResourceManager;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.entrypoint.SessionClusterEntrypoint;
@@ -26,8 +27,15 @@ import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.metrics.MetricRegistry;
 import org.apache.flink.runtime.resourcemanager.ResourceManager;
+import org.apache.flink.runtime.resourcemanager.ResourceManagerConfiguration;
+import org.apache.flink.runtime.resourcemanager.ResourceManagerRuntimeServices;
+import org.apache.flink.runtime.resourcemanager.ResourceManagerRuntimeServicesConfiguration;
+import org.apache.flink.runtime.resourcemanager.StandaloneResourceManager;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
+import org.apache.flink.runtime.util.EnvironmentInformation;
+import org.apache.flink.runtime.util.JvmShutdownSafeguard;
+import org.apache.flink.runtime.util.SignalHandler;
 
 import javax.annotation.Nullable;
 
@@ -51,10 +59,37 @@ public class KubernetesSessionClusterEntrypoint extends SessionClusterEntrypoint
 			FatalErrorHandler fatalErrorHandler,
 			ClusterInformation clusterInformation,
 			@Nullable String webInterfaceUrl) throws Exception {
-		return null;
+		final ResourceManagerConfiguration resourceManagerConfiguration = ResourceManagerConfiguration.fromConfiguration(configuration);
+		final ResourceManagerRuntimeServicesConfiguration resourceManagerRuntimeServicesConfiguration = ResourceManagerRuntimeServicesConfiguration.fromConfiguration(configuration);
+		final ResourceManagerRuntimeServices resourceManagerRuntimeServices = ResourceManagerRuntimeServices.fromConfiguration(
+			resourceManagerRuntimeServicesConfiguration,
+			highAvailabilityServices,
+			rpcService.getScheduledExecutor());
+
+		return new StandaloneResourceManager(
+			rpcService,
+			FlinkResourceManager.RESOURCE_MANAGER_NAME,
+			resourceId,
+			resourceManagerConfiguration,
+			highAvailabilityServices,
+			heartbeatServices,
+			resourceManagerRuntimeServices.getSlotManager(),
+			metricRegistry,
+			resourceManagerRuntimeServices.getJobLeaderIdService(),
+			clusterInformation,
+			fatalErrorHandler);
 	}
 
 	public static void main(String[] args) {
-		LOG.info("Started {}.", KubernetesSessionClusterEntrypoint.class.getSimpleName());
+		// startup checks and logging
+		EnvironmentInformation.logEnvironmentInfo(LOG, KubernetesSessionClusterEntrypoint.class.getSimpleName(), args);
+		SignalHandler.register(LOG);
+		JvmShutdownSafeguard.installAsShutdownHook(LOG);
+
+		Configuration configuration = loadConfiguration(parseArguments(args));
+
+		KubernetesSessionClusterEntrypoint entrypoint = new KubernetesSessionClusterEntrypoint(configuration);
+
+		entrypoint.startCluster();
 	}
 }
