@@ -177,7 +177,7 @@ public abstract class ClusterEntrypoint implements FatalErrorHandler {
 		return terminationFuture;
 	}
 
-	protected void startCluster() {
+	public void startCluster() {
 		LOG.info("Starting {}.", getClass().getSimpleName());
 
 		try {
@@ -691,6 +691,10 @@ public abstract class ClusterEntrypoint implements FatalErrorHandler {
 	protected static ClusterConfiguration parseArguments(String[] args) {
 		ParameterTool parameterTool = ParameterTool.fromArgs(args);
 
+		return parseArguments(parameterTool);
+	}
+
+	protected static ClusterConfiguration parseArguments(ParameterTool parameterTool) {
 		final String configDir = parameterTool.get("configDir", "");
 
 		final int restPort;

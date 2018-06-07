@@ -19,6 +19,7 @@
 package org.apache.flink.yarn.entrypoint;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.blob.BlobServer;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
@@ -118,7 +119,7 @@ public class YarnJobClusterEntrypoint extends JobClusterEntrypoint {
 	}
 
 	@Override
-	protected JobGraph retrieveJobGraph(Configuration configuration) throws FlinkException {
+	protected JobGraph retrieveJobGraph(Configuration configuration, BlobServer blobServer) throws FlinkException {
 		String jobGraphFile = configuration.getString(JOB_GRAPH_FILE_PATH, "job.graph");
 		File fp = new File(jobGraphFile);
 

@@ -17,7 +17,7 @@
 # limitations under the License.
 ################################################################################
 
-USAGE="Usage: kubernetes-session.sh (cluster|taskmanager) [args]"
+USAGE="Usage: kubernetes-session.sh (cluster|taskmanager|job) [args]"
 
 bin=`dirname "$0"`
 bin=`cd "$bin"; pwd`
@@ -45,6 +45,8 @@ ENTRY_POINT=org.apache.flink.kubernetes.entrypoint.KubernetesSessionClusterEntry
 
 if [ "$MODE" = "taskmanager" ]; then
     ENTRY_POINT=org.apache.flink.runtime.taskexecutor.TaskManagerRunner
+elif [ "$MODE" = "job" ]; then
+    ENTRY_POINT=org.apache.flink.kubernetes.entrypoint.KubernetesJobClusterEntrypoint
 fi
 
 # Evaluate user options for local variable expansion

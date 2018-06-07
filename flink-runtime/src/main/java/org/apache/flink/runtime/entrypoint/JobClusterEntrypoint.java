@@ -104,7 +104,7 @@ public abstract class JobClusterEntrypoint extends ClusterEntrypoint {
 			@Nullable String restAddress,
 			HistoryServerArchivist historyServerArchivist) throws Exception {
 
-		final JobGraph jobGraph = retrieveJobGraph(configuration);
+		final JobGraph jobGraph = retrieveJobGraph(configuration, blobServer);
 
 		final String executionModeValue = configuration.getString(EXECUTION_MODE);
 
@@ -133,7 +133,7 @@ public abstract class JobClusterEntrypoint extends ClusterEntrypoint {
 		return dispatcher;
 	}
 
-	protected abstract JobGraph retrieveJobGraph(Configuration configuration) throws FlinkException;
+	protected abstract JobGraph retrieveJobGraph(Configuration configuration, BlobServer blobServer) throws FlinkException;
 
 	protected abstract void registerShutdownActions(CompletableFuture<ApplicationStatus> terminationFuture);
 }
