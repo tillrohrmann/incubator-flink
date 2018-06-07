@@ -102,6 +102,13 @@ under the License.
 			<outputDirectory>bin</outputDirectory>
 			<fileMode>0755</fileMode>
 		</fileSet>
+
+		<!-- copy Kubernetes start scripts -->
+		<fileSet>
+			<directory>src/main/flink-bin/kubernetes-bin</directory>
+			<outputDirectory>bin</outputDirectory>
+			<fileMode>0755</fileMode>
+		</fileSet>
 		
 		<!-- copy default configuration -->
 		<fileSet>
