@@ -20,6 +20,7 @@ package org.apache.flink.kubernetes.resourcemanager;
 
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.clusterframework.types.ResourceIDRetrievable;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
@@ -32,51 +33,61 @@ import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerExcept
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
+import org.apache.flink.util.Preconditions;
 
 import io.kubernetes.client.ApiClient;
 import io.kubernetes.client.ApiException;
 import io.kubernetes.client.apis.CoreV1Api;
 import io.kubernetes.client.models.V1Container;
+import io.kubernetes.client.models.V1DeleteOptions;
 import io.kubernetes.client.models.V1EnvVar;
 import io.kubernetes.client.models.V1ObjectMeta;
 import io.kubernetes.client.models.V1Pod;
+import io.kubernetes.client.models.V1PodList;
 import io.kubernetes.client.models.V1PodSpec;
 import io.kubernetes.client.util.Config;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Kubernetes specific implementation of the {@link ResourceManager}.
  */
-public class KubernetesResourceManager extends ResourceManager<ResourceID> {
+public class KubernetesResourceManager extends ResourceManager<KubernetesResourceManager.KubernetesWorkerNode> {
+	public static final String ENV_RESOURCE_ID = "RESOURCE_ID";
+
+	private final ConcurrentMap<ResourceID, KubernetesWorkerNode> workerNodeMap;
 
 	@Nullable
 	private CoreV1Api kubernetesApi;
 
 	public KubernetesResourceManager(
-			RpcService rpcService,
-			String resourceManagerEndpointId,
-			ResourceID resourceId,
-			ResourceManagerConfiguration resourceManagerConfiguration,
-			HighAvailabilityServices highAvailabilityServices,
-			HeartbeatServices heartbeatServices,
-			SlotManager slotManager,
-			MetricRegistry metricRegistry,
-			JobLeaderIdService jobLeaderIdService,
-			ClusterInformation clusterInformation,
-			FatalErrorHandler fatalErrorHandler) {
-		super(rpcService, resourceManagerEndpointId, resourceId, resourceManagerConfiguration, highAvailabilityServices, heartbeatServices, slotManager, metricRegistry, jobLeaderIdService, clusterInformation, fatalErrorHandler);
-
+		RpcService rpcService,
+		String resourceManagerEndpointId,
+		ResourceID resourceId,
+		ResourceManagerConfiguration resourceManagerConfiguration,
+		HighAvailabilityServices highAvailabilityServices,
+		HeartbeatServices heartbeatServices,
+		SlotManager slotManager,
+		MetricRegistry metricRegistry,
+		JobLeaderIdService jobLeaderIdService,
+		ClusterInformation clusterInformation,
+		FatalErrorHandler fatalErrorHandler) {
+		super(rpcService, resourceManagerEndpointId, resourceId, resourceManagerConfiguration, highAvailabilityServices,
+			heartbeatServices, slotManager, metricRegistry, jobLeaderIdService, clusterInformation, fatalErrorHandler);
+		this.workerNodeMap = new ConcurrentHashMap<>();
 		kubernetesApi = null;
 	}
 
 	@Override
 	protected void initialize() throws ResourceManagerException {
-		ApiClient apiClient = null;
+		ApiClient apiClient;
 		try {
 			apiClient = Config.defaultClient();
 		} catch (IOException e) {
@@ -87,37 +98,111 @@ public class KubernetesResourceManager extends ResourceManager<ResourceID> {
 	}
 
 	@Override
-	protected void internalDeregisterApplication(ApplicationStatus finalStatus, @Nullable String optionalDiagnostics) throws ResourceManagerException {
+	protected void internalDeregisterApplication(ApplicationStatus finalStatus, @Nullable String optionalDiagnostics) {
 
 	}
 
 	@Override
 	public void startNewWorker(ResourceProfile resourceProfile) {
+		Preconditions.checkNotNull(kubernetesApi);
+		String podName = "flink-taskmanager-" + UUID.randomUUID();
+		V1Pod pod = createTaskManagerPodManifest(podName, resourceProfile);
+		log.debug(String.format("Creating pod %s:\n%s", podName, pod));
+		try {
+			pod = kubernetesApi.createNamespacedPod("default", pod, "true");
+		} catch (ApiException e) {
+			throw new RuntimeException("Failed to start task manager pod", e);
+		}
+		KubernetesWorkerNode worker = new KubernetesWorkerNode(pod);
+		workerNodeMap.put(worker.getResourceID(), worker);
+	}
+
+	private V1Pod createTaskManagerPodManifest(String podName, ResourceProfile resourceProfile) {
 		final V1Container container = new V1Container()
 			.name("taskmanager")
 			.image("flink:native-kubernetes")
 			.args(Collections.singletonList("taskmanager"))
-			.env(Collections.singletonList(new V1EnvVar().name("JOB_MANAGER_RPC_ADDRESS").value(getRpcService().getAddress())));
+			.env(Arrays.asList(
+				new V1EnvVar().name("JOB_MANAGER_RPC_ADDRESS").value(getRpcService().getAddress()),
+				new V1EnvVar().name(ENV_RESOURCE_ID).value(podName)
+			))
+//			.resources(new V1ResourceRequirements().limits(ImmutableMap.of(
+//				"cpu", Quantity.fromString(Double.toString(resourceProfile.getCpuCores())),
+//				"memory", Quantity.fromString(String.format("%dMi", resourceProfile.getMemoryInMB()))
+//			)))
+			;
 
-		final V1Pod pod = new V1Pod()
+		return new V1Pod()
 			.apiVersion("v1")
-			.metadata(new V1ObjectMeta().name("flink-taskmanager-" + UUID.randomUUID()))
+			.metadata(new V1ObjectMeta().name(podName))
 			.spec(new V1PodSpec().containers(Collections.singletonList(container)));
+	}
 
+	@Override
+	protected KubernetesWorkerNode workerStarted(ResourceID resourceID) {
+		return workerNodeMap.get(resourceID);
+	}
+
+	@Override
+	public boolean stopWorker(KubernetesWorkerNode worker) {
+		Preconditions.checkNotNull(kubernetesApi);
+		String name = worker.pod.getMetadata().getName();
+		String namespace = worker.pod.getMetadata().getNamespace();
 		try {
-			kubernetesApi.createNamespacedPod("default", pod, "true");
+			if (!podExists(name, namespace)) {
+				log.debug(String.format("Deleting pod %s: does not exist", name));
+				return true;
+			}
+			log.debug(String.format("Deleting pod %s:\n%s", name, worker.pod));
+			kubernetesApi.deleteNamespacedPod(
+				name,
+				namespace,
+				new V1DeleteOptions().kind("DeleteOptions").apiVersion("apiVersion").propagationPolicy("Background"),
+				"true",
+				0, false, "Background");
 		} catch (ApiException e) {
-			throw new RuntimeException(e);
+			throw new RuntimeException("Failed to delete task manager pod", e);
 		}
-	}
-
-	@Override
-	protected ResourceID workerStarted(ResourceID resourceID) {
-		return resourceID;
-	}
-
-	@Override
-	public boolean stopWorker(ResourceID worker) {
 		return true;
+	}
+
+	private boolean podExists(String name, String namespace) throws ApiException {
+		String cont = null;
+		do {
+			V1PodList pods = listPods(namespace, cont);
+			for (V1Pod pod : pods.getItems()) {
+				if (pod.getMetadata().getName().equals(name)) {
+					return true;
+				}
+			}
+			cont = pods.getMetadata().getContinue();
+		} while (cont != null);
+		return false;
+	}
+
+	private V1PodList listPods(String namespace, String cont) throws ApiException {
+		Preconditions.checkNotNull(kubernetesApi);
+		return kubernetesApi.listNamespacedPod(namespace, "true",
+			cont, null, null, null,
+			null, null, null, null);
+	}
+
+	/**
+	 * Kubernetes specific implementation of the {@link ResourceIDRetrievable}.
+	 */
+	public static class KubernetesWorkerNode implements ResourceIDRetrievable {
+		private final ResourceID resourceID;
+		private final V1Pod pod;
+
+		KubernetesWorkerNode(V1Pod pod) {
+			this.pod = pod;
+			Preconditions.checkNotNull(this.pod);
+			this.resourceID = new ResourceID(pod.getMetadata().getName());
+		}
+
+		@Override
+		public ResourceID getResourceID() {
+			return resourceID;
+		}
 	}
 }

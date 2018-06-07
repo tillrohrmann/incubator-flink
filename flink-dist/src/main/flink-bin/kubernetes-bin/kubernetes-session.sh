@@ -44,7 +44,7 @@ export FLINK_LIB_DIR
 ENTRY_POINT=org.apache.flink.kubernetes.entrypoint.KubernetesSessionClusterEntrypoint
 
 if [ "$MODE" = "taskmanager" ]; then
-    ENTRY_POINT=org.apache.flink.runtime.taskexecutor.TaskManagerRunner
+    ENTRY_POINT=org.apache.flink.kubernetes.taskmanager.KubernetesTaskManagerRunner
 elif [ "$MODE" = "job" ]; then
     ENTRY_POINT=org.apache.flink.kubernetes.entrypoint.KubernetesJobClusterEntrypoint
 fi
