@@ -261,6 +261,10 @@ public class TaskManagerRunner implements FatalErrorHandler, AutoCloseableAsync 
 	// --------------------------------------------------------------------------------------------
 
 	public static void main(String[] args) throws Exception {
+		run(args, ResourceID.generate());
+	}
+
+	public static void run(String[] args, ResourceID resourceID) throws Exception {
 		// startup checks and logging
 		EnvironmentInformation.logEnvironmentInfo(LOG, "TaskManager", args);
 		SignalHandler.register(LOG);
@@ -290,12 +294,9 @@ public class TaskManagerRunner implements FatalErrorHandler, AutoCloseableAsync 
 		SecurityUtils.install(new SecurityConfiguration(configuration));
 
 		try {
-			SecurityUtils.getInstalledContext().runSecured(new Callable<Void>() {
-				@Override
-				public Void call() throws Exception {
-					runTaskManager(configuration, ResourceID.generate());
-					return null;
-				}
+			SecurityUtils.getInstalledContext().runSecured((Callable<Void>) () -> {
+				runTaskManager(configuration, resourceID);
+				return null;
 			});
 		} catch (Throwable t) {
 			LOG.error("TaskManager initialization failed.", t);
