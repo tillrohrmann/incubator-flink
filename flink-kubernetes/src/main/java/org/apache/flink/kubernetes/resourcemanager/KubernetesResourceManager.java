@@ -47,6 +47,7 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.UUID;
 
 /**
  * Kubernetes specific implementation of the {@link ResourceManager}.
@@ -96,11 +97,11 @@ public class KubernetesResourceManager extends ResourceManager<ResourceID> {
 			.name("taskmanager")
 			.image("flink:native-kubernetes")
 			.args(Collections.singletonList("taskmanager"))
-			.env(Collections.singletonList(new V1EnvVar().name("JOB_MANAGER_RPC_ADDRESS").value(getHostname() + ':' + getRpcService().getPort())));
+			.env(Collections.singletonList(new V1EnvVar().name("JOB_MANAGER_RPC_ADDRESS").value("flink-session-cluster")));
 
 		final V1Pod pod = new V1Pod()
 			.apiVersion("v1")
-			.metadata(new V1ObjectMeta().name("flink-taskmanager"))
+			.metadata(new V1ObjectMeta().name("flink-taskmanager-" + UUID.randomUUID()))
 			.spec(new V1PodSpec().containers(Collections.singletonList(container)));
 
 		try {
