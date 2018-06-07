@@ -43,6 +43,7 @@ import io.kubernetes.client.models.V1Pod;
 import io.kubernetes.client.models.V1PodSpec;
 import io.kubernetes.client.util.Config;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
@@ -53,6 +54,9 @@ import java.util.UUID;
  * Kubernetes specific implementation of the {@link ResourceManager}.
  */
 public class KubernetesResourceManager extends ResourceManager<ResourceID> {
+
+	@Nonnull
+	private final String imageName;
 
 	@Nullable
 	private CoreV1Api kubernetesApi;
@@ -68,10 +72,12 @@ public class KubernetesResourceManager extends ResourceManager<ResourceID> {
 			MetricRegistry metricRegistry,
 			JobLeaderIdService jobLeaderIdService,
 			ClusterInformation clusterInformation,
-			FatalErrorHandler fatalErrorHandler) {
+			FatalErrorHandler fatalErrorHandler,
+			@Nonnull String imageName) {
 		super(rpcService, resourceManagerEndpointId, resourceId, resourceManagerConfiguration, highAvailabilityServices, heartbeatServices, slotManager, metricRegistry, jobLeaderIdService, clusterInformation, fatalErrorHandler);
 
-		kubernetesApi = null;
+		this.imageName = imageName;
+		this.kubernetesApi = null;
 	}
 
 	@Override
@@ -95,7 +101,7 @@ public class KubernetesResourceManager extends ResourceManager<ResourceID> {
 	public void startNewWorker(ResourceProfile resourceProfile) {
 		final V1Container container = new V1Container()
 			.name("taskmanager")
-			.image("flink:native-kubernetes")
+			.image(imageName)
 			.args(Collections.singletonList("taskmanager"))
 			.env(Collections.singletonList(new V1EnvVar().name("JOB_MANAGER_RPC_ADDRESS").value(getRpcService().getAddress())));
 

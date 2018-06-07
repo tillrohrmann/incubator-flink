@@ -71,24 +71,30 @@ import java.util.concurrent.CompletableFuture;
 
 public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 
+	static final String KUBERNETES_IMAGE_NAME = "KUBERNETES_IMAGE_NAME";
+
 	private static final int CONNECTION_TIMEOUT = 60000;
 
 	private static final int READ_TIMEOUT = 60000;
 
-	@Nonnull
+	@Nullable
 	private final Path userCodeJarPath;
 
 	@Nullable
-	private String entrypointClassName;
+	private final String entrypointClassName;
+
+	@Nonnull
+	private final String imageName;
 
 	private final String[] args;
 
 	private final int parallelism;
 
-	public KubernetesJobClusterEntrypoint(Configuration configuration, @Nonnull Path userCodeJarPath, @Nullable String entrypointClassName) {
+	public KubernetesJobClusterEntrypoint(Configuration configuration, @Nullable Path userCodeJarPath, @Nullable String entrypointClassName, @Nonnull String imageName) {
 		super(configuration);
 		this.userCodeJarPath = userCodeJarPath;
 		this.entrypointClassName = entrypointClassName;
+		this.imageName = imageName;
 		args = new String[0];
 		this.parallelism = 1;
 	}
@@ -100,13 +106,15 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 			final JobGraph jobGraph = PackagedProgramUtils.createJobGraph(packagedProgram, configuration, parallelism);
 			jobGraph.setAllowQueuedScheduling(true);
 
-			final PermanentBlobKey permanentBlobKey;
-			final FileSystem fileSystem = userCodeJarPath.getFileSystem();
-			try (InputStream inputStream = fileSystem.open(userCodeJarPath)) {
-				permanentBlobKey = blobServer.putPermanent(jobGraph.getJobID(), inputStream);
-			}
+			if (userCodeJarPath != null) {
+				final PermanentBlobKey permanentBlobKey;
+				final FileSystem fileSystem = userCodeJarPath.getFileSystem();
+				try (InputStream inputStream = fileSystem.open(userCodeJarPath)) {
+					permanentBlobKey = blobServer.putPermanent(jobGraph.getJobID(), inputStream);
+				}
 
-			jobGraph.addUserJarBlobKey(permanentBlobKey);
+				jobGraph.addUserJarBlobKey(permanentBlobKey);
+			}
 
 			return jobGraph;
 		} catch (Exception e) {
@@ -115,10 +123,21 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 	}
 
 	private PackagedProgram createPackagedProgram() throws FlinkException {
-		try {
-			return new PackagedProgram(new File(userCodeJarPath.toUri()), entrypointClassName, args);
-		} catch (ProgramInvocationException e) {
-			throw new FlinkException("Could not create a PackagedProgram from the provided user code jar.", e);
+		assert(userCodeJarPath != null || entrypointClassName != null);
+
+		if (userCodeJarPath == null) {
+			try {
+				final Class<?> mainClass = getClass().getClassLoader().loadClass(entrypointClassName);
+				return new PackagedProgram(mainClass, args);
+			} catch (ClassNotFoundException | ProgramInvocationException e) {
+				throw new FlinkException("Could not load the provied entrypoint class.", e);
+			}
+		} else {
+			try {
+				return new PackagedProgram(new File(userCodeJarPath.toUri()), entrypointClassName, args);
+			} catch (ProgramInvocationException e) {
+				throw new FlinkException("Could not create a PackagedProgram from the provided user code jar.", e);
+			}
 		}
 	}
 
@@ -147,14 +166,15 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 			metricRegistry,
 			resourceManagerRuntimeServices.getJobLeaderIdService(),
 			clusterInformation,
-			fatalErrorHandler);
+			fatalErrorHandler,
+			imageName);
 	}
 
 	protected static KubernetesJobClusterConfiguration parseArguments(String[] args) {
 		final ParameterTool parameterTool = ParameterTool.fromArgs(args);
 		final ClusterConfiguration clusterConfiguration = ClusterEntrypoint.parseArguments(parameterTool);
 
-		final String userCodeJar = parameterTool.get("userCodeJar", "file://jobs/job.jar");
+		final String userCodeJar = parameterTool.get("userCodeJar");
 		final String entrypointClassName = parameterTool.get("class");
 
 		return new KubernetesJobClusterConfiguration(
@@ -176,9 +196,16 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 
 		final String[] tmpDirs = ConfigurationUtils.parseTempDirectories(configuration);
 
-		final Path userCodeJarPath = downloadIfRemote(clusterConfiguration.getUserCodeJar(), new File(tmpDirs[0]));
+		final Path userCodeJarPath;
+		if (clusterConfiguration.getUserCodeJar() != null) {
+			userCodeJarPath = downloadIfRemote(clusterConfiguration.getUserCodeJar(), new File(tmpDirs[0]));
+		} else {
+			userCodeJarPath = null;
+		}
 
-		KubernetesJobClusterEntrypoint entrypoint = new KubernetesJobClusterEntrypoint(configuration, userCodeJarPath, clusterConfiguration.getEntrypointClassName());
+		final String imageName = System.getenv(KUBERNETES_IMAGE_NAME);
+
+		KubernetesJobClusterEntrypoint entrypoint = new KubernetesJobClusterEntrypoint(configuration, userCodeJarPath, clusterConfiguration.getEntrypointClassName(), imageName);
 
 		entrypoint.startCluster();
 	}
@@ -209,13 +236,13 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 
 	private static class KubernetesJobClusterConfiguration extends ClusterConfiguration {
 
-		@Nonnull
+		@Nullable
 		private final String userCodeJar;
 
 		@Nullable
 		private final String entrypointClassName;
 
-		KubernetesJobClusterConfiguration(String configDir, int restPort, @Nonnull String userCodeJar, @Nullable String entrypointClassName) {
+		KubernetesJobClusterConfiguration(String configDir, int restPort, @Nullable String userCodeJar, @Nullable String entrypointClassName) {
 			super(configDir, restPort);
 			this.userCodeJar = userCodeJar;
 			this.entrypointClassName = entrypointClassName;

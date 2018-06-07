@@ -37,15 +37,22 @@ import org.apache.flink.runtime.util.EnvironmentInformation;
 import org.apache.flink.runtime.util.JvmShutdownSafeguard;
 import org.apache.flink.runtime.util.SignalHandler;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
+import static org.apache.flink.kubernetes.entrypoint.KubernetesJobClusterEntrypoint.KUBERNETES_IMAGE_NAME;
 
 /**
  * Entrypoint for a Kubernetes session cluster.
  */
 public class KubernetesSessionClusterEntrypoint extends SessionClusterEntrypoint {
 
-	public KubernetesSessionClusterEntrypoint(Configuration configuration) {
+	@Nonnull
+	private final String imageName;
+
+	public KubernetesSessionClusterEntrypoint(Configuration configuration, @Nonnull String imageName) {
 		super(configuration);
+		this.imageName = imageName;
 	}
 
 	@Override
@@ -77,7 +84,8 @@ public class KubernetesSessionClusterEntrypoint extends SessionClusterEntrypoint
 			metricRegistry,
 			resourceManagerRuntimeServices.getJobLeaderIdService(),
 			clusterInformation,
-			fatalErrorHandler);
+			fatalErrorHandler,
+			imageName);
 	}
 
 	public static void main(String[] args) {
@@ -88,7 +96,9 @@ public class KubernetesSessionClusterEntrypoint extends SessionClusterEntrypoint
 
 		Configuration configuration = loadConfiguration(parseArguments(args));
 
-		KubernetesSessionClusterEntrypoint entrypoint = new KubernetesSessionClusterEntrypoint(configuration);
+		final String imageName = System.getenv(KUBERNETES_IMAGE_NAME);
+
+		KubernetesSessionClusterEntrypoint entrypoint = new KubernetesSessionClusterEntrypoint(configuration, imageName);
 
 		entrypoint.startCluster();
 	}

@@ -1,12 +1,10 @@
 FROM flink:native-kubernetes
 
-ENV JOB_TARGET_DIR=/opt/jobs
-ENV JOB_NAME=job.jar
-ENV JOB_SOURCE=throughput.jar
+ENV JOB_TARGET_DIR=/opt/flink/lib
+ARG job_jar=NOT_SET
 
 USER root
-RUN mkdir -p $JOB_TARGET_DIR
-COPY $JOB_SOURCE "$JOB_TARGET_DIR/$JOB_NAME"
+ADD $job_jar "$JOB_TARGET_DIR"
 RUN chown flink -R $JOB_TARGET_DIR
 USER flink
 
