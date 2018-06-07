@@ -17,11 +17,16 @@
 # limitations under the License.
 ################################################################################
 
+USAGE="Usage: kubernetes-session.sh (cluster|taskmanager) [args]"
+
 bin=`dirname "$0"`
 bin=`cd "$bin"; pwd`
 
 # get Flink config
 . "$bin"/config.sh
+
+MODE=$1
+ARGS=("${@:2}" "--configDir" "${FLINK_CONF_DIR}")
 
 if [ "$FLINK_IDENT_STRING" = "" ]; then
     FLINK_IDENT_STRING="$USER"
@@ -38,10 +43,14 @@ export FLINK_LIB_DIR
 
 ENTRY_POINT=org.apache.flink.kubernetes.KubernetesSessionClusterEntrypoint
 
+if [ "$MODE" = "taskmanager" ]; then
+    ENTRY_POINT=org.apache.flink.runtime.taskexecutor.TaskManagerRunner
+fi
+
 # Evaluate user options for local variable expansion
 FLINK_ENV_JAVA_OPTS=$(eval echo ${FLINK_ENV_JAVA_OPTS})
 
-exec $JAVA_RUN $JVM_ARGS $FLINK_ENV_JAVA_OPTS -classpath "$CC_CLASSPATH" $log_setting ${ENTRY_POINT} "$@"
+exec $JAVA_RUN $JVM_ARGS $FLINK_ENV_JAVA_OPTS -classpath "$CC_CLASSPATH" $log_setting ${ENTRY_POINT} "${ARGS[@]}"
 
 rc=$?
 
