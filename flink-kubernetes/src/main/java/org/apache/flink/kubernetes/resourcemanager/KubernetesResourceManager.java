@@ -53,6 +53,8 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -138,9 +140,16 @@ public class KubernetesResourceManager extends ResourceManager<KubernetesResourc
 //			)))
 			;
 
+		final Map<String, String> labels = new HashMap<>(2);
+		labels.put("app", "flink");
+		labels.put("component", "taskmanager");
+
 		return new V1Pod()
 			.apiVersion("v1")
-			.metadata(new V1ObjectMeta().name(podName))
+			.metadata(
+				new V1ObjectMeta()
+					.name(podName)
+					.labels(labels))
 			.spec(new V1PodSpec().containers(Collections.singletonList(container)));
 	}
 
