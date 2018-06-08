@@ -113,8 +113,12 @@ public class KubernetesClusterDescriptor implements ClusterDescriptor<String> {
 	public ClusterClient<String> deployJobCluster(ClusterSpecification clusterSpecification, JobGraph jobGraph, boolean detached) throws ClusterDeploymentException {
 		final String clusterName = "flink-job-cluster-" + UUID.randomUUID();
 
-		final List<String> args = new ArrayList<>(5);
+		final List<String> args = new ArrayList<>(6);
 		args.add("job");
+
+		if (detached) {
+			args.add("--detached");
+		}
 
 		if (className != null) {
 			args.add("--class");

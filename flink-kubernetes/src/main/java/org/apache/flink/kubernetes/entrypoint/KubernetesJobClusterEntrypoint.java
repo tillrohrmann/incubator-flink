@@ -183,12 +183,14 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 
 		final String userCodeJar = parameterTool.get("userCodeJar");
 		final String entrypointClassName = parameterTool.get("class");
+		final boolean isDetached = parameterTool.has("detached");
 
 		return new KubernetesJobClusterConfiguration(
 			clusterConfiguration.getConfigDir(),
 			clusterConfiguration.getRestPort(),
 			userCodeJar,
-			entrypointClassName);
+			entrypointClassName,
+			isDetached);
 	}
 
 	public static void main(String[] args) {
@@ -212,6 +214,10 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 
 		final String imageName = System.getenv(KUBERNETES_IMAGE_NAME);
 		final String clusterId = System.getenv(KUBERNETES_CLUSTER_ID);
+
+		if (clusterConfiguration.isDetached) {
+			configuration.setString(EXECUTION_MODE, ExecutionMode.DETACHED.toString());
+		}
 
 		KubernetesJobClusterEntrypoint entrypoint = new KubernetesJobClusterEntrypoint(configuration, userCodeJarPath, clusterConfiguration.getEntrypointClassName(), clusterId, imageName);
 
@@ -250,10 +256,13 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 		@Nullable
 		private final String entrypointClassName;
 
-		KubernetesJobClusterConfiguration(String configDir, int restPort, @Nullable String userCodeJar, @Nullable String entrypointClassName) {
+		private final boolean isDetached;
+
+		KubernetesJobClusterConfiguration(String configDir, int restPort, @Nullable String userCodeJar, @Nullable String entrypointClassName, boolean isDetached) {
 			super(configDir, restPort);
 			this.userCodeJar = userCodeJar;
 			this.entrypointClassName = entrypointClassName;
+			this.isDetached = isDetached;
 		}
 
 		@Nonnull
@@ -264,6 +273,10 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 		@Nullable
 		public String getEntrypointClassName() {
 			return entrypointClassName;
+		}
+
+		public boolean isDetached() {
+			return isDetached;
 		}
 	}
 }
