@@ -21,8 +21,8 @@
 usage() {
   cat <<HERE
 Usage:
-  build.sh --from-local-dist [--image-name <image>] [--kubernetes-certificates <certificate-directory>]
-  build.sh --from-release --flink-version <x.x.x> --hadoop-version <x.x> --scala-version <x.xx> [--image-name <image>] [--kubernetes-certificates <certificate-directory>]
+  build.sh --from-local-dist [--image-name <image>]
+  build.sh --from-release --flink-version <x.x.x> --hadoop-version <x.x> --scala-version <x.xx> [--image-name <image>]
   build.sh --help
 
   If the --image-name flag is not used the built image name will be 'flink'.
@@ -83,20 +83,6 @@ trap cleanup EXIT
 
 mkdir -p "${TMPDIR}"
 
-CERT_DIR="${TMPDIR}"/certs
-
-mkdir "${CERT_DIR}"
-
-if [ -n "${CERTIFICATES_DIR}" ]; then
-    cp "${CERTIFICATES_DIR}"/ca.crt "${CERT_DIR}"
-    cp "${CERTIFICATES_DIR}"/client.crt "${CERT_DIR}"
-    cp "${CERTIFICATES_DIR}"/client.key "${CERT_DIR}"
-fi
-
-CONFIG_FILE="${TMPDIR}"/config
-
-sed 's?certificate-authority: .*?certificate-authority: /opt/flink/.minikube/ca.crt?g; s?client-certificate: .*?client-certificate: /opt/flink/.minikube/client.crt?g; s$client-key: .*$client-key: /opt/flink/.minikube/client.key$g' ~/.kube/config > "${CONFIG_FILE}"
-
 if [ -n "${FROM_RELEASE}" ]; then
 
   [[ -n "${FLINK_VERSION}" ]] && [[ -n "${HADOOP_VERSION}" ]] && [[ -n "${SCALA_VERSION}" ]] || usage
@@ -123,4 +109,4 @@ else
 
 fi
 
-docker build --build-arg flink_dist="${FLINK_DIST}" --build-arg cert_dir="${CERT_DIR}" --build-arg config_file="${CONFIG_FILE}" -t "${IMAGE_NAME}" .
+docker build --build-arg flink_dist="${FLINK_DIST}" -t "${IMAGE_NAME}" .

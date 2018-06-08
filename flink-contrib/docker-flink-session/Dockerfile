@@ -28,8 +28,6 @@ ENV PATH $PATH:$FLINK_HOME/bin
 
 # flink-dist can point to a directory or a tarball on the local system
 ARG flink_dist=NOT_SET
-ARG cert_dir=NOT_SET
-ARG config_file=NOT_SET
 
 # Install build dependencies and flink
 ADD $flink_dist $FLINK_INSTALL_PATH
@@ -39,11 +37,6 @@ RUN set -x && \
   addgroup -S flink && adduser -D -S -H -G flink -h $FLINK_HOME flink && \
   chown -R flink:flink $FLINK_INSTALL_PATH/flink-* && \
   chown -h flink:flink $FLINK_HOME
-
-COPY $config_file /opt/flink/.kube/config
-COPY $cert_dir/*  /opt/flink/.minikube/
-
-RUN chown -R flink:flink /opt/flink/.kube && chown -R flink:flink /opt/flink/.minikube
 
 COPY docker-entrypoint.sh /
 

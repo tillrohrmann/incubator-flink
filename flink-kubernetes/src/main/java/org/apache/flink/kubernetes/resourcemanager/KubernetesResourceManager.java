@@ -95,7 +95,7 @@ public class KubernetesResourceManager extends ResourceManager<KubernetesResourc
 	protected void initialize() throws ResourceManagerException {
 		ApiClient apiClient;
 		try {
-			apiClient = Config.defaultClient();
+			apiClient = Config.fromCluster();
 		} catch (IOException e) {
 			throw new ResourceManagerException("Could not create the Kubernetes ApiClient.", e);
 		}
