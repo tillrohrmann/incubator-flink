@@ -305,36 +305,33 @@ public class RestClusterClient<T> extends ClusterClient<T> implements NewCluster
 		// we have to enable queued scheduling because slot will be allocated lazily
 		jobGraph.setAllowQueuedScheduling(true);
 
-		CompletableFuture<JobSubmitResponseBody> submissionFuture = getWebMonitorBaseUrl()
-			.thenCompose(webMonitorBaseUrl -> {
-				try {
-					jobGraph.zipUserArtifacts();
+		CompletableFuture<JobSubmitResponseBody> submissionFuture;
 
-					Collection<Path> localUserArtifacts = jobGraph.getUserArtifacts().values().stream()
-						.map(entry -> new Path(entry.filePath))
-						.filter(path -> {
-							try {
-								return !path.getFileSystem().isDistributedFS();
-							} catch (Exception e) {
-								log.warn("Could not determine whether {} is a local file. The file may not be accessible via the Distributed Cache.", path, e);
-								// filesystem isn't accessible from the client or FS class not present
-								return false;
-							}
-						})
-						.collect(Collectors.toList());
+		try {
+			jobGraph.zipUserArtifacts();
 
-					return restClient.sendRequest(
-						webMonitorBaseUrl.getHost(),
-						webMonitorBaseUrl.getPort(),
-						JobSubmitHeaders.getInstance(),
-						EmptyMessageParameters.getInstance(),
-						new JobSubmitRequestBody(jobGraph),
-						jobGraph.getUserJars(),
-						localUserArtifacts);
-				} catch (IOException ioe) {
-					throw new CompletionException(new FlinkException("Could not create JobSubmitRequestBody.", ioe));
-				}
-			});
+			Collection<Path> localUserArtifacts = jobGraph.getUserArtifacts().values().stream()
+				.map(entry -> new Path(entry.filePath))
+				.filter(path -> {
+					try {
+						return !path.getFileSystem().isDistributedFS();
+					} catch (Exception e) {
+						log.warn("Could not determine whether {} is a local file. The file may not be accessible via the Distributed Cache.", path, e);
+						// filesystem isn't accessible from the client or FS class not present
+						return false;
+					}
+				})
+				.collect(Collectors.toList());
+
+			submissionFuture = sendRequest(
+				JobSubmitHeaders.getInstance(),
+				EmptyMessageParameters.getInstance(),
+				new JobSubmitRequestBody(jobGraph),
+				jobGraph.getUserJars(),
+				localUserArtifacts);
+		} catch (IOException ioe) {
+			submissionFuture = FutureUtils.completedExceptionally(new FlinkException("Cannot zip the user artifacts.", ioe));
+		}
 
 		return submissionFuture
 			.thenApply(
@@ -665,10 +662,27 @@ public class RestClusterClient<T> extends ClusterClient<T> implements NewCluster
 	}
 
 	private <M extends MessageHeaders<R, P, U>, U extends MessageParameters, R extends RequestBody, P extends ResponseBody> CompletableFuture<P>
+	sendRequest(M messageHeaders, U messageParameters, R request, Collection<Path> jars, Collection<Path> userArtifacts) {
+		return sendRetriableRequest(
+			messageHeaders, messageParameters, request, isConnectionProblemOrServiceUnavailable(), jars, userArtifacts);
+	}
+
+	private <M extends MessageHeaders<R, P, U>, U extends MessageParameters, R extends RequestBody, P extends ResponseBody> CompletableFuture<P>
 			sendRetriableRequest(M messageHeaders, U messageParameters, R request, Predicate<Throwable> retryPredicate) {
 		return retry(() -> getWebMonitorBaseUrl().thenCompose(webMonitorBaseUrl -> {
 			try {
 				return restClient.sendRequest(webMonitorBaseUrl.getHost(), webMonitorBaseUrl.getPort(), messageHeaders, messageParameters, request);
+			} catch (IOException e) {
+				throw new CompletionException(e);
+			}
+		}), retryPredicate);
+	}
+
+	private <M extends MessageHeaders<R, P, U>, U extends MessageParameters, R extends RequestBody, P extends ResponseBody> CompletableFuture<P>
+		sendRetriableRequest(M messageHeaders, U messageParameters, R request, Predicate<Throwable> retryPredicate, Collection<Path> jars, Collection<Path> userArtifacts) {
+		return retry(() -> getWebMonitorBaseUrl().thenCompose(webMonitorBaseUrl -> {
+			try {
+				return restClient.sendRequest(webMonitorBaseUrl.getHost(), webMonitorBaseUrl.getPort(), messageHeaders, messageParameters, request, jars, userArtifacts);
 			} catch (IOException e) {
 				throw new CompletionException(e);
 			}

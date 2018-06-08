@@ -71,7 +71,7 @@ import java.util.concurrent.CompletableFuture;
 
 public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 
-	static final String KUBERNETES_IMAGE_NAME = "KUBERNETES_IMAGE_NAME";
+	public static final String KUBERNETES_IMAGE_NAME = "KUBERNETES_IMAGE_NAME";
 
 	private static final int CONNECTION_TIMEOUT = 60000;
 
