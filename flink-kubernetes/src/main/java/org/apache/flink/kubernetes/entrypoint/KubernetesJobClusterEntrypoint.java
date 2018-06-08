@@ -73,6 +73,8 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 
 	public static final String KUBERNETES_IMAGE_NAME = "KUBERNETES_IMAGE_NAME";
 
+	public static final String KUBERNETES_CLUSTER_ID = "KUBERNETES_CLUSTER_ID";
+
 	private static final int CONNECTION_TIMEOUT = 60000;
 
 	private static final int READ_TIMEOUT = 60000;
@@ -84,16 +86,20 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 	private final String entrypointClassName;
 
 	@Nonnull
+	private final String clusterId;
+
+	@Nonnull
 	private final String imageName;
 
 	private final String[] args;
 
 	private final int parallelism;
 
-	public KubernetesJobClusterEntrypoint(Configuration configuration, @Nullable Path userCodeJarPath, @Nullable String entrypointClassName, @Nonnull String imageName) {
+	public KubernetesJobClusterEntrypoint(Configuration configuration, @Nullable Path userCodeJarPath, @Nullable String entrypointClassName, @Nonnull String clusterId, @Nonnull String imageName) {
 		super(configuration);
 		this.userCodeJarPath = userCodeJarPath;
 		this.entrypointClassName = entrypointClassName;
+		this.clusterId = clusterId;
 		this.imageName = imageName;
 		args = new String[0];
 		this.parallelism = 1;
@@ -143,7 +149,7 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 
 	@Override
 	protected void registerShutdownActions(CompletableFuture<ApplicationStatus> terminationFuture) {
-		terminationFuture.thenAccept((status) -> System.exit(status.processExitCode()));
+		terminationFuture.thenAccept((status) -> shutDownAndTerminate(0, ApplicationStatus.SUCCEEDED, null, true));
 	}
 
 	@Override
@@ -167,6 +173,7 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 			resourceManagerRuntimeServices.getJobLeaderIdService(),
 			clusterInformation,
 			fatalErrorHandler,
+			clusterId,
 			imageName);
 	}
 
@@ -204,8 +211,9 @@ public class KubernetesJobClusterEntrypoint extends JobClusterEntrypoint {
 		}
 
 		final String imageName = System.getenv(KUBERNETES_IMAGE_NAME);
+		final String clusterId = System.getenv(KUBERNETES_CLUSTER_ID);
 
-		KubernetesJobClusterEntrypoint entrypoint = new KubernetesJobClusterEntrypoint(configuration, userCodeJarPath, clusterConfiguration.getEntrypointClassName(), imageName);
+		KubernetesJobClusterEntrypoint entrypoint = new KubernetesJobClusterEntrypoint(configuration, userCodeJarPath, clusterConfiguration.getEntrypointClassName(), clusterId, imageName);
 
 		entrypoint.startCluster();
 	}

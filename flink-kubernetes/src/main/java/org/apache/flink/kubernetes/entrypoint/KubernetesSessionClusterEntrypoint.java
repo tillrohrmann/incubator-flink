@@ -40,6 +40,7 @@ import org.apache.flink.runtime.util.SignalHandler;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import static org.apache.flink.kubernetes.entrypoint.KubernetesJobClusterEntrypoint.KUBERNETES_CLUSTER_ID;
 import static org.apache.flink.kubernetes.entrypoint.KubernetesJobClusterEntrypoint.KUBERNETES_IMAGE_NAME;
 
 /**
@@ -48,10 +49,14 @@ import static org.apache.flink.kubernetes.entrypoint.KubernetesJobClusterEntrypo
 public class KubernetesSessionClusterEntrypoint extends SessionClusterEntrypoint {
 
 	@Nonnull
+	private final String clusterId;
+
+	@Nonnull
 	private final String imageName;
 
-	public KubernetesSessionClusterEntrypoint(Configuration configuration, @Nonnull String imageName) {
+	public KubernetesSessionClusterEntrypoint(Configuration configuration, @Nonnull String clusterId, @Nonnull String imageName) {
 		super(configuration);
+		this.clusterId = clusterId;
 		this.imageName = imageName;
 	}
 
@@ -85,6 +90,7 @@ public class KubernetesSessionClusterEntrypoint extends SessionClusterEntrypoint
 			resourceManagerRuntimeServices.getJobLeaderIdService(),
 			clusterInformation,
 			fatalErrorHandler,
+			clusterId,
 			imageName);
 	}
 
@@ -96,9 +102,10 @@ public class KubernetesSessionClusterEntrypoint extends SessionClusterEntrypoint
 
 		Configuration configuration = loadConfiguration(parseArguments(args));
 
+		final String clusterId = System.getenv(KUBERNETES_CLUSTER_ID);
 		final String imageName = System.getenv(KUBERNETES_IMAGE_NAME);
 
-		KubernetesSessionClusterEntrypoint entrypoint = new KubernetesSessionClusterEntrypoint(configuration, imageName);
+		KubernetesSessionClusterEntrypoint entrypoint = new KubernetesSessionClusterEntrypoint(configuration, clusterId, imageName);
 
 		entrypoint.startCluster();
 	}

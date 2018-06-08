@@ -70,6 +70,9 @@ public class KubernetesResourceManager extends ResourceManager<KubernetesResourc
 	@Nonnull
 	private final String imageName;
 
+	@Nonnull
+	private final String clusterId;
+
 	@Nullable
 	private CoreV1Api kubernetesApi;
 
@@ -85,9 +88,11 @@ public class KubernetesResourceManager extends ResourceManager<KubernetesResourc
 			JobLeaderIdService jobLeaderIdService,
 			ClusterInformation clusterInformation,
 			FatalErrorHandler fatalErrorHandler,
+			@Nonnull String clusterId,
 			@Nonnull String imageName) {
 		super(rpcService, resourceManagerEndpointId, resourceId, resourceManagerConfiguration, highAvailabilityServices, heartbeatServices, slotManager, metricRegistry, jobLeaderIdService, clusterInformation, fatalErrorHandler);
 
+		this.clusterId = clusterId;
 		this.imageName = imageName;
 		this.kubernetesApi = null;
 		this.workerNodeMap = new ConcurrentHashMap<>();
@@ -107,7 +112,12 @@ public class KubernetesResourceManager extends ResourceManager<KubernetesResourc
 
 	@Override
 	protected void internalDeregisterApplication(ApplicationStatus finalStatus, @Nullable String optionalDiagnostics) {
-
+		try {
+			kubernetesApi.deleteNamespacedService(clusterId, "default", "true");
+			kubernetesApi.deleteCollectionNamespacedPod("default", "true", null, null, true, "app=flink,cluster=" + clusterId, 1000, null, null, false);
+		} catch (ApiException e) {
+			log.warn("Could not properly deregister Kubernetes application.", e);
+		}
 	}
 
 	@Override

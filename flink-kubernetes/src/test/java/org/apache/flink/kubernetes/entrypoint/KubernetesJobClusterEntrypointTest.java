@@ -49,7 +49,7 @@ public class KubernetesJobClusterEntrypointTest extends TestLogger {
 	public void testProgramExecution() {
 		final Configuration configuration = new Configuration();
 		final Path userCodeJarPath = new Path(URI.create("file:///Users/till/work/flink/workspace/flink/build-target/examples/streaming/WindowJoin.jar"));
-		final KubernetesJobClusterEntrypoint kubernetesJobClusterEntrypoint = new KubernetesJobClusterEntrypoint(configuration, userCodeJarPath, "foobar", "foobar");
+		final KubernetesJobClusterEntrypoint kubernetesJobClusterEntrypoint = new KubernetesJobClusterEntrypoint(configuration, userCodeJarPath, "foobar", "foobar", "foobar");
 
 		kubernetesJobClusterEntrypoint.startCluster();
 	}

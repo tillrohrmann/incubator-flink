@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.flink.kubernetes.entrypoint.KubernetesJobClusterEntrypoint.KUBERNETES_CLUSTER_ID;
 import static org.apache.flink.kubernetes.entrypoint.KubernetesJobClusterEntrypoint.KUBERNETES_IMAGE_NAME;
 
 /**
@@ -188,7 +189,8 @@ public class KubernetesClusterDescriptor implements ClusterDescriptor<String> {
 				.env(
 					Arrays.asList(
 						new V1EnvVar().name("JOB_MANAGER_RPC_ADDRESS").value(clusterName),
-						new V1EnvVar().name(KUBERNETES_IMAGE_NAME).value(imageName)));
+						new V1EnvVar().name(KUBERNETES_IMAGE_NAME).value(imageName),
+						new V1EnvVar().name(KUBERNETES_CLUSTER_ID).value(clusterName)));
 
 			final V1Pod pod = new V1Pod()
 				.apiVersion("v1")
