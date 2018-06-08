@@ -152,7 +152,7 @@ public class KubernetesResourceManager extends ResourceManager<KubernetesResourc
 
 		final Map<String, String> labels = new HashMap<>(2);
 		labels.put("app", "flink");
-		labels.put("component", "taskmanager");
+		labels.put("cluster", clusterId);
 
 		return new V1Pod()
 			.apiVersion("v1")
