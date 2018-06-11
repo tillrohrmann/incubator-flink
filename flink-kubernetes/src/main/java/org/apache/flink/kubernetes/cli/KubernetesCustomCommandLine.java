@@ -34,8 +34,6 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 
-import static org.apache.flink.client.cli.CliFrontendParser.CLASS_OPTION;
-
 /**
  * Kubernetes {@link CustomCommandLine} implementation.
  */
@@ -47,10 +45,12 @@ public class KubernetesCustomCommandLine extends AbstractCustomCommandLine<Strin
 	private static final Options KUBERNETES_OPTIONS = new Options();
 	private static final Option IMAGE_OPTION = new Option("i", "image", true, "Image name");
 	private static final Option USER_CODE_JAR_OPTION = new Option("u", "userCodeJar", true, "User code jar");
+	private static final Option ENTRY_CLASS = new Option("e", "entryClass", true, "User code jar");
 
 	static {
 		KUBERNETES_OPTIONS.addOption(IMAGE_OPTION);
 		KUBERNETES_OPTIONS.addOption(USER_CODE_JAR_OPTION);
+		KUBERNETES_OPTIONS.addOption(ENTRY_CLASS);
 	}
 
 	public KubernetesCustomCommandLine(Configuration configuration) {
@@ -81,7 +81,7 @@ public class KubernetesCustomCommandLine extends AbstractCustomCommandLine<Strin
 	@Override
 	public ClusterDescriptor<String> createClusterDescriptor(CommandLine commandLine) throws FlinkException {
 		final String imageNameValue = commandLine.getOptionValue(IMAGE_OPTION.getOpt(), "flink:native-kubernetes");
-		final String className = commandLine.getOptionValue(CLASS_OPTION.getOpt());
+		final String className = commandLine.getOptionValue(ENTRY_CLASS.getOpt());
 		final String userCodeJar = commandLine.getOptionValue(USER_CODE_JAR_OPTION.getOpt());
 
 		try {
