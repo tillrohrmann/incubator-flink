@@ -40,6 +40,7 @@ import javax.annotation.concurrent.GuardedBy;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -143,10 +144,18 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 		this.initialCredit = segments.size();
 		this.numRequiredBuffers = segments.size();
 
+		final Collection<Buffer> floatingBuffersToPrune;
+
 		synchronized (bufferQueue) {
 			for (MemorySegment segment : segments) {
-				bufferQueue.addExclusiveBuffer(new NetworkBuffer(segment, this), numRequiredBuffers);
+				bufferQueue.addExclusiveBuffer(new NetworkBuffer(segment, this));
 			}
+
+			floatingBuffersToPrune = bufferQueue.pruneFloatingBuffers(numRequiredBuffers);
+		}
+
+		for (Buffer buffer : floatingBuffersToPrune) {
+			buffer.recycleBuffer();
 		}
 	}
 
@@ -302,7 +311,9 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 	 */
 	@Override
 	public void recycle(MemorySegment segment) {
-		int numAddedBuffers;
+		final Collection<Buffer> floatingBuffersToPrune;
+		final int numAddedBuffers;
+		final int oldAvailableBufferSize = bufferQueue.getAvailableBufferSize();
 
 		synchronized (bufferQueue) {
 			// Important: check the isReleased state inside synchronized block, so there is no
@@ -315,7 +326,15 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 					ExceptionUtils.rethrow(t);
 				}
 			}
-			numAddedBuffers = bufferQueue.addExclusiveBuffer(new NetworkBuffer(segment, this), numRequiredBuffers);
+
+			bufferQueue.addExclusiveBuffer(new NetworkBuffer(segment, this));
+			floatingBuffersToPrune = bufferQueue.pruneFloatingBuffers(numRequiredBuffers);
+
+			numAddedBuffers = oldAvailableBufferSize - bufferQueue.getAvailableBufferSize();
+		}
+
+		for (Buffer buffer : floatingBuffersToPrune) {
+			buffer.recycleBuffer();
 		}
 
 		if (numAddedBuffers > 0 && unannouncedCredit.getAndAdd(numAddedBuffers) == 0) {
@@ -598,18 +617,23 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 		 * number of available buffers in queue is more than the required amount.
 		 *
 		 * @param buffer The exclusive buffer to add
-		 * @param numRequiredBuffers The number of required buffers
-		 *
-		 * @return How many buffers were added to the queue
 		 */
-		int addExclusiveBuffer(Buffer buffer, int numRequiredBuffers) {
+		void addExclusiveBuffer(Buffer buffer) {
 			exclusiveBuffers.add(buffer);
-			if (getAvailableBufferSize() > numRequiredBuffers) {
-				Buffer floatingBuffer = floatingBuffers.poll();
-				floatingBuffer.recycleBuffer();
-				return 0;
+		}
+
+		Collection<Buffer> pruneFloatingBuffers(int numRequiredBuffers) {
+			final int numFloatingBuffersToRecycle = getAvailableBufferSize() - numRequiredBuffers;
+
+			if (numFloatingBuffersToRecycle > 0) {
+				final Collection<Buffer> floatingBuffersToRecycle = new ArrayList<>(numFloatingBuffersToRecycle);
+				for (int i = 0; i < numFloatingBuffersToRecycle; i++) {
+					floatingBuffersToRecycle.add(floatingBuffers.poll());
+				}
+
+				return floatingBuffersToRecycle;
 			} else {
-				return 1;
+				return Collections.emptyList();
 			}
 		}
 
@@ -638,15 +662,18 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 		 * exclusive buffer will be gathered to return to global buffer pool later.
 		 *
 		 * @param exclusiveSegments The list that we will add exclusive segments into.
+		 * @return collection of floating buffers which need to be recycled.
 		 */
-		void releaseAll(List<MemorySegment> exclusiveSegments) {
+		Collection<Buffer> releaseAll(List<MemorySegment> exclusiveSegments) {
+			final Collection<Buffer> floatingBuffersToRelease = new ArrayList<>(floatingBuffers);
+			floatingBuffers.clear();
+
 			Buffer buffer;
-			while ((buffer = floatingBuffers.poll()) != null) {
-				buffer.recycleBuffer();
-			}
 			while ((buffer = exclusiveBuffers.poll()) != null) {
 				exclusiveSegments.add(buffer.getMemorySegment());
 			}
+
+			return floatingBuffersToRelease;
 		}
 
 		int getAvailableBufferSize() {

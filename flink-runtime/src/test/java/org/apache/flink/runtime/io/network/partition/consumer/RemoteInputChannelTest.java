@@ -34,6 +34,7 @@ import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.taskmanager.TaskActions;
 import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.TestLogger;
 
 import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 
@@ -67,7 +68,7 @@ import static org.mockito.Mockito.when;
 /**
  * Tests for the {@link RemoteInputChannel}.
  */
-public class RemoteInputChannelTest {
+public class RemoteInputChannelTest extends TestLogger {
 
 	@Test
 	public void testExceptionOnReordering() throws Exception {
