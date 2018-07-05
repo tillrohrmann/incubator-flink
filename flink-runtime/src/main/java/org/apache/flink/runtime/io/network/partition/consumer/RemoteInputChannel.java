@@ -44,6 +44,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -488,6 +489,7 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 	 */
 	void onSenderBacklog(int backlog) throws IOException {
 		int numRequestedBuffers = 0;
+		int requiredBuffers;
 
 		synchronized (bufferQueue) {
 			// Important: check the isReleased state inside synchronized block, so there is no
@@ -496,23 +498,63 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 				return;
 			}
 
+			final int availableBufferSize = bufferQueue.getAvailableBufferSize();
 			numRequiredBuffers = backlog + initialCredit;
-			while (bufferQueue.getAvailableBufferSize() < numRequiredBuffers && !isWaitingForFloatingBuffers) {
-				Buffer buffer = inputGate.getBufferPool().requestBuffer();
-				if (buffer != null) {
-					bufferQueue.addFloatingBuffer(buffer);
+		 	requiredBuffers = backlog + initialCredit - availableBufferSize;
+		}
+
+		Queue<Buffer> buffers = null;
+
+		while (requiredBuffers > 0) {
+			buffers = obtainBuffers(requiredBuffers);
+
+			synchronized (bufferQueue) {
+				// Important: check the isReleased state inside synchronized block, so there is no
+				// race condition when onSenderBacklog and releaseAllResources running in parallel.
+				if (isReleased.get()) {
+					break;
+				}
+
+				final boolean obtainedFewerBuffersThanRequested = buffers.size() < numRequestedBuffers;
+
+				while (!buffers.isEmpty() && bufferQueue.getAvailableBufferSize() < numRequiredBuffers) {
+					bufferQueue.addFloatingBuffer(buffers.poll());
 					numRequestedBuffers++;
-				} else if (inputGate.getBufferProvider().addBufferListener(this)) {
-					// If the channel has not got enough buffers, register it as listener to wait for more floating buffers.
+				}
+
+				requiredBuffers = numRequiredBuffers - bufferQueue.getAvailableBufferSize();
+
+				if (requiredBuffers > 0 && obtainedFewerBuffersThanRequested && inputGate.getBufferProvider().addBufferListener(this)) {
 					isWaitingForFloatingBuffers = true;
 					break;
 				}
 			}
 		}
 
+		if (buffers != null) {
+			for (Buffer buffer : buffers) {
+				buffer.recycleBuffer();
+			}
+		}
+
 		if (numRequestedBuffers > 0 && unannouncedCredit.getAndAdd(numRequestedBuffers) == 0) {
 			notifyCreditAvailable();
 		}
+	}
+
+	private Queue<Buffer> obtainBuffers(int requiredBuffers) throws IOException {
+		Queue<Buffer> buffers = new ArrayDeque<>(requiredBuffers);
+
+		for (int i = 0; i < requiredBuffers; i++) {
+			final Buffer buffer = inputGate.getBufferPool().requestBuffer();
+			if (buffer != null) {
+				buffers.offer(buffer);
+			} else {
+				break;
+			}
+		}
+
+		return buffers;
 	}
 
 	public void onBuffer(Buffer buffer, int sequenceNumber, int backlog) throws IOException {
