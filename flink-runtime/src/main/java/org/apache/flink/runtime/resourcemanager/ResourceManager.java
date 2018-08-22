@@ -42,6 +42,7 @@ import org.apache.flink.runtime.jobmaster.JobMaster;
 import org.apache.flink.runtime.jobmaster.JobMasterGateway;
 import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.jobmaster.JobMasterRegistrationSuccess;
+import org.apache.flink.runtime.jobmaster.RescalingBehaviour;
 import org.apache.flink.runtime.leaderelection.LeaderContender;
 import org.apache.flink.runtime.leaderelection.LeaderElectionService;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -60,6 +61,7 @@ import org.apache.flink.runtime.rest.messages.taskmanager.TaskManagerInfo;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.FencedRpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcService;
+import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.taskexecutor.FileType;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
@@ -76,8 +78,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
@@ -147,6 +152,30 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 	 */
 	private CompletableFuture<Void> clearStateFuture = CompletableFuture.completedFuture(null);
 
+	// ------------------------------------------------------------------------------------------
+	// 	per Job mode
+	// ------------------------------------------------------------------------------------------
+
+	/**
+	 * Current parallelism of the job.
+	 */
+	private int currentJobParallelism = -1;
+
+	/**
+	 * Targeted parallelism of the job.
+	 */
+	private int targetJobParallelism = -1;
+
+	/**
+	 * Number of task executors during last polling.
+	 */
+	private int lastTaskExecutors = -1;
+
+	/**
+	 * Last time the set of TMs changed.
+	 */
+	private long lastTaskExecutorChange = -1;
+
 	public ResourceManager(
 			RpcService rpcService,
 			String resourceManagerEndpointId,
@@ -187,7 +216,6 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 		this.jmResourceIdRegistrations = new HashMap<>(4);
 		this.taskExecutors = new HashMap<>(8);
 	}
-
 
 
 	// ------------------------------------------------------------------------
@@ -907,6 +935,69 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 					onFatalError(ExceptionUtils.stripCompletionException(throwable));
 				}
 			});
+
+		initJobRescaler();
+	}
+
+	private void initJobRescaler() {
+		getRpcService().getScheduledExecutor().scheduleWithFixedDelay(() -> {
+
+			final CountDownLatch rescalingDone = new CountDownLatch(1);
+
+			getMainThreadExecutor().execute(() -> {
+
+				computeTargetJobParallelism();
+
+				final Set<Map.Entry<JobID, JobManagerRegistration>> jobIdJobManagerRegistration = jobManagerRegistrations.entrySet();
+
+				if (!jobIdJobManagerRegistration.isEmpty()
+					&& targetJobParallelism > 0
+					&& currentJobParallelism < targetJobParallelism) {
+					log.info("Trying to scale job from {} to {}", currentJobParallelism, targetJobParallelism);
+
+					final JobMasterGateway jobManagerGateway = jobIdJobManagerRegistration
+						.iterator()
+						.next()
+						.getValue()
+						.getJobManagerGateway();
+
+					// just block until rescale is done
+					jobManagerGateway.rescaleJob(targetJobParallelism, RescalingBehaviour.STRICT, RpcUtils.INF_TIMEOUT).whenCompleteAsync((ack, throwable) -> {
+						if (throwable != null) {
+							log.error("Rescaling failed", throwable);
+						} else {
+							currentJobParallelism = targetJobParallelism;
+							log.info("Job scaled to new parallelism {}", targetJobParallelism);
+							rescalingDone.countDown();
+						}
+					}, getMainThreadExecutor());
+				} else {
+					rescalingDone.countDown();
+				}
+			});
+
+			try {
+				rescalingDone.await();
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}, 20, 2, TimeUnit.SECONDS);
+	}
+
+	/**
+	 * Updates {@link #targetJobParallelism} if re-scale should be initiated.
+	 */
+	private void computeTargetJobParallelism() {
+		if (lastTaskExecutors != taskExecutors.size()) {
+			lastTaskExecutorChange = System.nanoTime();
+			lastTaskExecutors = taskExecutors.size();
+		}
+
+		final long elapsedSeconds = (System.nanoTime() - lastTaskExecutorChange) / 1000000 / 1000;
+		if (elapsedSeconds > 3) {
+			targetJobParallelism = taskExecutors.size(); // assume one slot per TM
+			log.info("Target parallelism should be {}", targetJobParallelism);
+		}
 	}
 
 	private CompletableFuture<Boolean> tryAcceptLeadership(final UUID newLeaderSessionID) {
