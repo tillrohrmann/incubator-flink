@@ -19,12 +19,15 @@
 package org.apache.flink.runtime.jobmaster.driver;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.runtime.StoppingException;
 import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
+import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
+import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
 import org.apache.flink.runtime.executiongraph.Execution;
@@ -41,13 +44,16 @@ import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.query.KvStateLocationRegistry;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Default implementation of the {@link ExecutionGraphDriver}.
@@ -208,5 +214,56 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	@Override
 	public AccessExecutionGraph getExecutionGraph() {
 		return executionGraph;
+	}
+
+	@Override
+	public CompletableFuture<String> triggerSavepoint(@Nullable String targetDirectory) {
+		final CheckpointCoordinator checkpointCoordinator = executionGraph.getCheckpointCoordinator();
+		if (checkpointCoordinator == null) {
+			return FutureUtils.completedExceptionally(new IllegalStateException(
+				String.format("Job %s is not a streaming job.", executionGraph.getJobID())));
+		} else if (targetDirectory == null && !checkpointCoordinator.getCheckpointStorage().hasDefaultSavepointLocation()) {
+			LOG.info("Trying to cancel job {} with savepoint, but no savepoint directory configured.", executionGraph.getJobID());
+
+			return FutureUtils.completedExceptionally(new IllegalStateException(
+				"No savepoint directory configured. You can either specify a directory " +
+					"while cancelling via -s :targetDirectory or configure a cluster-wide " +
+					"default via key '" + CheckpointingOptions.SAVEPOINT_DIRECTORY.key() + "'."));
+		}
+
+		return checkpointCoordinator
+			.triggerSavepoint(System.currentTimeMillis(), targetDirectory)
+			.thenApply(CompletedCheckpoint::getExternalPointer);
+	}
+
+	@Override
+	public void startCheckpointScheduler() {
+		final CheckpointCoordinator checkpointCoordinator = getCheckpointCoordinator();
+		if (checkpointCoordinator.isPeriodicCheckpointingConfigured()) {
+			try {
+				checkpointCoordinator.startCheckpointScheduler();
+			} catch (IllegalStateException ignored) {
+				// Concurrent shut down of the coordinator
+			}
+		}
+	}
+
+	@Nonnull
+	private CheckpointCoordinator getCheckpointCoordinator() {
+		final CheckpointCoordinator checkpointCoordinator = executionGraph.getCheckpointCoordinator();
+		Preconditions.checkState(checkpointCoordinator != null, "Job %s is not a streaming job.", executionGraph.getJobID());
+		return checkpointCoordinator;
+	}
+
+	@Override
+	public void stopCheckpointScheduler() {
+		final CheckpointCoordinator checkpointCoordinator = getCheckpointCoordinator();
+
+		checkpointCoordinator.stopCheckpointScheduler();
+	}
+
+	@Override
+	public ExecutionJobVertex getJobVertex(JobVertexID jobVertexId) {
+		return executionGraph.getJobVertex(jobVertexId);
 	}
 }

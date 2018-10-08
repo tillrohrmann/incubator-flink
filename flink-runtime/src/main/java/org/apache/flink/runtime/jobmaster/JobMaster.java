@@ -23,7 +23,6 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.queryablestate.KvStateID;
 import org.apache.flink.runtime.JobException;
@@ -35,7 +34,6 @@ import org.apache.flink.runtime.checkpoint.CheckpointDeclineReason;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
 import org.apache.flink.runtime.checkpoint.CheckpointTriggerException;
 import org.apache.flink.runtime.checkpoint.Checkpoints;
-import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
@@ -868,7 +866,8 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	@Override
 	public CompletableFuture<JobStatus> requestJobStatus(Time timeout) {
-		return CompletableFuture.completedFuture(executionGraphDriver.getExecutionGraph().getState());
+		final AccessExecutionGraph currentExecutionGraph = executionGraphDriver.getExecutionGraph();
+		return CompletableFuture.completedFuture(currentExecutionGraph.getState());
 	}
 
 	@Override
@@ -881,54 +880,30 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			@Nullable final String targetDirectory,
 			final boolean cancelJob,
 			final Time timeout) {
-
-		final CheckpointCoordinator checkpointCoordinator = executionGraph.getCheckpointCoordinator();
-		if (checkpointCoordinator == null) {
-			return FutureUtils.completedExceptionally(new IllegalStateException(
-				String.format("Job %s is not a streaming job.", jobGraph.getJobID())));
-		} else if (targetDirectory == null && !checkpointCoordinator.getCheckpointStorage().hasDefaultSavepointLocation()) {
-			log.info("Trying to cancel job {} with savepoint, but no savepoint directory configured.", jobGraph.getJobID());
-
-			return FutureUtils.completedExceptionally(new IllegalStateException(
-				"No savepoint directory configured. You can either specify a directory " +
-					"while cancelling via -s :targetDirectory or configure a cluster-wide " +
-					"default via key '" + CheckpointingOptions.SAVEPOINT_DIRECTORY.key() + "'."));
-		}
-
 		if (cancelJob) {
-			checkpointCoordinator.stopCheckpointScheduler();
+			executionGraphDriver.stopCheckpointScheduler();
 		}
-		return checkpointCoordinator
-			.triggerSavepoint(System.currentTimeMillis(), targetDirectory)
-			.thenApply(CompletedCheckpoint::getExternalPointer)
-			.thenApplyAsync(path -> {
-				if (cancelJob) {
-					log.info("Savepoint stored in {}. Now cancelling {}.", path, jobGraph.getJobID());
-					cancel(timeout);
-				}
-				return path;
-			}, getMainThreadExecutor())
+
+		final CompletableFuture<String> savepointFuture = executionGraphDriver.triggerSavepoint(targetDirectory);
+
+		return savepointFuture.thenApplyAsync(path -> {
+			if (cancelJob) {
+				log.info("Savepoint stored in {}. Now cancelling {}.", path, jobGraph.getJobID());
+				executionGraphDriver.cancel();
+			}
+			return path;
+		}, getMainThreadExecutor())
 			.exceptionally(throwable -> {
 				if (cancelJob) {
-					startCheckpointScheduler(checkpointCoordinator);
+					executionGraphDriver.startCheckpointScheduler();
 				}
 				throw new CompletionException(throwable);
 			});
 	}
 
-	private void startCheckpointScheduler(final CheckpointCoordinator checkpointCoordinator) {
-		if (checkpointCoordinator.isPeriodicCheckpointingConfigured()) {
-			try {
-				checkpointCoordinator.startCheckpointScheduler();
-			} catch (IllegalStateException ignored) {
-				// Concurrent shut down of the coordinator
-			}
-		}
-	}
-
 	@Override
 	public CompletableFuture<OperatorBackPressureStatsResponse> requestOperatorBackPressureStats(final JobVertexID jobVertexId) {
-		final ExecutionJobVertex jobVertex = executionGraph.getJobVertex(jobVertexId);
+		final ExecutionJobVertex jobVertex = executionGraphDriver.getJobVertex(jobVertexId);
 		if (jobVertex == null) {
 			return FutureUtils.completedExceptionally(new FlinkException("JobVertexID not found " +
 				jobVertexId));
