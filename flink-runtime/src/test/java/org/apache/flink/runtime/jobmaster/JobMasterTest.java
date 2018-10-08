@@ -52,11 +52,11 @@ import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.deployment.ResultPartitionDeploymentDescriptor;
 import org.apache.flink.runtime.deployment.TaskDeploymentDescriptor;
 import org.apache.flink.runtime.execution.ExecutionState;
+import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
+import org.apache.flink.runtime.executiongraph.AccessExecutionVertex;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
-import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphTestUtils;
-import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.restart.FixedDelayRestartStrategy;
 import org.apache.flink.runtime.executiongraph.restart.RestartStrategy;
 import org.apache.flink.runtime.executiongraph.restart.RestartStrategyFactory;
@@ -794,7 +794,7 @@ public class JobMasterTest extends TestLogger {
 				.setRestartStrategyFactory(RestartStrategyFactory.createRestartStrategyFactory(configuration))
 				.build();
 
-		final JobMaster jobMaster = createJobMaster(
+		final TestingJobMaster jobMaster = createJobMaster(
 			configuration,
 			testJobGraph,
 			haServices,
@@ -808,8 +808,8 @@ public class JobMasterTest extends TestLogger {
 
 			final JobMasterGateway jobMasterGateway = jobMaster.getSelfGateway(JobMasterGateway.class);
 
-			ExecutionGraph eg = jobMaster.getExecutionGraph();
-			ExecutionVertex ev = eg.getAllExecutionVertices().iterator().next();
+			AccessExecutionGraph eg = jobMaster.getExecutionGraph().get();
+			AccessExecutionVertex ev = eg.getAllExecutionVertices().iterator().next();
 
 			final SupplierWithException<SerializedInputSplit, Exception> inputSplitSupplier = () -> jobMasterGateway.requestNextInputSplit(
 				source.getID(),
@@ -825,7 +825,7 @@ public class JobMasterTest extends TestLogger {
 			final long maxWaitMillis = 2000L;
 			ExecutionGraphTestUtils.waitUntilExecutionVertexState(ev, ExecutionState.SCHEDULED, maxWaitMillis);
 
-			eg.failGlobal(new Exception("Testing exception"));
+			jobMaster.failJob(new Exception("Testing exception"));
 
 			ExecutionGraphTestUtils.waitUntilExecutionVertexState(ev, ExecutionState.SCHEDULED, maxWaitMillis);
 
@@ -1135,7 +1135,7 @@ public class JobMasterTest extends TestLogger {
 				fail("Expected to fail because of clashing registration message.");
 			} catch (Exception e) {
 				assertTrue(ExceptionUtils.findThrowableWithMessage(e, "Registration name clash").isPresent());
-				assertEquals(JobStatus.FAILED, jobMaster.getExecutionGraph().getState());
+				assertEquals(JobStatus.FAILED, jobMasterGateway.requestJobStatus(testingTimeout).get());
 			}
 		} finally {
 			RpcUtils.terminateRpcEndpoint(jobMaster, testingTimeout);
@@ -1443,7 +1443,7 @@ public class JobMasterTest extends TestLogger {
 	}
 
 	@Nonnull
-	private JobMaster createJobMaster(
+	private TestingJobMaster createJobMaster(
 			Configuration configuration,
 			JobGraph jobGraph,
 			HighAvailabilityServices highAvailabilityServices,
@@ -1457,7 +1457,7 @@ public class JobMasterTest extends TestLogger {
 	}
 
 	@Nonnull
-	private JobMaster createJobMaster(
+	private TestingJobMaster createJobMaster(
 			Configuration configuration,
 			JobGraph jobGraph,
 			HighAvailabilityServices highAvailabilityServices,
@@ -1466,7 +1466,7 @@ public class JobMasterTest extends TestLogger {
 
 		final JobMasterConfiguration jobMasterConfiguration = JobMasterConfiguration.fromConfiguration(configuration);
 
-		return new JobMaster(
+		return new TestingJobMaster(
 			rpcService,
 			jobMasterConfiguration,
 			jmResourceId,

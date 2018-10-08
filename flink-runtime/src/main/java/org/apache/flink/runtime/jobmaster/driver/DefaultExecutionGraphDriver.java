@@ -279,7 +279,7 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	}
 
 	@Override
-	public CompletionStage<JobStatus> getTerminationFuture() {
+	public CompletableFuture<JobStatus> getTerminationFuture() {
 		return executionGraph.getTerminationFuture();
 	}
 
