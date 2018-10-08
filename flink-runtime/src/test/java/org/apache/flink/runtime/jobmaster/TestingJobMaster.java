@@ -67,8 +67,13 @@ public class TestingJobMaster extends JobMaster {
 			userCodeLoader);
 	}
 
-	public void failJob(Throwable cause) {
-		runAsync(() -> getExecutionGraphDriver().fail(cause));
+	public CompletableFuture<Void> failJob(Throwable cause) {
+		return CompletableFuture.supplyAsync(
+			() -> {
+				getExecutionGraphDriver().fail(cause);
+				return null;
+			},
+			getMainThreadExecutor());
 	}
 
 	public CompletableFuture<AccessExecutionGraph> getExecutionGraph() {

@@ -88,7 +88,6 @@ import org.apache.flink.runtime.registration.RetryingRegistration;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
-import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStatsResponse;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.FencedRpcEndpoint;
@@ -496,7 +495,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 				if (executionGraphDriver == currentExecutionGraphDriver) {
 					clearExecutionGraphFields();
 					assignExecutionGraphDriver(
-						new DefaultExecutionGraphDriver(restoredExecutionGraph),
+						new DefaultExecutionGraphDriver(restoredExecutionGraph, backPressureStatsTracker),
 						newJobManagerJobMetricGroup);
 					scheduleExecutionGraph();
 
@@ -896,16 +895,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	@Override
 	public CompletableFuture<OperatorBackPressureStatsResponse> requestOperatorBackPressureStats(final JobVertexID jobVertexId) {
-		final AccessExecutionJobVertex jobVertex = executionGraphDriver.getJobVertex(jobVertexId);
-		if (jobVertex == null) {
-			return FutureUtils.completedExceptionally(new FlinkException("JobVertexID not found " +
-				jobVertexId));
-		}
-
-		final Optional<OperatorBackPressureStats> operatorBackPressureStats =
-			backPressureStatsTracker.getOperatorBackPressureStats(jobVertex);
-		return CompletableFuture.completedFuture(OperatorBackPressureStatsResponse.of(
-			operatorBackPressureStats.orElse(null)));
+		return executionGraphDriver.requestOperatorBackPressureStats(jobVertexId);
 	}
 
 	@Override
@@ -1072,7 +1062,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			}
 		}
 
-		return new DefaultExecutionGraphDriver(newExecutionGraph);
+		return new DefaultExecutionGraphDriver(newExecutionGraph, backPressureStatsTracker);
 	}
 
 	private ExecutionGraph createExecutionGraph(JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws JobExecutionException, JobException {

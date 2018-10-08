@@ -825,7 +825,7 @@ public class JobMasterTest extends TestLogger {
 			final long maxWaitMillis = 2000L;
 			ExecutionGraphTestUtils.waitUntilExecutionVertexState(ev, ExecutionState.SCHEDULED, maxWaitMillis);
 
-			jobMaster.failJob(new Exception("Testing exception"));
+			jobMaster.failJob(new Exception("Testing exception")).get();
 
 			ExecutionGraphTestUtils.waitUntilExecutionVertexState(ev, ExecutionState.SCHEDULED, maxWaitMillis);
 
