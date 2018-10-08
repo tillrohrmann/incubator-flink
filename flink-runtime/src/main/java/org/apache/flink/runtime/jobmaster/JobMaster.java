@@ -1584,7 +1584,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	}
 
 	@VisibleForTesting
-	ExecutionGraph getExecutionGraph() {
-		return executionGraph;
+	public ExecutionGraphDriver getExecutionGraphDriver() {
+		return executionGraphDriver;
 	}
 }

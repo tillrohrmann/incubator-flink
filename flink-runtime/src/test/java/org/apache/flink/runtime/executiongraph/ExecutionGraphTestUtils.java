@@ -155,7 +155,7 @@ public class ExecutionGraphTestUtils {
 	 *
 	 * <p>This method is based on polling and might miss very fast state transitions!
 	 */
-	public static void waitUntilExecutionVertexState(ExecutionVertex executionVertex, ExecutionState state, long maxWaitMillis)
+	public static void waitUntilExecutionVertexState(AccessExecutionVertex executionVertex, ExecutionState state, long maxWaitMillis)
 		throws TimeoutException {
 		checkNotNull(executionVertex);
 		checkNotNull(state);
@@ -165,7 +165,7 @@ public class ExecutionGraphTestUtils {
 		final long deadline = maxWaitMillis == 0 ? Long.MAX_VALUE : System.nanoTime() + (maxWaitMillis * 1_000_000);
 
 		while (true) {
-			Execution execution = executionVertex.getCurrentExecutionAttempt();
+			AccessExecution execution = executionVertex.getCurrentExecutionAttempt();
 
 			if (execution == null || (execution.getState() != state && System.nanoTime() < deadline)) {
 				try {
