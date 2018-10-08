@@ -23,6 +23,7 @@ import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.runtime.StoppingException;
+import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
@@ -30,14 +31,17 @@ import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
+import org.apache.flink.runtime.executiongraph.AccessExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphException;
 import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.IntermediateResult;
+import org.apache.flink.runtime.executiongraph.JobStatusListener;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
+import org.apache.flink.runtime.jobgraph.JobStatus;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
@@ -54,6 +58,7 @@ import javax.annotation.Nullable;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * Default implementation of the {@link ExecutionGraphDriver}.
@@ -61,14 +66,10 @@ import java.util.concurrent.CompletableFuture;
 public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	private static final Logger LOG = LoggerFactory.getLogger(DefaultExecutionGraphDriver.class);
 
-	@Nonnull
-	private final ExecutionGraphFactory executionGraphFactory;
-
 	private ExecutionGraph executionGraph;
 
-	public DefaultExecutionGraphDriver(@Nonnull ExecutionGraph executionGraph, @Nonnull ExecutionGraphFactory executionGraphFactory) {
+	public DefaultExecutionGraphDriver(@Nonnull ExecutionGraph executionGraph) {
 		this.executionGraph = executionGraph;
-		this.executionGraphFactory = executionGraphFactory;
 	}
 
 	@Override
@@ -129,7 +130,7 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	}
 
 	@Override
-	public void fail(Exception reason) {
+	public void fail(Throwable reason) {
 		executionGraph.failGlobal(reason);
 	}
 
@@ -263,7 +264,32 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	}
 
 	@Override
-	public ExecutionJobVertex getJobVertex(JobVertexID jobVertexId) {
+	public AccessExecutionJobVertex getJobVertex(JobVertexID jobVertexId) {
 		return executionGraph.getJobVertex(jobVertexId);
+	}
+
+	@Override
+	public void suspend(Exception cause) {
+		executionGraph.suspend(cause);
+	}
+
+	@Override
+	public void updateAccumulators(AccumulatorSnapshot snapshot) {
+		executionGraph.updateAccumulators(snapshot);
+	}
+
+	@Override
+	public CompletionStage<JobStatus> getTerminationFuture() {
+		return executionGraph.getTerminationFuture();
+	}
+
+	@Override
+	public JobStatus getState() {
+		return executionGraph.getState();
+	}
+
+	@Override
+	public void registerJobStatusListener(JobStatusListener jobStatusListener) {
+		executionGraph.registerJobStatusListener(jobStatusListener);
 	}
 }
