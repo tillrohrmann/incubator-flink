@@ -74,4 +74,13 @@ public interface AccessExecutionJobVertex {
 	 */
 	StringifiedAccumulatorResult[] getAggregatedUserAccumulatorsStringified();
 
+	/**
+	 * Archive the given {@link AccessExecutionJobVertex}.
+	 *
+	 * <p>Archiving means to release all active resources and create an
+	 * immutable {@link ArchivedExecutionJobVertex} instance.
+	 *
+	 * @return Archived {@link ArchivedExecutionJobVertex}.
+	 */
+	ArchivedExecutionJobVertex archive();
 }

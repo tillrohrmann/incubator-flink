@@ -231,6 +231,11 @@ public class ArchivedExecutionGraph implements AccessExecutionGraph, Serializabl
 	}
 
 	@Override
+	public int getTotalNumberOfVertices() {
+		return verticesInCreationOrder.stream().mapToInt(ArchivedExecutionJobVertex::getParallelism).sum();
+	}
+
+	@Override
 	public ArchivedExecutionConfig getArchivedExecutionConfig() {
 		return archivedExecutionConfig;
 	}
@@ -301,13 +306,13 @@ public class ArchivedExecutionGraph implements AccessExecutionGraph, Serializabl
 	 * @param executionGraph to create the ArchivedExecutionGraph from
 	 * @return ArchivedExecutionGraph created from the given ExecutionGraph
 	 */
-	public static ArchivedExecutionGraph createFrom(ExecutionGraph executionGraph) {
+	public static ArchivedExecutionGraph createFrom(AccessExecutionGraph executionGraph) {
 		final int numberVertices = executionGraph.getTotalNumberOfVertices();
 
 		Map<JobVertexID, ArchivedExecutionJobVertex> archivedTasks = new HashMap<>(numberVertices);
 		List<ArchivedExecutionJobVertex> archivedVerticesInCreationOrder = new ArrayList<>(numberVertices);
 
-		for (ExecutionJobVertex task : executionGraph.getVerticesTopologically()) {
+		for (AccessExecutionJobVertex task : executionGraph.getVerticesTopologically()) {
 			ArchivedExecutionJobVertex archivedTask = task.archive();
 			archivedVerticesInCreationOrder.add(archivedTask);
 			archivedTasks.put(task.getJobVertexId(), archivedTask);

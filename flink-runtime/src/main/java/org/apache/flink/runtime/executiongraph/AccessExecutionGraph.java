@@ -164,4 +164,6 @@ public interface AccessExecutionGraph {
 	 * @return true, if the execution graph was archived, false otherwise
 	 */
 	boolean isArchived();
+
+	int getTotalNumberOfVertices();
 }

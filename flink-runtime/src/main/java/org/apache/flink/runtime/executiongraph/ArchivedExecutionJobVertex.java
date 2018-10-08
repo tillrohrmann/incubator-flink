@@ -117,4 +117,9 @@ public class ArchivedExecutionJobVertex implements AccessExecutionJobVertex, Ser
 		return archivedUserAccumulators;
 	}
 
+	@Override
+	public ArchivedExecutionJobVertex archive() {
+		return this;
+	}
+
 }
