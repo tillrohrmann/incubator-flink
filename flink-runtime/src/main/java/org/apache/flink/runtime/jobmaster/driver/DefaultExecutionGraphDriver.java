@@ -47,7 +47,11 @@ import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.query.KvStateLocationRegistry;
+import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
+import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
+import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStatsResponse;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
+import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -58,7 +62,6 @@ import javax.annotation.Nullable;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
 /**
  * Default implementation of the {@link ExecutionGraphDriver}.
@@ -66,10 +69,13 @@ import java.util.concurrent.CompletionStage;
 public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	private static final Logger LOG = LoggerFactory.getLogger(DefaultExecutionGraphDriver.class);
 
-	private ExecutionGraph executionGraph;
+	private final ExecutionGraph executionGraph;
 
-	public DefaultExecutionGraphDriver(@Nonnull ExecutionGraph executionGraph) {
+	private final BackPressureStatsTracker backPressureStatsTracker;
+
+	public DefaultExecutionGraphDriver(@Nonnull ExecutionGraph executionGraph, @Nonnull BackPressureStatsTracker backPressureStatsTracker) {
 		this.executionGraph = executionGraph;
+		this.backPressureStatsTracker = backPressureStatsTracker;
 	}
 
 	@Override
@@ -291,5 +297,19 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	@Override
 	public void registerJobStatusListener(JobStatusListener jobStatusListener) {
 		executionGraph.registerJobStatusListener(jobStatusListener);
+	}
+
+	@Override
+	public CompletableFuture<OperatorBackPressureStatsResponse> requestOperatorBackPressureStats(JobVertexID jobVertexId) {
+		final ExecutionJobVertex jobVertex = executionGraph.getJobVertex(jobVertexId);
+		if (jobVertex == null) {
+			return FutureUtils.completedExceptionally(new FlinkException("JobVertexID not found " +
+				jobVertexId));
+		}
+
+		final Optional<OperatorBackPressureStats> operatorBackPressureStats =
+			backPressureStatsTracker.getOperatorBackPressureStats(jobVertex);
+		return CompletableFuture.completedFuture(OperatorBackPressureStatsResponse.of(
+			operatorBackPressureStats.orElse(null)));
 	}
 }
