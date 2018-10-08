@@ -710,6 +710,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 		};
 	}
 
+	@Override
 	public int getTotalNumberOfVertices() {
 		return numVerticesTotal;
 	}
