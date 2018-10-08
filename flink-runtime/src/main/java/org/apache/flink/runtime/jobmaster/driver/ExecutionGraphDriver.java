@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.jobmaster.driver;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.runtime.StoppingException;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
@@ -28,13 +29,17 @@ import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphException;
+import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.query.KvStateLocationRegistry;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
 
+import javax.annotation.Nullable;
+
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Component which is responsible for executing the {@link ExecutionGraph}.
@@ -64,4 +69,12 @@ public interface ExecutionGraphDriver {
 	KvStateLocationRegistry getKvStateLocationRegistry();
 
 	AccessExecutionGraph getExecutionGraph();
+
+	CompletableFuture<String> triggerSavepoint(@Nullable String targetDirectory);
+
+	void startCheckpointScheduler();
+
+	void stopCheckpointScheduler();
+
+	ExecutionJobVertex getJobVertex(JobVertexID jobVertexId);
 }
