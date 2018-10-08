@@ -202,9 +202,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	private JobManagerJobStatusListener jobStatusListener;
 
 	@Nullable
-	private JobManagerJobMetricGroup jobManagerJobMetricGroup;
-
-	@Nullable
 	private String lastInternalSavepoint;
 
 	@Nullable
@@ -288,8 +285,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		this.backPressureStatsTracker = checkNotNull(jobManagerSharedServices.getBackPressureStatsTracker());
 		this.lastInternalSavepoint = null;
 
-		this.jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
-		this.executionGraphDriver = createAndRestoreExecutionGraphDriver(jobManagerJobMetricGroup);
+		this.executionGraphDriver = createAndRestoreExecutionGraphDriver();
 		this.jobStatusListener = null;
 
 		this.resourceManagerConnection = null;
@@ -495,8 +491,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 				if (executionGraphDriver == currentExecutionGraphDriver) {
 					clearExecutionGraphFields();
 					assignExecutionGraphDriver(
-						new DefaultExecutionGraphDriver(restoredExecutionGraph, backPressureStatsTracker),
-						newJobManagerJobMetricGroup);
+						new DefaultExecutionGraphDriver(restoredExecutionGraph, newJobManagerJobMetricGroup, backPressureStatsTracker));
 					scheduleExecutionGraph();
 
 					return Acknowledge.get();
@@ -996,15 +991,11 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		return Acknowledge.get();
 	}
 
-	private void assignExecutionGraphDriver(
-			ExecutionGraphDriver newExecutionGraphDriver,
-			JobManagerJobMetricGroup newJobManagerJobMetricGroup) {
+	private void assignExecutionGraphDriver(ExecutionGraphDriver newExecutionGraphDriver) {
 		validateRunsInMainThread();
 		checkState(executionGraphDriver.getState().isTerminalState());
-		checkState(jobManagerJobMetricGroup == null);
 
 		executionGraphDriver = newExecutionGraphDriver;
-		jobManagerJobMetricGroup = newJobManagerJobMetricGroup;
 	}
 
 	private void resetAndScheduleExecutionGraph() throws Exception {
@@ -1016,12 +1007,11 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			executionGraphAssignedFuture = CompletableFuture.completedFuture(null);
 		} else {
 			suspendAndClearExecutionGraphFields(new FlinkException("ExecutionGraph is being reset in order to be rescheduled."));
-			final JobManagerJobMetricGroup newJobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
-			final ExecutionGraphDriver newExecutionGraphDriver = createAndRestoreExecutionGraphDriver(newJobManagerJobMetricGroup);
+			final ExecutionGraphDriver newExecutionGraphDriver = createAndRestoreExecutionGraphDriver();
 
 			executionGraphAssignedFuture = executionGraphDriver.getTerminationFuture().handleAsync(
 				(JobStatus ignored, Throwable throwable) -> {
-					assignExecutionGraphDriver(newExecutionGraphDriver, newJobManagerJobMetricGroup);
+					assignExecutionGraphDriver(newExecutionGraphDriver);
 					return null;
 				},
 				getMainThreadExecutor());
@@ -1044,9 +1034,10 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		}
 	}
 
-	private ExecutionGraphDriver createAndRestoreExecutionGraphDriver(JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws Exception {
+	private ExecutionGraphDriver createAndRestoreExecutionGraphDriver() throws Exception {
 
-		ExecutionGraph newExecutionGraph = createExecutionGraph(currentJobManagerJobMetricGroup);
+		final JobManagerJobMetricGroup jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
+		ExecutionGraph newExecutionGraph = createExecutionGraph(jobManagerJobMetricGroup);
 
 		final CheckpointCoordinator checkpointCoordinator = newExecutionGraph.getCheckpointCoordinator();
 
@@ -1062,7 +1053,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			}
 		}
 
-		return new DefaultExecutionGraphDriver(newExecutionGraph, backPressureStatsTracker);
+		return new DefaultExecutionGraphDriver(newExecutionGraph, jobManagerJobMetricGroup, backPressureStatsTracker);
 	}
 
 	private ExecutionGraph createExecutionGraph(JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws JobExecutionException, JobException {
@@ -1091,17 +1082,12 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	private void suspendExecutionGraphDriver(Exception cause) {
 		executionGraphDriver.suspend(cause);
 
-		if (jobManagerJobMetricGroup != null) {
-			jobManagerJobMetricGroup.close();
-		}
-
 		if (jobStatusListener != null) {
 			jobStatusListener.stop();
 		}
 	}
 
 	private void clearExecutionGraphFields() {
-		jobManagerJobMetricGroup = null;
 		jobStatusListener = null;
 	}
 

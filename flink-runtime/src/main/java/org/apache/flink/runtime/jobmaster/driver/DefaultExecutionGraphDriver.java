@@ -46,6 +46,7 @@ import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
+import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
 import org.apache.flink.runtime.query.KvStateLocationRegistry;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
@@ -71,10 +72,16 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	private final ExecutionGraph executionGraph;
 
+	private final JobManagerJobMetricGroup jobManagerJobMetricGroup;
+
 	private final BackPressureStatsTracker backPressureStatsTracker;
 
-	public DefaultExecutionGraphDriver(@Nonnull ExecutionGraph executionGraph, @Nonnull BackPressureStatsTracker backPressureStatsTracker) {
+	public DefaultExecutionGraphDriver(
+		@Nonnull ExecutionGraph executionGraph,
+		@Nonnull JobManagerJobMetricGroup jobManagerJobMetricGroup,
+		@Nonnull BackPressureStatsTracker backPressureStatsTracker) {
 		this.executionGraph = executionGraph;
+		this.jobManagerJobMetricGroup = jobManagerJobMetricGroup;
 		this.backPressureStatsTracker = backPressureStatsTracker;
 	}
 
@@ -277,6 +284,7 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	@Override
 	public void suspend(Exception cause) {
 		executionGraph.suspend(cause);
+		jobManagerJobMetricGroup.close();
 	}
 
 	@Override
@@ -311,5 +319,10 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 			backPressureStatsTracker.getOperatorBackPressureStats(jobVertex);
 		return CompletableFuture.completedFuture(OperatorBackPressureStatsResponse.of(
 			operatorBackPressureStats.orElse(null)));
+	}
+
+	@Override
+	public CompletableFuture<Void> closeAsync() {
+		return CompletableFuture.completedFuture(null);
 	}
 }
