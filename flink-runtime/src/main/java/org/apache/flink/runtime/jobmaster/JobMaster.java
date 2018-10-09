@@ -198,8 +198,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private ExecutionGraphDriver executionGraphDriver;
 
-	@Nullable
-	private JobManagerJobStatusListener jobStatusListener;
+	private final JobManagerJobStatusListener jobStatusListener;
 
 	@Nullable
 	private String lastInternalSavepoint;
@@ -286,7 +285,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		this.lastInternalSavepoint = null;
 
 		this.executionGraphDriver = createAndRestoreExecutionGraphDriver();
-		this.jobStatusListener = null;
+		this.jobStatusListener = new JobManagerJobStatusListener();
 
 		this.resourceManagerConnection = null;
 		this.establishedResourceManagerConnection = null;
@@ -489,9 +488,8 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			(Void ignored, ExecutionGraph restoredExecutionGraph) -> {
 				// check if the ExecutionGraph is still the same
 				if (executionGraphDriver == currentExecutionGraphDriver) {
-					clearExecutionGraphFields();
 					assignExecutionGraphDriver(
-						new DefaultExecutionGraphDriver(restoredExecutionGraph, newJobManagerJobMetricGroup, backPressureStatsTracker));
+						new DefaultExecutionGraphDriver(restoredExecutionGraph, newJobManagerJobMetricGroup, jobStatusListener, backPressureStatsTracker));
 					scheduleExecutionGraph();
 
 					return Acknowledge.get();
@@ -980,7 +978,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			log.warn("Failed to stop resource manager leader retriever when suspending.", t);
 		}
 
-		suspendAndClearExecutionGraphFields(cause);
+		suspendExecutionGraphDriver(cause);
 
 		// the slot pool stops receiving messages and clears its pooled slots
 		slotPoolGateway.suspend();
@@ -1006,7 +1004,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		if (executionGraphDriver.getState() == JobStatus.CREATED) {
 			executionGraphAssignedFuture = CompletableFuture.completedFuture(null);
 		} else {
-			suspendAndClearExecutionGraphFields(new FlinkException("ExecutionGraph is being reset in order to be rescheduled."));
+			suspendExecutionGraphDriver(new FlinkException("ExecutionGraph is being reset in order to be rescheduled."));
 			final ExecutionGraphDriver newExecutionGraphDriver = createAndRestoreExecutionGraphDriver();
 
 			executionGraphAssignedFuture = executionGraphDriver.getTerminationFuture().handleAsync(
@@ -1021,11 +1019,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	}
 
 	private void scheduleExecutionGraph() {
-		checkState(jobStatusListener == null);
-		// register self as job status change listener
-		jobStatusListener = new JobManagerJobStatusListener();
-		executionGraphDriver.registerJobStatusListener(jobStatusListener);
-
 		try {
 			executionGraphDriver.schedule();
 		}
@@ -1053,7 +1046,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			}
 		}
 
-		return new DefaultExecutionGraphDriver(newExecutionGraph, jobManagerJobMetricGroup, backPressureStatsTracker);
+		return new DefaultExecutionGraphDriver(newExecutionGraph, jobManagerJobMetricGroup, jobStatusListener, backPressureStatsTracker);
 	}
 
 	private ExecutionGraph createExecutionGraph(JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws JobExecutionException, JobException {
@@ -1074,21 +1067,8 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			log);
 	}
 
-	private void suspendAndClearExecutionGraphFields(Exception cause) {
-		suspendExecutionGraphDriver(cause);
-		clearExecutionGraphFields();
-	}
-
 	private void suspendExecutionGraphDriver(Exception cause) {
 		executionGraphDriver.suspend(cause);
-
-		if (jobStatusListener != null) {
-			jobStatusListener.stop();
-		}
-	}
-
-	private void clearExecutionGraphFields() {
-		jobStatusListener = null;
 	}
 
 	/**
@@ -1479,24 +1459,14 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	//----------------------------------------------------------------------------------------------
 
 	private class JobManagerJobStatusListener implements JobStatusListener {
-
-		private volatile boolean running = true;
-
 		@Override
 		public void jobStatusChanges(
 				final JobID jobId,
 				final JobStatus newJobStatus,
 				final long timestamp,
 				final Throwable error) {
-
-			if (running) {
-				// run in rpc thread to avoid concurrency
-				runAsync(() -> jobStatusChanged(newJobStatus, timestamp, error));
-			}
-		}
-
-		private void stop() {
-			running = false;
+			// run in rpc thread to avoid concurrency
+			runAsync(() -> jobStatusChanged(newJobStatus, timestamp, error));
 		}
 	}
 

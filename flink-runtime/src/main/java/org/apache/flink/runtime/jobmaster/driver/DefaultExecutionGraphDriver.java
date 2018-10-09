@@ -74,19 +74,24 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	private final JobManagerJobMetricGroup jobManagerJobMetricGroup;
 
+	private final JobStatusListener jobStatusListener;
+
 	private final BackPressureStatsTracker backPressureStatsTracker;
 
 	public DefaultExecutionGraphDriver(
-		@Nonnull ExecutionGraph executionGraph,
-		@Nonnull JobManagerJobMetricGroup jobManagerJobMetricGroup,
-		@Nonnull BackPressureStatsTracker backPressureStatsTracker) {
+			@Nonnull ExecutionGraph executionGraph,
+			@Nonnull JobManagerJobMetricGroup jobManagerJobMetricGroup,
+			@Nonnull JobStatusListener jobStatusListener,
+			@Nonnull BackPressureStatsTracker backPressureStatsTracker) {
 		this.executionGraph = executionGraph;
 		this.jobManagerJobMetricGroup = jobManagerJobMetricGroup;
+		this.jobStatusListener = jobStatusListener;
 		this.backPressureStatsTracker = backPressureStatsTracker;
 	}
 
 	@Override
 	public void schedule() throws Exception {
+		executionGraph.registerJobStatusListener(jobStatusListener);
 		executionGraph.scheduleForExecution();
 	}
 
@@ -284,6 +289,7 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	@Override
 	public void suspend(Exception cause) {
 		executionGraph.suspend(cause);
+		executionGraph.unregisterJobStatusListener(jobStatusListener);
 		jobManagerJobMetricGroup.close();
 	}
 
@@ -300,11 +306,6 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	@Override
 	public JobStatus getState() {
 		return executionGraph.getState();
-	}
-
-	@Override
-	public void registerJobStatusListener(JobStatusListener jobStatusListener) {
-		executionGraph.registerJobStatusListener(jobStatusListener);
 	}
 
 	@Override

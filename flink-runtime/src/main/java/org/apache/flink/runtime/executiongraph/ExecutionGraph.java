@@ -1687,6 +1687,12 @@ public class ExecutionGraph implements AccessExecutionGraph {
 		}
 	}
 
+	public void unregisterJobStatusListener(JobStatusListener listener) {
+		if (listener != null) {
+			jobStatusListeners.remove(listener);
+		}
+	}
+
 	public void registerExecutionListener(ExecutionStatusListener listener) {
 		if (listener != null) {
 			executionListeners.add(listener);
