@@ -432,7 +432,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		final ExecutionGraph newExecutionGraph;
 
 		try {
-			newExecutionGraph = createExecutionGraph(newJobManagerJobMetricGroup);
+			newExecutionGraph = createExecutionGraph(jobGraph, newJobManagerJobMetricGroup);
 		} catch (JobExecutionException | JobException e) {
 			return FutureUtils.completedExceptionally(
 				new JobModificationException("Could not create rescaled ExecutionGraph.", e));
@@ -485,7 +485,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 				// check if the ExecutionGraph is still the same
 				if (executionGraphDriver == currentExecutionGraphDriver) {
 					assignExecutionGraphDriver(
-						new DefaultExecutionGraphDriver(restoredExecutionGraph, newJobManagerJobMetricGroup, backPressureStatsTracker));
+						new DefaultExecutionGraphDriver(jobGraph, this::createExecutionGraph, restoredExecutionGraph, newJobManagerJobMetricGroup, backPressureStatsTracker));
 					scheduleExecutionGraph();
 
 					return Acknowledge.get();
@@ -1028,7 +1028,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	private ExecutionGraphDriver createAndRestoreExecutionGraphDriver() throws Exception {
 
 		final JobManagerJobMetricGroup jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
-		ExecutionGraph newExecutionGraph = createExecutionGraph(jobManagerJobMetricGroup);
+		ExecutionGraph newExecutionGraph = createExecutionGraph(jobGraph, jobManagerJobMetricGroup);
 
 		final CheckpointCoordinator checkpointCoordinator = newExecutionGraph.getCheckpointCoordinator();
 
@@ -1044,10 +1044,10 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			}
 		}
 
-		return new DefaultExecutionGraphDriver(newExecutionGraph, jobManagerJobMetricGroup, backPressureStatsTracker);
+		return new DefaultExecutionGraphDriver(jobGraph, this::createExecutionGraph, newExecutionGraph, jobManagerJobMetricGroup, backPressureStatsTracker);
 	}
 
-	private ExecutionGraph createExecutionGraph(JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws JobExecutionException, JobException {
+	private ExecutionGraph createExecutionGraph(JobGraph jobGraph, JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws JobExecutionException, JobException {
 		return ExecutionGraphBuilder.buildGraph(
 			null,
 			jobGraph,

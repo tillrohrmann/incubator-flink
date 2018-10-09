@@ -40,6 +40,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.IntermediateResult;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
+import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobStatus;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
@@ -69,6 +70,10 @@ import java.util.concurrent.CompletableFuture;
 public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	private static final Logger LOG = LoggerFactory.getLogger(DefaultExecutionGraphDriver.class);
 
+	private final JobGraph jobGraph;
+
+	private final ExecutionGraphFactory executionGraphFactory;
+
 	private final ExecutionGraph executionGraph;
 
 	private final JobManagerJobMetricGroup jobManagerJobMetricGroup;
@@ -76,9 +81,13 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	private final BackPressureStatsTracker backPressureStatsTracker;
 
 	public DefaultExecutionGraphDriver(
+			@Nonnull JobGraph jobGraph,
+			@Nonnull ExecutionGraphFactory executionGraphFactory,
 			@Nonnull ExecutionGraph executionGraph,
 			@Nonnull JobManagerJobMetricGroup jobManagerJobMetricGroup,
 			@Nonnull BackPressureStatsTracker backPressureStatsTracker) {
+		this.jobGraph = jobGraph;
+		this.executionGraphFactory = executionGraphFactory;
 		this.executionGraph = executionGraph;
 		this.jobManagerJobMetricGroup = jobManagerJobMetricGroup;
 		this.backPressureStatsTracker = backPressureStatsTracker;

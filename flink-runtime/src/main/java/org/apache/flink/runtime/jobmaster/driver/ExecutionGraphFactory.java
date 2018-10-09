@@ -19,8 +19,13 @@
 package org.apache.flink.runtime.jobmaster.driver;
 
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
+import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
 
+/**
+ * Factory to create an {@link ExecutionGraph}.
+ */
 public interface ExecutionGraphFactory {
 
-	ExecutionGraph create() throws Exception;
+	ExecutionGraph create(JobGraph jobGraph, JobManagerJobMetricGroup jobManagerJobMetricGroup) throws Exception;
 }
