@@ -323,6 +323,7 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Override
 	public CompletableFuture<Void> closeAsync() {
+		suspend(new FlinkException("Closing ExecutionGraphDriver."));
 		return CompletableFuture.completedFuture(null);
 	}
 }
