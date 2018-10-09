@@ -47,7 +47,6 @@ import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphBuilder;
-import org.apache.flink.runtime.executiongraph.JobStatusListener;
 import org.apache.flink.runtime.executiongraph.restart.RestartStrategy;
 import org.apache.flink.runtime.executiongraph.restart.RestartStrategyResolving;
 import org.apache.flink.runtime.heartbeat.HeartbeatListener;
@@ -198,8 +197,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private ExecutionGraphDriver executionGraphDriver;
 
-	private final JobManagerJobStatusListener jobStatusListener;
-
 	@Nullable
 	private String lastInternalSavepoint;
 
@@ -285,7 +282,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		this.lastInternalSavepoint = null;
 
 		this.executionGraphDriver = createAndRestoreExecutionGraphDriver();
-		this.jobStatusListener = new JobManagerJobStatusListener();
 
 		this.resourceManagerConnection = null;
 		this.establishedResourceManagerConnection = null;
@@ -489,7 +485,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 				// check if the ExecutionGraph is still the same
 				if (executionGraphDriver == currentExecutionGraphDriver) {
 					assignExecutionGraphDriver(
-						new DefaultExecutionGraphDriver(restoredExecutionGraph, newJobManagerJobMetricGroup, jobStatusListener, backPressureStatsTracker));
+						new DefaultExecutionGraphDriver(restoredExecutionGraph, newJobManagerJobMetricGroup, backPressureStatsTracker));
 					scheduleExecutionGraph();
 
 					return Acknowledge.get();
@@ -994,6 +990,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		checkState(executionGraphDriver.getState().isTerminalState());
 
 		executionGraphDriver = newExecutionGraphDriver;
+		executionGraphDriver.getTerminationFuture().thenAcceptAsync(this::jobReachedTerminalState, getMainThreadExecutor());
 	}
 
 	private void resetAndScheduleExecutionGraph() throws Exception {
@@ -1003,6 +1000,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 		if (executionGraphDriver.getState() == JobStatus.CREATED) {
 			executionGraphAssignedFuture = CompletableFuture.completedFuture(null);
+			executionGraphDriver.getTerminationFuture().thenAcceptAsync(this::jobReachedTerminalState, getMainThreadExecutor());
 		} else {
 			suspendExecutionGraphDriver(new FlinkException("ExecutionGraph is being reset in order to be rescheduled."));
 			final ExecutionGraphDriver newExecutionGraphDriver = createAndRestoreExecutionGraphDriver();
@@ -1046,7 +1044,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			}
 		}
 
-		return new DefaultExecutionGraphDriver(newExecutionGraph, jobManagerJobMetricGroup, jobStatusListener, backPressureStatsTracker);
+		return new DefaultExecutionGraphDriver(newExecutionGraph, jobManagerJobMetricGroup, backPressureStatsTracker);
 	}
 
 	private ExecutionGraph createExecutionGraph(JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws JobExecutionException, JobException {
@@ -1121,10 +1119,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		}
 	}
 
-	private void jobStatusChanged(
-			final JobStatus newJobStatus,
-			long timestamp,
-			@Nullable final Throwable error) {
+	private void jobReachedTerminalState(final JobStatus newJobStatus) {
 		validateRunsInMainThread();
 
 		if (newJobStatus.isGloballyTerminalState()) {
@@ -1457,18 +1452,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	}
 
 	//----------------------------------------------------------------------------------------------
-
-	private class JobManagerJobStatusListener implements JobStatusListener {
-		@Override
-		public void jobStatusChanges(
-				final JobID jobId,
-				final JobStatus newJobStatus,
-				final long timestamp,
-				final Throwable error) {
-			// run in rpc thread to avoid concurrency
-			runAsync(() -> jobStatusChanged(newJobStatus, timestamp, error));
-		}
-	}
 
 	private class TaskManagerHeartbeatListener implements HeartbeatListener<AccumulatorReport, Void> {
 
