@@ -43,8 +43,10 @@ import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobStatus;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.jobmaster.RescalingBehaviour;
+import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
@@ -77,28 +79,98 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	private final ExecutionGraphFactory executionGraphFactory;
 
+	private final JobManagerJobMetricGroupFactory jobMetricGroupFactory;
+
+	private final BackPressureStatsTracker backPressureStatsTracker;
+
+	private final ClassLoader userCodeClassLoader;
+
 	private final ExecutionGraph executionGraph;
 
 	private final JobManagerJobMetricGroup jobManagerJobMetricGroup;
 
-	private final BackPressureStatsTracker backPressureStatsTracker;
-
 	public DefaultExecutionGraphDriver(
 			@Nonnull JobGraph jobGraph,
 			@Nonnull ExecutionGraphFactory executionGraphFactory,
-			@Nonnull ExecutionGraph executionGraph,
-			@Nonnull JobManagerJobMetricGroup jobManagerJobMetricGroup,
-			@Nonnull BackPressureStatsTracker backPressureStatsTracker) {
+			@Nonnull JobManagerJobMetricGroupFactory jobMetricGroupFactory,
+			@Nonnull BackPressureStatsTracker backPressureStatsTracker,
+			@Nonnull ClassLoader userCodeClassLoader) throws Exception {
 		this.jobGraph = jobGraph;
 		this.executionGraphFactory = executionGraphFactory;
-		this.executionGraph = executionGraph;
-		this.jobManagerJobMetricGroup = jobManagerJobMetricGroup;
+		this.jobMetricGroupFactory = jobMetricGroupFactory;
 		this.backPressureStatsTracker = backPressureStatsTracker;
+		this.userCodeClassLoader = userCodeClassLoader;
+
+		this.jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
+		this.executionGraph = createAndRestoreExecutionGraph(jobGraph, jobManagerJobMetricGroup);
 	}
 
 	@Override
 	public void schedule() throws Exception {
 		executionGraph.scheduleForExecution();
+	}
+//
+//	private void resetAndScheduleExecutionGraph() throws Exception {
+//		validateRunsInMainThread();
+//
+//		final CompletableFuture<Void> executionGraphAssignedFuture;
+//
+//		if (executionGraphDriver.getState() == JobStatus.CREATED) {
+//			executionGraphAssignedFuture = CompletableFuture.completedFuture(null);
+//			executionGraphDriver.getTerminationFuture().thenAcceptAsync(this::jobReachedTerminalState, getMainThreadExecutor());
+//		} else {
+//			suspendExecutionGraphDriver(new FlinkException("ExecutionGraph is being reset in order to be rescheduled."));
+//			final ExecutionGraphDriver newExecutionGraphDriver = createAndRestoreExecutionGraphDriver();
+//
+//			executionGraphAssignedFuture = executionGraphDriver.getTerminationFuture().handleAsync(
+//				(JobStatus ignored, Throwable throwable) -> {
+//					assignExecutionGraphDriver(newExecutionGraphDriver);
+//					return null;
+//				},
+//				getMainThreadExecutor());
+//		}
+//
+//		executionGraphAssignedFuture.thenRun(this::scheduleExecutionGraph);
+//	}
+
+	private ExecutionGraph createAndRestoreExecutionGraph(JobGraph jobGraph, JobManagerJobMetricGroup jobManagerJobMetricGroup) throws Exception {
+		ExecutionGraph newExecutionGraph = executionGraphFactory.create(jobGraph, jobManagerJobMetricGroup);
+
+		final CheckpointCoordinator checkpointCoordinator = newExecutionGraph.getCheckpointCoordinator();
+
+		if (checkpointCoordinator != null) {
+			// check whether we find a valid checkpoint
+			if (!checkpointCoordinator.restoreLatestCheckpointedState(
+				newExecutionGraph.getAllVertices(),
+				false,
+				false)) {
+
+				// check whether we can restore from a savepoint
+				tryRestoreExecutionGraphFromSavepoint(newExecutionGraph, jobGraph.getSavepointRestoreSettings());
+			}
+		}
+
+		return newExecutionGraph;
+	}
+
+	/**
+	 * Tries to restore the given {@link ExecutionGraph} from the provided {@link SavepointRestoreSettings}.
+	 *
+	 * @param executionGraphToRestore {@link ExecutionGraph} which is supposed to be restored
+	 * @param savepointRestoreSettings {@link SavepointRestoreSettings} containing information about the savepoint to restore from
+	 * @throws Exception if the {@link ExecutionGraph} could not be restored
+	 */
+	private void tryRestoreExecutionGraphFromSavepoint(ExecutionGraph executionGraphToRestore, SavepointRestoreSettings savepointRestoreSettings) throws Exception {
+		if (savepointRestoreSettings.restoreSavepoint()) {
+			final CheckpointCoordinator checkpointCoordinator = executionGraphToRestore.getCheckpointCoordinator();
+			if (checkpointCoordinator != null) {
+				checkpointCoordinator.restoreSavepoint(
+					savepointRestoreSettings.getRestorePath(),
+					savepointRestoreSettings.allowNonRestoredState(),
+					executionGraphToRestore.getAllVertices(),
+					userCodeClassLoader);
+			}
+		}
 	}
 
 	@Override

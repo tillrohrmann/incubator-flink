@@ -29,7 +29,6 @@ import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.StoppingException;
 import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 import org.apache.flink.runtime.blob.BlobServer;
-import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
 import org.apache.flink.runtime.checkpoint.Checkpoints;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
@@ -56,7 +55,6 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobStatus;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
-import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
 import org.apache.flink.runtime.jobmaster.driver.DefaultExecutionGraphDriver;
@@ -81,7 +79,6 @@ import org.apache.flink.runtime.registration.RegistrationResponse;
 import org.apache.flink.runtime.registration.RetryingRegistration;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
-import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStatsResponse;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.FencedRpcEndpoint;
@@ -123,7 +120,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeoutException;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
-import static org.apache.flink.util.Preconditions.checkState;
 
 /**
  * JobMaster implementation. The job master is responsible for the execution of a single
@@ -156,8 +152,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private final BlobServer blobServer;
 
-	private final JobManagerJobMetricGroupFactory jobMetricGroupFactory;
-
 	private final HeartbeatManager<AccumulatorReport, Void> taskManagerHeartbeatManager;
 
 	private final HeartbeatManager<Void, Void> resourceManagerHeartbeatManager;
@@ -176,9 +170,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private final RestartStrategy restartStrategy;
 
-	// --------- BackPressure --------
-
-	private final BackPressureStatsTracker backPressureStatsTracker;
+	private final ExecutionGraphDriver executionGraphDriver;
 
 	// --------- ResourceManager --------
 
@@ -189,8 +181,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	private final Map<ResourceID, Tuple2<TaskManagerLocation, TaskExecutorGateway>> registeredTaskManagers;
 
 	// -------- Mutable fields ---------
-
-	private ExecutionGraphDriver executionGraphDriver;
 
 	@Nullable
 	private String lastInternalSavepoint;
@@ -235,7 +225,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		this.jobCompletionActions = checkNotNull(jobCompletionActions);
 		this.fatalErrorHandler = checkNotNull(fatalErrorHandler);
 		this.userCodeLoader = checkNotNull(userCodeLoader);
-		this.jobMetricGroupFactory = checkNotNull(jobMetricGroupFactory);
 
 		this.taskManagerHeartbeatManager = heartbeatServices.createHeartbeatManagerSender(
 			resourceId,
@@ -273,10 +262,15 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 		this.registeredTaskManagers = new HashMap<>(4);
 
-		this.backPressureStatsTracker = checkNotNull(jobManagerSharedServices.getBackPressureStatsTracker());
 		this.lastInternalSavepoint = null;
 
-		this.executionGraphDriver = createAndRestoreExecutionGraphDriver();
+		this.executionGraphDriver = new DefaultExecutionGraphDriver(
+			jobGraph,
+			this::createExecutionGraph,
+			jobMetricGroupFactory,
+			jobManagerSharedServices.getBackPressureStatsTracker(),
+			userCodeLoader);
+		executionGraphDriver.getTerminationFuture().thenAccept(this::jobReachedTerminalState);
 
 		this.resourceManagerConnection = null;
 		this.establishedResourceManagerConnection = null;
@@ -813,10 +807,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		setNewFencingToken(newJobMasterId);
 
 		startJobMasterServices();
-
-		log.info("Starting execution of job {} ({})", jobGraph.getName(), jobGraph.getJobID());
-
-		resetAndScheduleExecutionGraph();
+		scheduleExecutionGraph();
 
 		return Acknowledge.get();
 	}
@@ -886,66 +877,15 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		return Acknowledge.get();
 	}
 
-	private void assignExecutionGraphDriver(ExecutionGraphDriver newExecutionGraphDriver) {
-		validateRunsInMainThread();
-		checkState(executionGraphDriver.getState().isTerminalState());
-
-		executionGraphDriver = newExecutionGraphDriver;
-		executionGraphDriver.getTerminationFuture().thenAcceptAsync(this::jobReachedTerminalState, getMainThreadExecutor());
-	}
-
-	private void resetAndScheduleExecutionGraph() throws Exception {
-		validateRunsInMainThread();
-
-		final CompletableFuture<Void> executionGraphAssignedFuture;
-
-		if (executionGraphDriver.getState() == JobStatus.CREATED) {
-			executionGraphAssignedFuture = CompletableFuture.completedFuture(null);
-			executionGraphDriver.getTerminationFuture().thenAcceptAsync(this::jobReachedTerminalState, getMainThreadExecutor());
-		} else {
-			suspendExecutionGraphDriver(new FlinkException("ExecutionGraph is being reset in order to be rescheduled."));
-			final ExecutionGraphDriver newExecutionGraphDriver = createAndRestoreExecutionGraphDriver();
-
-			executionGraphAssignedFuture = executionGraphDriver.getTerminationFuture().handleAsync(
-				(JobStatus ignored, Throwable throwable) -> {
-					assignExecutionGraphDriver(newExecutionGraphDriver);
-					return null;
-				},
-				getMainThreadExecutor());
-		}
-
-		executionGraphAssignedFuture.thenRun(this::scheduleExecutionGraph);
-	}
-
 	private void scheduleExecutionGraph() {
+		log.info("Starting execution of job {} ({})", jobGraph.getName(), jobGraph.getJobID());
+
 		try {
 			executionGraphDriver.schedule();
 		}
 		catch (Throwable t) {
 			executionGraphDriver.fail(t);
 		}
-	}
-
-	private ExecutionGraphDriver createAndRestoreExecutionGraphDriver() throws Exception {
-
-		final JobManagerJobMetricGroup jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
-		ExecutionGraph newExecutionGraph = createExecutionGraph(jobGraph, jobManagerJobMetricGroup);
-
-		final CheckpointCoordinator checkpointCoordinator = newExecutionGraph.getCheckpointCoordinator();
-
-		if (checkpointCoordinator != null) {
-			// check whether we find a valid checkpoint
-			if (!checkpointCoordinator.restoreLatestCheckpointedState(
-				newExecutionGraph.getAllVertices(),
-				false,
-				false)) {
-
-				// check whether we can restore from a savepoint
-				tryRestoreExecutionGraphFromSavepoint(newExecutionGraph, jobGraph.getSavepointRestoreSettings());
-			}
-		}
-
-		return new DefaultExecutionGraphDriver(jobGraph, this::createExecutionGraph, newExecutionGraph, jobManagerJobMetricGroup, backPressureStatsTracker);
 	}
 
 	private ExecutionGraph createExecutionGraph(JobGraph jobGraph, JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws JobExecutionException, JobException {
@@ -988,26 +928,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		}
 	}
 
-	/**
-	 * Tries to restore the given {@link ExecutionGraph} from the provided {@link SavepointRestoreSettings}.
-	 *
-	 * @param executionGraphToRestore {@link ExecutionGraph} which is supposed to be restored
-	 * @param savepointRestoreSettings {@link SavepointRestoreSettings} containing information about the savepoint to restore from
-	 * @throws Exception if the {@link ExecutionGraph} could not be restored
-	 */
-	private void tryRestoreExecutionGraphFromSavepoint(ExecutionGraph executionGraphToRestore, SavepointRestoreSettings savepointRestoreSettings) throws Exception {
-		if (savepointRestoreSettings.restoreSavepoint()) {
-			final CheckpointCoordinator checkpointCoordinator = executionGraphToRestore.getCheckpointCoordinator();
-			if (checkpointCoordinator != null) {
-				checkpointCoordinator.restoreSavepoint(
-					savepointRestoreSettings.getRestorePath(),
-					savepointRestoreSettings.allowNonRestoredState(),
-					executionGraphToRestore.getAllVertices(),
-					userCodeLoader);
-			}
-		}
-	}
-
 	//----------------------------------------------------------------------------------------------
 
 	private void handleJobMasterError(final Throwable cause) {
@@ -1021,8 +941,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	}
 
 	private void jobReachedTerminalState(final JobStatus newJobStatus) {
-		validateRunsInMainThread();
-
 		if (newJobStatus.isGloballyTerminalState()) {
 			final ArchivedExecutionGraph archivedExecutionGraph = ArchivedExecutionGraph.createFrom(executionGraphDriver.getExecutionGraph());
 			scheduledExecutorService.execute(() -> jobCompletionActions.jobReachedGloballyTerminalState(archivedExecutionGraph));
