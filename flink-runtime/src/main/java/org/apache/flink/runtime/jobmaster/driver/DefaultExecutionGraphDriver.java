@@ -627,6 +627,24 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 //		}
 //	}
 
+//	/**
+//	 * Dispose the savepoint stored under the given path.
+//	 *
+//	 * @param savepointPath path where the savepoint is stored
+//	 */
+//	private void disposeSavepoint(String savepointPath) {
+//		try {
+//			// delete the temporary savepoint
+//			Checkpoints.disposeSavepoint(
+//				savepointPath,
+//				jobMasterConfiguration.getConfiguration(),
+//				userCodeLoader,
+//				log);
+//		} catch (FlinkException | IOException e) {
+//			log.info("Could not dispose temporary rescaling savepoint under {}.", savepointPath, e);
+//		}
+//	}
+
 	@Override
 	public CompletableFuture<Void> closeAsync() {
 		suspend(new FlinkException("Closing ExecutionGraphDriver."));

@@ -30,7 +30,6 @@ import org.apache.flink.runtime.StoppingException;
 import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 import org.apache.flink.runtime.blob.BlobServer;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
-import org.apache.flink.runtime.checkpoint.Checkpoints;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
@@ -104,7 +103,6 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -183,9 +181,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	// -------- Mutable fields ---------
 
 	@Nullable
-	private String lastInternalSavepoint;
-
-	@Nullable
 	private ResourceManagerAddress resourceManagerAddress;
 
 	@Nullable
@@ -261,8 +256,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		this.slotPoolGateway = slotPool.getSelfGateway(SlotPoolGateway.class);
 
 		this.registeredTaskManagers = new HashMap<>(4);
-
-		this.lastInternalSavepoint = null;
 
 		this.executionGraphDriver = new DefaultExecutionGraphDriver(
 			jobGraph,
@@ -345,17 +338,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		// shut down will internally release all registered slots
 		slotPool.shutDown();
 
-		final CompletableFuture<Void> disposeInternalSavepointFuture;
-
-		if (lastInternalSavepoint != null) {
-			disposeInternalSavepointFuture = CompletableFuture.runAsync(() -> disposeSavepoint(lastInternalSavepoint));
-		} else {
-			disposeInternalSavepointFuture = CompletableFuture.completedFuture(null);
-		}
-
-		final CompletableFuture<Void> slotPoolTerminationFuture = slotPool.getTerminationFuture();
-
-		return FutureUtils.completeAll(Arrays.asList(disposeInternalSavepointFuture, slotPoolTerminationFuture));
+		return slotPool.getTerminationFuture();
 	}
 
 	//----------------------------------------------------------------------------------------------
@@ -908,24 +891,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private void suspendExecutionGraphDriver(Exception cause) {
 		executionGraphDriver.suspend(cause);
-	}
-
-	/**
-	 * Dispose the savepoint stored under the given path.
-	 *
-	 * @param savepointPath path where the savepoint is stored
-	 */
-	private void disposeSavepoint(String savepointPath) {
-		try {
-			// delete the temporary savepoint
-			Checkpoints.disposeSavepoint(
-				savepointPath,
-				jobMasterConfiguration.getConfiguration(),
-				userCodeLoader,
-				log);
-		} catch (FlinkException | IOException e) {
-			log.info("Could not dispose temporary rescaling savepoint under {}.", savepointPath, e);
-		}
 	}
 
 	//----------------------------------------------------------------------------------------------
