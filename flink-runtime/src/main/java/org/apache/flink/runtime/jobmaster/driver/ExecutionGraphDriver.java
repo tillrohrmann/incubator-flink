@@ -34,6 +34,8 @@ import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobStatus;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.jobmaster.RescalingBehaviour;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.query.KvStateLocationRegistry;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStatsResponse;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
@@ -41,6 +43,7 @@ import org.apache.flink.util.AutoCloseableAsync;
 
 import javax.annotation.Nullable;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -90,4 +93,6 @@ public interface ExecutionGraphDriver extends AutoCloseableAsync {
 	JobStatus getState();
 
 	CompletableFuture<OperatorBackPressureStatsResponse> requestOperatorBackPressureStats(JobVertexID jobVertexId);
+
+	CompletableFuture<Acknowledge> rescaleOperators(Collection<JobVertexID> operators, int newParallelism, RescalingBehaviour rescalingBehaviour);
 }

@@ -44,6 +44,8 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobStatus;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
+import org.apache.flink.runtime.jobmaster.RescalingBehaviour;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
@@ -61,6 +63,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -323,6 +326,234 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 		return CompletableFuture.completedFuture(OperatorBackPressureStatsResponse.of(
 			operatorBackPressureStats.orElse(null)));
 	}
+
+	@Override
+	public CompletableFuture<Acknowledge> rescaleOperators(Collection<JobVertexID> operators, int newParallelism, RescalingBehaviour rescalingBehaviour) {
+		return FutureUtils.completedExceptionally(new UnsupportedOperationException("Not yet supported."));
+//		if (newParallelism <= 0) {
+//			return FutureUtils.completedExceptionally(
+//				new JobModificationException("The target parallelism of a rescaling operation must be larger than 0."));
+//		}
+//
+//		// 1. Check whether we can rescale the job & rescale the respective vertices
+//		try {
+//			rescaleJobGraph(operators, newParallelism, rescalingBehaviour);
+//		} catch (FlinkException e) {
+//			final String msg = String.format("Cannot rescale job %s.", jobGraph.getName());
+//
+//			log.info(msg, e);
+//			return FutureUtils.completedExceptionally(new JobModificationException(msg, e));
+//		}
+//
+//		final ExecutionGraphDriver currentExecutionGraphDriver = executionGraphDriver;
+//
+//		final JobManagerJobMetricGroup newJobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
+//		final ExecutionGraph newExecutionGraph;
+//
+//		try {
+//			newExecutionGraph = createExecutionGraph(jobGraph, newJobManagerJobMetricGroup);
+//		} catch (JobExecutionException | JobException e) {
+//			return FutureUtils.completedExceptionally(
+//				new JobModificationException("Could not create rescaled ExecutionGraph.", e));
+//		}
+//
+//		// 3. disable checkpoint coordinator to suppress subsequent checkpoints
+//		currentExecutionGraphDriver.stopCheckpointScheduler();
+//
+//		// 4. take a savepoint
+//		final CompletableFuture<String> savepointFuture = getJobModificationSavepoint(timeout);
+//
+//		final CompletableFuture<ExecutionGraph> executionGraphFuture = restoreExecutionGraphFromRescalingSavepoint(
+//			newExecutionGraph,
+//			savepointFuture)
+//			.handleAsync(
+//				(ExecutionGraph executionGraph, Throwable failure) -> {
+//					if (failure != null) {
+//						// in case that we couldn't take a savepoint or restore from it, let's restart the checkpoint
+//						// coordinator and abort the rescaling operation
+//						currentExecutionGraphDriver.startCheckpointScheduler();
+//
+//						throw new CompletionException(ExceptionUtils.stripCompletionException(failure));
+//					} else {
+//						return executionGraph;
+//					}
+//				},
+//				getMainThreadExecutor());
+//
+//		// 5. suspend the current job
+//		final CompletableFuture<JobStatus> terminationFuture = executionGraphFuture.thenComposeAsync(
+//			(ExecutionGraph ignored) -> {
+//				suspendExecutionGraphDriver(new FlinkException("Job is being rescaled."));
+//				return currentExecutionGraphDriver.getTerminationFuture();
+//			},
+//			getMainThreadExecutor());
+//
+//		final CompletableFuture<Void> suspendedFuture = terminationFuture.thenAccept(
+//			(JobStatus jobStatus) -> {
+//				if (jobStatus != JobStatus.SUSPENDED) {
+//					final String msg = String.format("Job %s rescaling failed because we could not suspend the execution graph.", jobGraph.getName());
+//					log.info(msg);
+//					throw new CompletionException(new JobModificationException(msg));
+//				}
+//			});
+//
+//		// 6. resume the new execution graph from the taken savepoint
+//		final CompletableFuture<Acknowledge> rescalingFuture = suspendedFuture.thenCombineAsync(
+//			executionGraphFuture,
+//			(Void ignored, ExecutionGraph restoredExecutionGraph) -> {
+//				// check if the ExecutionGraph is still the same
+//				if (executionGraphDriver == currentExecutionGraphDriver) {
+//					assignExecutionGraphDriver(
+//						new DefaultExecutionGraphDriver(jobGraph, this::createExecutionGraph, restoredExecutionGraph, newJobManagerJobMetricGroup, backPressureStatsTracker));
+//					scheduleExecutionGraph();
+//
+//					return Acknowledge.get();
+//				} else {
+//					throw new CompletionException(new JobModificationException("Detected concurrent modification of ExecutionGraph. Aborting the rescaling."));
+//				}
+//
+//			},
+//			getMainThreadExecutor());
+//
+//		rescalingFuture.whenComplete(
+//			(Acknowledge ignored, Throwable throwable) -> {
+//				if (throwable != null) {
+//					// fail the newly created execution graph
+//					newExecutionGraph.failGlobal(
+//						new SuppressRestartsException(
+//							new FlinkException(
+//								String.format("Failed to rescale the job %s.", jobGraph.getJobID()),
+//								throwable)));
+//				}
+//			});
+//
+//		return rescalingFuture;
+	}
+
+//	/**
+//	 * Restore the given {@link ExecutionGraph} from the rescaling savepoint. If the {@link ExecutionGraph} could
+//	 * be restored, then this savepoint will be recorded as the latest successful modification savepoint. A previous
+//	 * savepoint will be disposed. If the rescaling savepoint is empty, the job will be restored from the initially
+//	 * provided savepoint.
+//	 *
+//	 * @param newExecutionGraph to restore
+//	 * @param savepointFuture containing the path to the internal modification savepoint
+//	 * @return Future which is completed with the restored {@link ExecutionGraph}
+//	 */
+//	private CompletableFuture<ExecutionGraph> restoreExecutionGraphFromRescalingSavepoint(ExecutionGraph newExecutionGraph, CompletableFuture<String> savepointFuture) {
+//		return savepointFuture
+//			.thenApplyAsync(
+//				(@Nullable String savepointPath) -> {
+//					if (savepointPath != null) {
+//						try {
+//							tryRestoreExecutionGraphFromSavepoint(newExecutionGraph, SavepointRestoreSettings.forPath(savepointPath, false));
+//						} catch (Exception e) {
+//							final String message = String.format("Could not restore from temporary rescaling savepoint. This might indicate " +
+//									"that the savepoint %s got corrupted. Deleting this savepoint as a precaution.",
+//								savepointPath);
+//
+//							log.info(message);
+//
+//							CompletableFuture
+//								.runAsync(
+//									() -> {
+//										if (savepointPath.equals(lastInternalSavepoint)) {
+//											lastInternalSavepoint = null;
+//										}
+//									},
+//									getMainThreadExecutor())
+//								.thenRunAsync(
+//									() -> disposeSavepoint(savepointPath),
+//									scheduledExecutorService);
+//
+//							throw new CompletionException(new JobModificationException(message, e));
+//						}
+//					} else {
+//						// No rescaling savepoint, restart from the initial savepoint or none
+//						try {
+//							tryRestoreExecutionGraphFromSavepoint(newExecutionGraph, jobGraph.getSavepointRestoreSettings());
+//						} catch (Exception e) {
+//							final String message = String.format("Could not restore from initial savepoint. This might indicate " +
+//								"that the savepoint %s got corrupted.", jobGraph.getSavepointRestoreSettings().getRestorePath());
+//
+//							log.info(message);
+//
+//							throw new CompletionException(new JobModificationException(message, e));
+//						}
+//					}
+//
+//					return newExecutionGraph;
+//				}, scheduledExecutorService);
+//	}
+//
+//	/**
+//	 * Takes an internal savepoint for job modification purposes. If the savepoint was not successful because
+//	 * not all tasks were running, it returns the last successful modification savepoint.
+//	 *
+//	 * @param timeout for the operation
+//	 * @return Future which is completed with the savepoint path or the last successful modification savepoint if the
+//	 * former was not successful
+//	 */
+//	private CompletableFuture<String> getJobModificationSavepoint(Time timeout) {
+//		return triggerSavepoint(
+//			null,
+//			false,
+//			timeout)
+//			.handleAsync(
+//				(String savepointPath, Throwable throwable) -> {
+//					if (throwable != null) {
+//						final Throwable strippedThrowable = ExceptionUtils.stripCompletionException(throwable);
+//						if (strippedThrowable instanceof CheckpointTriggerException) {
+//							final CheckpointTriggerException checkpointTriggerException = (CheckpointTriggerException) strippedThrowable;
+//
+//							if (checkpointTriggerException.getCheckpointDeclineReason() == CheckpointDeclineReason.NOT_ALL_REQUIRED_TASKS_RUNNING) {
+//								return lastInternalSavepoint;
+//							} else {
+//								throw new CompletionException(checkpointTriggerException);
+//							}
+//						} else {
+//							throw new CompletionException(strippedThrowable);
+//						}
+//					} else {
+//						final String savepointToDispose = lastInternalSavepoint;
+//						lastInternalSavepoint = savepointPath;
+//
+//						if (savepointToDispose != null) {
+//							// dispose the old savepoint asynchronously
+//							CompletableFuture.runAsync(
+//								() -> disposeSavepoint(savepointToDispose),
+//								scheduledExecutorService);
+//						}
+//
+//						return lastInternalSavepoint;
+//					}
+//				},
+//				getMainThreadExecutor());
+//	}
+//
+//	/**
+//	 * Rescales the given operators of the {@link JobGraph} of this {@link JobMaster} with respect to given
+//	 * parallelism and {@link RescalingBehaviour}.
+//	 *
+//	 * @param operators to rescale
+//	 * @param newParallelism new parallelism for these operators
+//	 * @param rescalingBehaviour of the rescaling operation
+//	 * @throws FlinkException if the {@link JobGraph} could not be rescaled
+//	 */
+//	private void rescaleJobGraph(Collection<JobVertexID> operators, int newParallelism, RescalingBehaviour rescalingBehaviour) throws FlinkException {
+//		for (JobVertexID jobVertexId : operators) {
+//			final JobVertex jobVertex = jobGraph.findVertexByID(jobVertexId);
+//
+//			// update max parallelism in case that it has not been configured
+//			final AccessExecutionJobVertex executionJobVertex = executionGraphDriver.getJobVertex(jobVertexId);
+//
+//			if (executionJobVertex != null) {
+//				jobVertex.setMaxParallelism(executionJobVertex.getMaxParallelism());
+//			}
+//
+//			rescalingBehaviour.accept(jobVertex, newParallelism);
+//		}
+//	}
 
 	@Override
 	public CompletableFuture<Void> closeAsync() {
