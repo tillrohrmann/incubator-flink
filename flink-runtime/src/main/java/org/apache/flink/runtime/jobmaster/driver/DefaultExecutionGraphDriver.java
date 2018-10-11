@@ -32,6 +32,7 @@ import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
 import org.apache.flink.runtime.executiongraph.AccessExecutionJobVertex;
+import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
@@ -89,6 +90,8 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	private final JobManagerJobMetricGroup jobManagerJobMetricGroup;
 
+	private final CompletableFuture<ArchivedExecutionGraph> resultFuture;
+
 	public DefaultExecutionGraphDriver(
 			@Nonnull JobGraph jobGraph,
 			@Nonnull ExecutionGraphFactory executionGraphFactory,
@@ -100,9 +103,9 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 		this.jobMetricGroupFactory = jobMetricGroupFactory;
 		this.backPressureStatsTracker = backPressureStatsTracker;
 		this.userCodeClassLoader = userCodeClassLoader;
-
 		this.jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
 		this.executionGraph = createAndRestoreExecutionGraph(jobGraph, jobManagerJobMetricGroup);
+		this.resultFuture = new CompletableFuture<>();
 	}
 
 	@Override
@@ -376,8 +379,8 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	}
 
 	@Override
-	public CompletableFuture<JobStatus> getTerminationFuture() {
-		return executionGraph.getTerminationFuture();
+	public CompletableFuture<ArchivedExecutionGraph> getResultFuture() {
+		return resultFuture;
 	}
 
 	@Override

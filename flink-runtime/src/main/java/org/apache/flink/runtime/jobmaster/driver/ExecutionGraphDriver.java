@@ -27,6 +27,7 @@ import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.AccessExecutionGraph;
 import org.apache.flink.runtime.executiongraph.AccessExecutionJobVertex;
+import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphException;
@@ -88,7 +89,7 @@ public interface ExecutionGraphDriver extends AutoCloseableAsync {
 
 	void updateAccumulators(AccumulatorSnapshot snapshot);
 
-	CompletableFuture<JobStatus> getTerminationFuture();
+	CompletableFuture<ArchivedExecutionGraph> getResultFuture();
 
 	JobStatus getState();
 

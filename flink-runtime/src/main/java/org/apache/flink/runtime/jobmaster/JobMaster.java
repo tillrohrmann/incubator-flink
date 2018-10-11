@@ -263,7 +263,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			jobMetricGroupFactory,
 			jobManagerSharedServices.getBackPressureStatsTracker(),
 			userCodeLoader);
-		executionGraphDriver.getTerminationFuture().thenAccept(this::jobReachedTerminalState);
+		executionGraphDriver.getResultFuture().thenAccept(this::jobReachedTerminalState);
 
 		this.resourceManagerConnection = null;
 		this.establishedResourceManagerConnection = null;
@@ -905,11 +905,9 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		}
 	}
 
-	private void jobReachedTerminalState(final JobStatus newJobStatus) {
-		if (newJobStatus.isGloballyTerminalState()) {
-			final ArchivedExecutionGraph archivedExecutionGraph = ArchivedExecutionGraph.createFrom(executionGraphDriver.getExecutionGraph());
-			scheduledExecutorService.execute(() -> jobCompletionActions.jobReachedGloballyTerminalState(archivedExecutionGraph));
-		}
+	private void jobReachedTerminalState(final ArchivedExecutionGraph archivedExecutionGraph) {
+		Preconditions.checkArgument(archivedExecutionGraph.getState().isGloballyTerminalState());
+		scheduledExecutorService.execute(() -> jobCompletionActions.jobReachedGloballyTerminalState(archivedExecutionGraph));
 	}
 
 	private void notifyOfNewResourceManagerLeader(final String newResourceManagerAddress, final ResourceManagerId resourceManagerId) {
