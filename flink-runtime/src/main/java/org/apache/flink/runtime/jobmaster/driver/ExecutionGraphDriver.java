@@ -53,7 +53,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface ExecutionGraphDriver extends AutoCloseableAsync {
 
-	void schedule() throws Exception;
+	void start();
 
 	void cancel();
 

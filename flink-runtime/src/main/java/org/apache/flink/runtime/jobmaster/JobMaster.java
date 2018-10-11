@@ -263,7 +263,13 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			jobMetricGroupFactory,
 			jobManagerSharedServices.getBackPressureStatsTracker(),
 			userCodeLoader);
-		executionGraphDriver.getResultFuture().thenAccept(this::jobReachedTerminalState);
+		executionGraphDriver.getResultFuture().whenComplete((archivedExecutionGraph, throwable) -> {
+			if (throwable != null) {
+				handleJobMasterError(new JobMasterException("The execution graph driver failed.", throwable));
+			} else {
+				jobReachedGloballyTerminalState(archivedExecutionGraph);
+			}
+		});
 
 		this.resourceManagerConnection = null;
 		this.establishedResourceManagerConnection = null;
@@ -862,13 +868,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	private void scheduleExecutionGraph() {
 		log.info("Starting execution of job {} ({})", jobGraph.getName(), jobGraph.getJobID());
-
-		try {
-			executionGraphDriver.schedule();
-		}
-		catch (Throwable t) {
-			executionGraphDriver.fail(t);
-		}
+		executionGraphDriver.start();
 	}
 
 	private ExecutionGraph createExecutionGraph(JobGraph jobGraph, JobManagerJobMetricGroup currentJobManagerJobMetricGroup) throws JobExecutionException, JobException {
@@ -905,7 +905,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		}
 	}
 
-	private void jobReachedTerminalState(final ArchivedExecutionGraph archivedExecutionGraph) {
+	private void jobReachedGloballyTerminalState(final ArchivedExecutionGraph archivedExecutionGraph) {
 		Preconditions.checkArgument(archivedExecutionGraph.getState().isGloballyTerminalState());
 		scheduledExecutorService.execute(() -> jobCompletionActions.jobReachedGloballyTerminalState(archivedExecutionGraph));
 	}

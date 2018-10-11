@@ -86,55 +86,64 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	private final ClassLoader userCodeClassLoader;
 
-	private final ExecutionGraph executionGraph;
-
-	private final JobManagerJobMetricGroup jobManagerJobMetricGroup;
-
 	private final CompletableFuture<ArchivedExecutionGraph> resultFuture;
+
+	@Nullable
+	private ExecutionGraph executionGraph;
+
+	@Nullable
+	private JobManagerJobMetricGroup jobManagerJobMetricGroup;
 
 	public DefaultExecutionGraphDriver(
 			@Nonnull JobGraph jobGraph,
 			@Nonnull ExecutionGraphFactory executionGraphFactory,
 			@Nonnull JobManagerJobMetricGroupFactory jobMetricGroupFactory,
 			@Nonnull BackPressureStatsTracker backPressureStatsTracker,
-			@Nonnull ClassLoader userCodeClassLoader) throws Exception {
+			@Nonnull ClassLoader userCodeClassLoader) {
 		this.jobGraph = jobGraph;
 		this.executionGraphFactory = executionGraphFactory;
 		this.jobMetricGroupFactory = jobMetricGroupFactory;
 		this.backPressureStatsTracker = backPressureStatsTracker;
 		this.userCodeClassLoader = userCodeClassLoader;
-		this.jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
-		this.executionGraph = createAndRestoreExecutionGraph(jobGraph, jobManagerJobMetricGroup);
 		this.resultFuture = new CompletableFuture<>();
+
+		executionGraph = null;
+		jobManagerJobMetricGroup = null;
 	}
 
 	@Override
-	public void schedule() throws Exception {
-		executionGraph.scheduleForExecution();
+	public void start() {
+		Preconditions.checkState(jobManagerJobMetricGroup == null);
+		Preconditions.checkState(executionGraph == null);
+
+		jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
+
+		try {
+			final ExecutionGraph newExecutionGraph = createAndRestoreExecutionGraph(jobGraph, jobManagerJobMetricGroup);
+
+			newExecutionGraph.getTerminationFuture().thenAccept(jobStatus -> {
+				// check if we are still the valid EG
+				if (newExecutionGraph == executionGraph) {
+					notifyTerminalState(newExecutionGraph);
+				} // else ignore
+			});
+
+			newExecutionGraph.scheduleForExecution();
+
+			executionGraph = newExecutionGraph;
+		} catch (Exception e) {
+			resultFuture.completeExceptionally(
+				new ExecutionGraphDriverException(
+					String.format("Could not schedule the job %s.", jobGraph.getJobID()),
+					e));
+		}
 	}
-//
-//	private void resetAndScheduleExecutionGraph() throws Exception {
-//		validateRunsInMainThread();
-//
-//		final CompletableFuture<Void> executionGraphAssignedFuture;
-//
-//		if (executionGraphDriver.getState() == JobStatus.CREATED) {
-//			executionGraphAssignedFuture = CompletableFuture.completedFuture(null);
-//			executionGraphDriver.getTerminationFuture().thenAcceptAsync(this::jobReachedTerminalState, getMainThreadExecutor());
-//		} else {
-//			suspendExecutionGraphDriver(new FlinkException("ExecutionGraph is being reset in order to be rescheduled."));
-//			final ExecutionGraphDriver newExecutionGraphDriver = createAndRestoreExecutionGraphDriver();
-//
-//			executionGraphAssignedFuture = executionGraphDriver.getTerminationFuture().handleAsync(
-//				(JobStatus ignored, Throwable throwable) -> {
-//					assignExecutionGraphDriver(newExecutionGraphDriver);
-//					return null;
-//				},
-//				getMainThreadExecutor());
-//		}
-//
-//		executionGraphAssignedFuture.thenRun(this::scheduleExecutionGraph);
-//	}
+
+	private void notifyTerminalState(ExecutionGraph terminatedExecutionGraph) {
+		if (terminatedExecutionGraph.getState().isGloballyTerminalState()) {
+			resultFuture.complete(ArchivedExecutionGraph.createFrom(terminatedExecutionGraph));
+		}
+	}
 
 	private ExecutionGraph createAndRestoreExecutionGraph(JobGraph jobGraph, JobManagerJobMetricGroup jobManagerJobMetricGroup) throws Exception {
 		ExecutionGraph newExecutionGraph = executionGraphFactory.create(jobGraph, jobManagerJobMetricGroup);
@@ -178,22 +187,27 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Override
 	public void cancel() {
+		validateExecutionGraph(executionGraph);
 		executionGraph.cancel();
 	}
 
 	@Override
 	public void stop() throws StoppingException {
+		validateExecutionGraph(executionGraph);
 		executionGraph.stop();
 	}
 
 	@Override
 	public boolean updateState(TaskExecutionState taskExecutionState) {
+		validateExecutionGraph(executionGraph);
 		return executionGraph.updateState(taskExecutionState);
 	}
 
 	@Override
 	public InputSplit requestNextInputSplit(JobVertexID vertexID, ExecutionAttemptID executionAttempt) throws ExecutionGraphDriverException {
+		validateExecutionGraph(executionGraph);
 		final Execution execution = executionGraph.getRegisteredExecutions().get(executionAttempt);
+
 		if (execution == null) {
 			// can happen when JobManager had already unregistered this execution upon on task failure,
 			// but TaskManager get some delay to aware of that situation
@@ -230,11 +244,13 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Override
 	public void fail(Throwable reason) {
+		validateExecutionGraph(executionGraph);
 		executionGraph.failGlobal(reason);
 	}
 
 	@Override
 	public Optional<ExecutionState> requestPartitionState(IntermediateDataSetID intermediateResultId, ResultPartitionID resultPartitionId) {
+		validateExecutionGraph(executionGraph);
 		final Execution execution = executionGraph.getRegisteredExecutions().get(resultPartitionId.getProducerId());
 
 		if (execution != null) {
@@ -263,11 +279,13 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Override
 	public void scheduleOrUpdateConsumers(ResultPartitionID partitionID) throws ExecutionGraphException {
+		validateExecutionGraph(executionGraph);
 		executionGraph.scheduleOrUpdateConsumers(partitionID);
 	}
 
 	@Override
 	public void acknowledgeCheckpoint(JobID jobID, ExecutionAttemptID executionAttemptID, long checkpointId, CheckpointMetrics checkpointMetrics, TaskStateSnapshot checkpointState) {
+		validateExecutionGraph(executionGraph);
 		final CheckpointCoordinator checkpointCoordinator = executionGraph.getCheckpointCoordinator();
 		final AcknowledgeCheckpoint ackMessage = new AcknowledgeCheckpoint(
 			jobID,
@@ -290,8 +308,8 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Override
 	public void declineCheckpoint(JobID jobID, ExecutionAttemptID executionAttemptID, long checkpointID, Throwable reason) {
-		final DeclineCheckpoint decline = new DeclineCheckpoint(
-			jobID, executionAttemptID, checkpointID, reason);
+		validateExecutionGraph(executionGraph);
+		final DeclineCheckpoint decline = new DeclineCheckpoint(jobID, executionAttemptID, checkpointID, reason);
 		final CheckpointCoordinator checkpointCoordinator = executionGraph.getCheckpointCoordinator();
 
 		if (checkpointCoordinator != null) {
@@ -306,18 +324,25 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 		}
 	}
 
+	private static void validateExecutionGraph(ExecutionGraph executionGraphToValidate) {
+		assert executionGraphToValidate != null;
+	}
+
 	@Override
 	public KvStateLocationRegistry getKvStateLocationRegistry() {
+		validateExecutionGraph(executionGraph);
 		return executionGraph.getKvStateLocationRegistry();
 	}
 
 	@Override
 	public AccessExecutionGraph getExecutionGraph() {
+		validateExecutionGraph(executionGraph);
 		return executionGraph;
 	}
 
 	@Override
 	public CompletableFuture<String> triggerSavepoint(@Nullable String targetDirectory) {
+		validateExecutionGraph(executionGraph);
 		final CheckpointCoordinator checkpointCoordinator = executionGraph.getCheckpointCoordinator();
 		if (checkpointCoordinator == null) {
 			return FutureUtils.completedExceptionally(new IllegalStateException(
@@ -350,6 +375,7 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Nonnull
 	private CheckpointCoordinator getCheckpointCoordinator() {
+		validateExecutionGraph(executionGraph);
 		final CheckpointCoordinator checkpointCoordinator = executionGraph.getCheckpointCoordinator();
 		Preconditions.checkState(checkpointCoordinator != null, "Job %s is not a streaming job.", executionGraph.getJobID());
 		return checkpointCoordinator;
@@ -364,17 +390,26 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Override
 	public AccessExecutionJobVertex getJobVertex(JobVertexID jobVertexId) {
+		validateExecutionGraph(executionGraph);
 		return executionGraph.getJobVertex(jobVertexId);
 	}
 
 	@Override
 	public void suspend(Exception cause) {
+		validateExecutionGraph(executionGraph);
 		executionGraph.suspend(cause);
-		jobManagerJobMetricGroup.close();
+
+		if (jobManagerJobMetricGroup != null) {
+			jobManagerJobMetricGroup.close();
+		}
+
+		executionGraph = null;
+		jobManagerJobMetricGroup = null;
 	}
 
 	@Override
 	public void updateAccumulators(AccumulatorSnapshot snapshot) {
+		validateExecutionGraph(executionGraph);
 		executionGraph.updateAccumulators(snapshot);
 	}
 
@@ -385,11 +420,13 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Override
 	public JobStatus getState() {
+		validateExecutionGraph(executionGraph);
 		return executionGraph.getState();
 	}
 
 	@Override
 	public CompletableFuture<OperatorBackPressureStatsResponse> requestOperatorBackPressureStats(JobVertexID jobVertexId) {
+		validateExecutionGraph(executionGraph);
 		final ExecutionJobVertex jobVertex = executionGraph.getJobVertex(jobVertexId);
 		if (jobVertex == null) {
 			return FutureUtils.completedExceptionally(new FlinkException("JobVertexID not found " +
