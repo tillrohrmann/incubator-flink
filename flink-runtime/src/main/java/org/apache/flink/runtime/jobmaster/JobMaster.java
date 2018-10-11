@@ -866,7 +866,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		return Acknowledge.get();
 	}
 
-	private void scheduleExecutionGraph() {
+	private void scheduleExecutionGraph() throws Exception {
 		log.info("Starting execution of job {} ({})", jobGraph.getName(), jobGraph.getJobID());
 		executionGraphDriver.start();
 	}

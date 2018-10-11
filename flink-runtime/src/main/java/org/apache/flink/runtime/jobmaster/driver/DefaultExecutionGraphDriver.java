@@ -112,13 +112,13 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	}
 
 	@Override
-	public void start() {
+	public void start() throws Exception {
 		Preconditions.checkState(jobManagerJobMetricGroup == null);
 		Preconditions.checkState(executionGraph == null);
 
 		jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
 
-		try {
+//		try {
 			final ExecutionGraph newExecutionGraph = createAndRestoreExecutionGraph(jobGraph, jobManagerJobMetricGroup);
 
 			newExecutionGraph.getTerminationFuture().thenAccept(jobStatus -> {
@@ -131,12 +131,12 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 			newExecutionGraph.scheduleForExecution();
 
 			executionGraph = newExecutionGraph;
-		} catch (Exception e) {
-			resultFuture.completeExceptionally(
-				new ExecutionGraphDriverException(
-					String.format("Could not schedule the job %s.", jobGraph.getJobID()),
-					e));
-		}
+//		} catch (Exception e) {
+//			resultFuture.completeExceptionally(
+//				new ExecutionGraphDriverException(
+//					String.format("Could not schedule the job %s.", jobGraph.getJobID()),
+//					e));
+//		}
 	}
 
 	private void notifyTerminalState(ExecutionGraph terminatedExecutionGraph) {

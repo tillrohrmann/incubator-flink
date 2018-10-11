@@ -392,6 +392,8 @@ public class JobMasterTest extends TestLogger {
 			haServices,
 			new TestingJobManagerSharedServicesBuilder().build());
 
+		jobMaster.start(JobMasterId.generate(), testingTimeout).get();
+
 		try {
 			// starting the JobMaster should have read the savepoint
 			final CompletedCheckpoint savepointCheckpoint = completedCheckpointStore.getLatestCheckpoint();
@@ -431,13 +433,16 @@ public class JobMasterTest extends TestLogger {
 		haServices.setCheckpointRecoveryFactory(testingCheckpointRecoveryFactory);
 
 		try {
-			createJobMaster(
+			final TestingJobMaster jobMaster = createJobMaster(
 				configuration,
 				jobGraphWithNewOperator,
 				haServices,
 				new TestingJobManagerSharedServicesBuilder().build());
+
+			jobMaster.start(JobMasterId.generate(), testingTimeout).get();
 			fail("Should fail because we cannot resume the changed JobGraph from the savepoint.");
-		} catch (IllegalStateException expected) {
+		} catch (ExecutionException expected) {
+			assertTrue(ExceptionUtils.findThrowable(expected, IllegalStateException.class).isPresent());
 			// that was expected :-)
 		}
 
@@ -452,6 +457,8 @@ public class JobMasterTest extends TestLogger {
 			jobGraphWithNewOperator,
 			haServices,
 			new TestingJobManagerSharedServicesBuilder().build());
+
+		jobMaster.start(JobMasterId.generate(), testingTimeout).get();
 
 		try {
 			// starting the JobMaster should have read the savepoint
