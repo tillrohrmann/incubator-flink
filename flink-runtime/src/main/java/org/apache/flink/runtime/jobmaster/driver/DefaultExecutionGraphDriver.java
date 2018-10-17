@@ -59,6 +59,7 @@ import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPre
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.function.FunctionUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,7 +100,7 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 			@Nonnull ExecutionGraphFactory executionGraphFactory,
 			@Nonnull JobManagerJobMetricGroupFactory jobMetricGroupFactory,
 			@Nonnull BackPressureStatsTracker backPressureStatsTracker,
-			@Nonnull ClassLoader userCodeClassLoader) {
+			@Nonnull ClassLoader userCodeClassLoader) throws Exception {
 		this.jobGraph = jobGraph;
 		this.executionGraphFactory = executionGraphFactory;
 		this.jobMetricGroupFactory = jobMetricGroupFactory;
@@ -107,36 +108,38 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 		this.userCodeClassLoader = userCodeClassLoader;
 		this.resultFuture = new CompletableFuture<>();
 
-		executionGraph = null;
-		jobManagerJobMetricGroup = null;
+		jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
+		executionGraph = createAndRestoreExecutionGraph(jobGraph, jobManagerJobMetricGroup);
 	}
 
 	@Override
 	public void start() throws Exception {
-		Preconditions.checkState(jobManagerJobMetricGroup == null);
-		Preconditions.checkState(executionGraph == null);
+		Preconditions.checkState(!resultFuture.isDone());
 
-		jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
+		try {
+			final ExecutionGraph currentExecutionGraph;
 
-//		try {
-			final ExecutionGraph newExecutionGraph = createAndRestoreExecutionGraph(jobGraph, jobManagerJobMetricGroup);
+			if (executionGraph == null) {
+				jobManagerJobMetricGroup = jobMetricGroupFactory.create(jobGraph);
+				currentExecutionGraph = createAndRestoreExecutionGraph(jobGraph, jobManagerJobMetricGroup);
+			} else {
+				currentExecutionGraph = executionGraph;
+			}
 
-			newExecutionGraph.getTerminationFuture().thenAccept(jobStatus -> {
+			currentExecutionGraph.getTerminationFuture().thenAccept(jobStatus -> {
 				// check if we are still the valid EG
-				if (newExecutionGraph == executionGraph) {
-					notifyTerminalState(newExecutionGraph);
+				if (currentExecutionGraph == executionGraph) {
+					notifyTerminalState(currentExecutionGraph);
 				} // else ignore
 			});
 
-			newExecutionGraph.scheduleForExecution();
+			currentExecutionGraph.scheduleForExecution();
 
-			executionGraph = newExecutionGraph;
-//		} catch (Exception e) {
-//			resultFuture.completeExceptionally(
-//				new ExecutionGraphDriverException(
-//					String.format("Could not schedule the job %s.", jobGraph.getJobID()),
-//					e));
-//		}
+			executionGraph = currentExecutionGraph;
+		} catch (Exception e) {
+			resultFuture.completeExceptionally(e);
+			throw e;
+		}
 	}
 
 	private void notifyTerminalState(ExecutionGraph terminatedExecutionGraph) {
@@ -396,15 +399,16 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 
 	@Override
 	public void suspend(Exception cause) {
-		validateExecutionGraph(executionGraph);
-		executionGraph.suspend(cause);
+		if (executionGraph != null) {
+			executionGraph.suspend(cause);
 
-		if (jobManagerJobMetricGroup != null) {
-			jobManagerJobMetricGroup.close();
+			if (jobManagerJobMetricGroup != null) {
+				jobManagerJobMetricGroup.close();
+			}
+
+			executionGraph = null;
+			jobManagerJobMetricGroup = null;
 		}
-
-		executionGraph = null;
-		jobManagerJobMetricGroup = null;
 	}
 
 	@Override
@@ -688,6 +692,6 @@ public class DefaultExecutionGraphDriver implements ExecutionGraphDriver {
 	@Override
 	public CompletableFuture<Void> closeAsync() {
 		suspend(new FlinkException("Closing ExecutionGraphDriver."));
-		return CompletableFuture.completedFuture(null);
+		return resultFuture.thenApply(FunctionUtils.nullFn());
 	}
 }

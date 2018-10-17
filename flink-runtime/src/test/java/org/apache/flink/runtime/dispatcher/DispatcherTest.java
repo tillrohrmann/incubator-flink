@@ -44,6 +44,7 @@ import org.apache.flink.runtime.jobmaster.JobManagerRunner;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.JobResult;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
+import org.apache.flink.runtime.leaderelection.StandaloneLeaderElectionService;
 import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
 import org.apache.flink.runtime.leaderretrieval.SettableLeaderRetrievalService;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -567,12 +568,13 @@ public class DispatcherTest extends TestLogger {
 	@Test
 	public void testJobSubmissionErrorAfterJobRecovery() throws Exception {
 		final FlinkException testException = new FlinkException("Test exception");
-
-		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
-
 		final JobGraph failingJobGraph = createFailingJobGraph(testException);
 
 		final SubmittedJobGraph submittedJobGraph = new SubmittedJobGraph(failingJobGraph, null);
+
+		haServices.setJobMasterLeaderElectionService(failingJobGraph.getJobID(), new StandaloneLeaderElectionService());
+
+		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
 		submittedJobGraphStore.putJobGraph(submittedJobGraph);
 
 		electDispatcher();

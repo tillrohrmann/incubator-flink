@@ -334,14 +334,8 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 			final CompletableFuture<Acknowledge> startFuture = jobMaster.start(new JobMasterId(leaderSessionId), rpcTimeout);
 			final CompletableFuture<JobMasterGateway> currentLeaderGatewayFuture = leaderGatewayFuture;
 
-			startFuture.whenCompleteAsync(
-				(Acknowledge ack, Throwable throwable) -> {
-					if (throwable != null) {
-						handleJobManagerRunnerError(new FlinkException("Could not start the job manager.", throwable));
-					} else {
-						confirmLeaderSessionIdIfStillLeader(leaderSessionId, currentLeaderGatewayFuture);
-					}
-				},
+			startFuture.thenRunAsync(
+				() -> confirmLeaderSessionIdIfStillLeader(leaderSessionId, currentLeaderGatewayFuture),
 				jobManagerSharedServices.getScheduledExecutorService());
 		}
 	}

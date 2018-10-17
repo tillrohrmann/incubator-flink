@@ -263,9 +263,10 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			jobMetricGroupFactory,
 			jobManagerSharedServices.getBackPressureStatsTracker(),
 			userCodeLoader);
+
 		executionGraphDriver.getResultFuture().whenComplete((archivedExecutionGraph, throwable) -> {
 			if (throwable != null) {
-				handleJobMasterError(new JobMasterException("The execution graph driver failed.", throwable));
+				handleJobMasterError(throwable);
 			} else {
 				jobReachedGloballyTerminalState(archivedExecutionGraph);
 			}
