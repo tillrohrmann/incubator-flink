@@ -179,7 +179,8 @@ elif [ $STAGE != "$STAGE_CLEANUP" ]; then
 	travis_time_finish
 	end_fold "adjust_timestamps"
 
-	TEST="$STAGE" "./tools/travis_mvn_watchdog.sh" 300
+	while mvn -pl flink-tests -Dtest=TaskManagerProcessFailureBatchRecoveryITCase integration-test -DfailIfNoTests=false; do :; done
+#	TEST="$STAGE" "./tools/travis_mvn_watchdog.sh" 300
 	EXIT_CODE=$?
 else
 	echo "Cleaning up $CACHE_BUILD_DIR"
