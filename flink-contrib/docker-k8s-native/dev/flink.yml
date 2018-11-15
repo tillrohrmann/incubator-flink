@@ -1,0 +1,69 @@
+
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: flink-jobmanager
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: flink
+        component: cluster
+    spec:
+      containers:
+      - name: jobmanager
+        image: flink-dev
+        imagePullPolicy: IfNotPresent
+        args:
+        - "cluster"
+        - "-i"
+        - "flink-dev"
+        - "-cid"
+        - "test"
+        env:
+        - name: EXTRA_CLASSPATHS
+          value: /flink-root/flink-kubernetes/target/classes
+        ports:
+        - containerPort: 6123
+          name: rpc
+        - containerPort: 6124
+          name: blob
+        - containerPort: 6125
+          name: query
+        - containerPort: 8081
+          name: ui
+        volumeMounts:
+          - mountPath: /opt/flink
+            name: flink-dist
+          - mountPath: /flink-root
+            name: flink-root
+      volumes:
+          - name: flink-dist
+            hostPath:
+                path: /flink-root/build-target
+          - name: flink-root
+            hostPath:
+              path: /flink-root
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-cluster
+spec:
+  ports:
+  - name: rpc
+    port: 6123
+  - name: blob
+    port: 6124
+  - name: query
+    port: 6125
+  - name: ui
+    port: 8081
+  selector:
+    app: flink
+    component: cluster
+  externalIPs:
+   - 192.168.99.100
+

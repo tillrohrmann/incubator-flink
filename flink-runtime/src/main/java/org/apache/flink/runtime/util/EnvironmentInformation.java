@@ -18,15 +18,13 @@
 
 package org.apache.flink.runtime.util;
 
+import org.apache.flink.util.OperatingSystem;
 import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Properties;
-
-import org.apache.flink.util.OperatingSystem;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
