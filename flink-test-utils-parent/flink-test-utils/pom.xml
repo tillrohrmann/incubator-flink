@@ -143,11 +143,18 @@ under the License.
 									<shadedPattern>org.apache.flink.shaded.testutils.org.jboss.netty</shadedPattern>
 								</relocation>
 							</relocations>
-							<filters>
+							<filters combine.children="append">
 								<filter>
-									<artifact>*</artifact>
+									<artifact>io.netty:netty</artifact>
 									<excludes>
 										<exclude>META-INF/maven/io.netty/**</exclude>
+										<!-- We need to extract the NOTICE file because not everything mentioned there is
+										contained in the netty jar. Instead we need to extract a snippet and add it manually
+										to the NOTICE file of this module. -->
+										<exclude>META-INF/NOTICE.txt</exclude>
+										<!-- This folder clashes with the LICENSE file on case-insensitive filesystems. We need to
+										add the respective licenses manually. -->
+										<exclude>META-INF/license</exclude>
 									</excludes>
 								</filter>
 							</filters>
