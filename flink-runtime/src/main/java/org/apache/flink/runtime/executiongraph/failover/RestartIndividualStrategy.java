@@ -20,6 +20,7 @@ package org.apache.flink.runtime.executiongraph.failover;
 
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.SimpleCounter;
+import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
@@ -110,20 +111,21 @@ public class RestartIndividualStrategy extends FailoverStrategy {
 
 		final ExecutionVertex vertexToRecover = taskExecution.getVertex(); 
 		final long globalModVersion = taskExecution.getGlobalModVersion();
+		final ScheduledExecutor mainThreadExecutor = executionGraph.getMainThreadExecutor();
 
 		terminationFuture.thenAcceptAsync(
 			(ExecutionState value) -> {
 				try {
 					long createTimestamp = System.currentTimeMillis();
 					Execution newExecution = vertexToRecover.resetForNewExecution(createTimestamp, globalModVersion);
-					newExecution.scheduleForExecution();
+					mainThreadExecutor.execute(newExecution::scheduleForExecution);
 				}
 				catch (GlobalModVersionMismatch e) {
 					// this happens if a concurrent global recovery happens. simply do nothing.
-				}
-				catch (Exception e) {
-					executionGraph.failGlobal(
-							new Exception("Error during fine grained recovery - triggering full recovery", e));
+				} catch (Exception e) {
+					mainThreadExecutor.execute(() ->
+						executionGraph.failGlobal(
+							new Exception("Error during fine grained recovery - triggering full recovery", e)));
 				}
 			},
 			callbackExecutor);
