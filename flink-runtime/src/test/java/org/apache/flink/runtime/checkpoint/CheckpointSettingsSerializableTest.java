@@ -26,6 +26,7 @@ import org.apache.flink.core.testutils.CommonTestUtils;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.runtime.blob.VoidBlobWriter;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutorServiceAdapter;
 import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphBuilder;
@@ -101,6 +102,7 @@ public class CheckpointSettingsSerializableTest extends TestLogger {
 			null,
 			copy,
 			new Configuration(),
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			TestingUtils.defaultExecutor(),
 			TestingUtils.defaultExecutor(),
 			mock(SlotProvider.class),

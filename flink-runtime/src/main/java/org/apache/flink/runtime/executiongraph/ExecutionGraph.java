@@ -41,6 +41,7 @@ import org.apache.flink.runtime.checkpoint.CheckpointStatsTracker;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpointStore;
 import org.apache.flink.runtime.checkpoint.MasterTriggerRestoreHook;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.concurrent.FutureUtils.ConjunctFuture;
 import org.apache.flink.runtime.concurrent.ScheduledExecutorServiceAdapter;
@@ -183,6 +184,9 @@ public class ExecutionGraph implements AccessExecutionGraph {
 	/** Serialized job information or a blob key pointing to the offloaded job information. */
 	private final Either<SerializedValue<JobInformation>, PermanentBlobKey> jobInformationOrBlobKey;
 
+	/** Executor that runs tasks in the job manager's main thread. */
+	private final ComponentMainThreadExecutor mainThreadExecutor;
+
 	/** The executor which is used to execute futures. */
 	private final ScheduledExecutorService futureExecutor;
 
@@ -305,6 +309,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 	 */
 	@VisibleForTesting
 	ExecutionGraph(
+			ComponentMainThreadExecutor mainThreadExecutor,
 			ScheduledExecutorService futureExecutor,
 			Executor ioExecutor,
 			JobID jobId,
@@ -323,6 +328,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 				jobConfig,
 				Collections.emptyList(),
 				Collections.emptyList()),
+			mainThreadExecutor,
 			futureExecutor,
 			ioExecutor,
 			timeout,
@@ -336,6 +342,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 	@VisibleForTesting
 	ExecutionGraph(
 			JobInformation jobInformation,
+			ComponentMainThreadExecutor mainThreadExecutor,
 			ScheduledExecutorService futureExecutor,
 			Executor ioExecutor,
 			Time timeout,
@@ -343,6 +350,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 			SlotProvider slotProvider) throws IOException {
 		this(
 			jobInformation,
+			mainThreadExecutor,
 			futureExecutor,
 			ioExecutor,
 			timeout,
@@ -354,6 +362,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 	@VisibleForTesting
 	ExecutionGraph(
 			JobInformation jobInformation,
+			ComponentMainThreadExecutor mainThreadExecutor,
 			ScheduledExecutorService futureExecutor,
 			Executor ioExecutor,
 			Time timeout,
@@ -362,6 +371,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 			SlotProvider slotProvider) throws IOException {
 		this(
 			jobInformation,
+			mainThreadExecutor,
 			futureExecutor,
 			ioExecutor,
 			timeout,
@@ -375,6 +385,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 
 	public ExecutionGraph(
 			JobInformation jobInformation,
+			ComponentMainThreadExecutor mainThreadExecutor,
 			ScheduledExecutorService futureExecutor,
 			Executor ioExecutor,
 			Time rpcTimeout,
@@ -393,6 +404,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 
 		this.jobInformationOrBlobKey = BlobWriter.serializeAndTryOffload(jobInformation, jobInformation.getJobId(), blobWriter);
 
+		this.mainThreadExecutor = Preconditions.checkNotNull(mainThreadExecutor);
 		this.futureExecutor = Preconditions.checkNotNull(futureExecutor);
 		this.ioExecutor = Preconditions.checkNotNull(ioExecutor);
 
@@ -738,6 +750,15 @@ public class ExecutionGraph implements AccessExecutionGraph {
 
 	public final BlobWriter getBlobWriter() {
 		return blobWriter;
+	}
+
+	/**
+	 * Returns the executor to run tasks in the job master's main thread.
+	 *
+	 * @return the executor to run tasks in the job master's main thread.
+	 */
+	public ComponentMainThreadExecutor getMainThreadExecutor() {
+		return mainThreadExecutor;
 	}
 
 	/**

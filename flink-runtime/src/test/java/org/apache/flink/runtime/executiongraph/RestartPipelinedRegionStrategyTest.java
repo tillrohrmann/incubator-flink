@@ -22,6 +22,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.akka.AkkaUtils;
 import org.apache.flink.runtime.blob.VoidBlobWriter;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutorServiceAdapter;
 import org.apache.flink.runtime.executiongraph.failover.FailoverRegion;
 import org.apache.flink.runtime.executiongraph.failover.RestartPipelinedRegionStrategy;
 import org.apache.flink.runtime.executiongraph.restart.NoRestartStrategy;
@@ -96,6 +97,7 @@ public class RestartPipelinedRegionStrategyTest {
 
 		ExecutionGraph eg = new ExecutionGraph(
 			jobInformation,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			TestingUtils.defaultExecutor(),
 			TestingUtils.defaultExecutor(),
 			AkkaUtils.getDefaultTimeout(),
@@ -181,6 +183,7 @@ public class RestartPipelinedRegionStrategyTest {
 
 		ExecutionGraph eg = new ExecutionGraph(
 			jobInformation,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			TestingUtils.defaultExecutor(),
 			TestingUtils.defaultExecutor(),
 			AkkaUtils.getDefaultTimeout(),
@@ -271,6 +274,7 @@ public class RestartPipelinedRegionStrategyTest {
 
 		ExecutionGraph eg = new ExecutionGraph(
 			jobInformation,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			TestingUtils.defaultExecutor(),
 			TestingUtils.defaultExecutor(),
 			AkkaUtils.getDefaultTimeout(),
@@ -352,6 +356,7 @@ public class RestartPipelinedRegionStrategyTest {
 
         ExecutionGraph eg = new ExecutionGraph(
         	jobInformation,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			TestingUtils.defaultExecutor(),
 			TestingUtils.defaultExecutor(),
 			AkkaUtils.getDefaultTimeout(),

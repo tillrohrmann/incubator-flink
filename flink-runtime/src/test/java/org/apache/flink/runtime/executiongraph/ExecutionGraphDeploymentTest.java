@@ -33,6 +33,7 @@ import org.apache.flink.runtime.blob.PermanentBlobService;
 import org.apache.flink.runtime.blob.VoidBlobWriter;
 import org.apache.flink.runtime.checkpoint.CheckpointRetentionPolicy;
 import org.apache.flink.runtime.checkpoint.StandaloneCheckpointRecoveryFactory;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutorServiceAdapter;
 import org.apache.flink.runtime.deployment.InputGateDeploymentDescriptor;
 import org.apache.flink.runtime.deployment.ResultPartitionDeploymentDescriptor;
 import org.apache.flink.runtime.deployment.TaskDeploymentDescriptor;
@@ -41,7 +42,6 @@ import org.apache.flink.runtime.executiongraph.failover.RestartAllStrategy;
 import org.apache.flink.runtime.executiongraph.restart.NoRestartStrategy;
 import org.apache.flink.runtime.executiongraph.utils.SimpleAckingTaskManagerGateway;
 import org.apache.flink.runtime.instance.Instance;
-import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.instance.SimpleSlot;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
@@ -54,6 +54,7 @@ import org.apache.flink.runtime.jobgraph.tasks.CheckpointCoordinatorConfiguratio
 import org.apache.flink.runtime.jobgraph.tasks.JobCheckpointingSettings;
 import org.apache.flink.runtime.jobmanager.scheduler.Scheduler;
 import org.apache.flink.runtime.jobmanager.slots.ActorTaskManagerGateway;
+import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.jobmaster.SlotOwner;
 import org.apache.flink.runtime.operators.BatchTask;
 import org.apache.flink.runtime.taskmanager.LocalTaskManagerLocation;
@@ -159,6 +160,7 @@ public class ExecutionGraphDeploymentTest extends TestLogger {
 
 			ExecutionGraph eg = new ExecutionGraph(
 				expectedJobInformation,
+				new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 				TestingUtils.defaultExecutor(),
 				TestingUtils.defaultExecutor(),
 				AkkaUtils.getDefaultTimeout(),
@@ -442,6 +444,7 @@ public class ExecutionGraphDeploymentTest extends TestLogger {
 		// execution graph that executes actions synchronously
 		ExecutionGraph eg = new ExecutionGraph(
 			jobInformation,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			new DirectScheduledExecutorService(),
 			TestingUtils.defaultExecutor(),
 			AkkaUtils.getDefaultTimeout(),
@@ -524,6 +527,7 @@ public class ExecutionGraphDeploymentTest extends TestLogger {
 		// execution graph that executes actions synchronously
 		ExecutionGraph eg = new ExecutionGraph(
 			jobInformation,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			new DirectScheduledExecutorService(),
 			TestingUtils.defaultExecutor(),
 			AkkaUtils.getDefaultTimeout(),
@@ -702,6 +706,7 @@ public class ExecutionGraphDeploymentTest extends TestLogger {
 			null,
 			jobGraph,
 			configuration,
+			new ComponentMainThreadExecutorServiceAdapter(executor),
 			executor,
 			executor,
 			new ProgrammedSlotProvider(1),

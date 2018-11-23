@@ -23,7 +23,7 @@ import java.net._
 import java.util
 import java.util.UUID
 import java.util.concurrent.{TimeUnit, Future => _, TimeoutException => _, _}
-import java.util.function.{BiFunction, Consumer}
+import java.util.function.{BiFunction, BooleanSupplier, Consumer}
 
 import akka.actor.Status.{Failure, Success}
 import akka.actor._
@@ -45,7 +45,7 @@ import org.apache.flink.runtime.clusterframework.standalone.StandaloneResourceMa
 import org.apache.flink.runtime.clusterframework.types.ResourceID
 import org.apache.flink.runtime.clusterframework.{BootstrapTools, FlinkResourceManager}
 import org.apache.flink.runtime.concurrent.Executors.directExecutionContext
-import org.apache.flink.runtime.concurrent.{FutureUtils, ScheduledExecutorServiceAdapter}
+import org.apache.flink.runtime.concurrent.{ComponentMainThreadExecutorServiceAdapter, FutureUtils, ScheduledExecutorServiceAdapter}
 import org.apache.flink.runtime.execution.SuppressRestartsException
 import org.apache.flink.runtime.execution.librarycache.FlinkUserCodeClassLoaders.ResolveOrder
 import org.apache.flink.runtime.execution.librarycache.{BlobLibraryCacheManager, LibraryCacheManager}
@@ -1284,6 +1284,8 @@ class JobManager(
           executionGraph,
           jobGraph,
           flinkConfiguration,
+          //TODO how to get a main-thread executor here?
+          new ComponentMainThreadExecutorServiceAdapter(futureExecutor),
           futureExecutor,
           ioExecutor,
           scheduler,

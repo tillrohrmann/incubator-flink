@@ -24,6 +24,7 @@ import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.akka.AkkaUtils;
 import org.apache.flink.runtime.blob.VoidBlobWriter;
 import org.apache.flink.runtime.checkpoint.StandaloneCheckpointRecoveryFactory;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutorServiceAdapter;
 import org.apache.flink.runtime.executiongraph.restart.NoRestartStrategy;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
@@ -67,6 +68,7 @@ public class ExecutionGraphRescalingTest extends TestLogger {
 			null,
 			jobGraph,
 			config,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			TestingUtils.defaultExecutor(),
 			TestingUtils.defaultExecutor(),
 			new Scheduler(TestingUtils.defaultExecutionContext()),
@@ -96,6 +98,7 @@ public class ExecutionGraphRescalingTest extends TestLogger {
 			null,
 			jobGraph,
 			config,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			TestingUtils.defaultExecutor(),
 			TestingUtils.defaultExecutor(),
 			new Scheduler(TestingUtils.defaultExecutionContext()),
@@ -125,6 +128,7 @@ public class ExecutionGraphRescalingTest extends TestLogger {
 			null,
 			jobGraph,
 			config,
+			new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 			TestingUtils.defaultExecutor(),
 			TestingUtils.defaultExecutor(),
 			new Scheduler(TestingUtils.defaultExecutionContext()),
@@ -167,6 +171,7 @@ public class ExecutionGraphRescalingTest extends TestLogger {
 				null,
 				jobGraph,
 				config,
+				new ComponentMainThreadExecutorServiceAdapter(TestingUtils.defaultExecutor()),
 				TestingUtils.defaultExecutor(),
 				TestingUtils.defaultExecutor(),
 				new Scheduler(TestingUtils.defaultExecutionContext()),

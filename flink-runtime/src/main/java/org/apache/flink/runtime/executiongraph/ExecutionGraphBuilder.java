@@ -36,6 +36,7 @@ import org.apache.flink.runtime.checkpoint.MasterTriggerRestoreHook;
 import org.apache.flink.runtime.checkpoint.hooks.MasterHooks;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.client.JobSubmissionException;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.executiongraph.failover.FailoverStrategy;
 import org.apache.flink.runtime.executiongraph.failover.FailoverStrategyLoader;
 import org.apache.flink.runtime.executiongraph.metrics.DownTimeGauge;
@@ -84,6 +85,7 @@ public class ExecutionGraphBuilder {
 			@Nullable ExecutionGraph prior,
 			JobGraph jobGraph,
 			Configuration jobManagerConfig,
+			ComponentMainThreadExecutor mainThreadExecutor,
 			ScheduledExecutorService futureExecutor,
 			Executor ioExecutor,
 			SlotProvider slotProvider,
@@ -101,6 +103,7 @@ public class ExecutionGraphBuilder {
 			prior,
 			jobGraph,
 			jobManagerConfig,
+			mainThreadExecutor,
 			futureExecutor,
 			ioExecutor,
 			slotProvider,
@@ -125,6 +128,7 @@ public class ExecutionGraphBuilder {
 			@Nullable ExecutionGraph prior,
 			JobGraph jobGraph,
 			Configuration jobManagerConfig,
+			ComponentMainThreadExecutor mainThreadExecutor,
 			ScheduledExecutorService futureExecutor,
 			Executor ioExecutor,
 			SlotProvider slotProvider,
@@ -161,6 +165,7 @@ public class ExecutionGraphBuilder {
 			executionGraph = (prior != null) ? prior :
 				new ExecutionGraph(
 					jobInformation,
+					mainThreadExecutor,
 					futureExecutor,
 					ioExecutor,
 					rpcTimeout,
