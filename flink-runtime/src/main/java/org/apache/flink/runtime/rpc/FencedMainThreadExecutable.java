@@ -45,4 +45,13 @@ public interface FencedMainThreadExecutable extends MainThreadExecutable {
 	 * @return Future containing the callable result
 	 */
 	<V> CompletableFuture<V> callAsyncWithoutFencing(Callable<V> callable, Time timeout);
+
+	/**
+	 * Execute the runnable in the main thread of the underlying RPC endpoint, with
+	 * a delay of the given number of milliseconds.
+	 *
+	 * @param runnable Runnable to be executed
+	 * @param delay    The delay, in milliseconds, after which the runnable will be executed
+	 */
+	void scheduleRunAsyncWithoutFencing(Runnable runnable, long delay);
 }

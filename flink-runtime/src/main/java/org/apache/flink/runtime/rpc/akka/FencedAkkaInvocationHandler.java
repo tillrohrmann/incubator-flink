@@ -113,6 +113,18 @@ public class FencedAkkaInvocationHandler<F extends Serializable> extends AkkaInv
 	}
 
 	@Override
+	public void scheduleRunAsyncWithoutFencing(Runnable runnable, long delay) {
+		if (isLocal) {
+			long atTimeNanos = delay == 0 ? 0 : System.nanoTime() + (delay * 1_000_000);
+			getActorRef().tell(
+				new UnfencedMessage<>(new RunAsync(runnable, atTimeNanos)), ActorRef.noSender());
+		} else {
+			throw new RuntimeException("Trying to send a Runnable to a remote actor at " +
+				getActorRef().path() + ". This is not supported.");
+		}
+	}
+
+	@Override
 	public void tell(Object message) {
 		super.tell(fenceMessage(message));
 	}

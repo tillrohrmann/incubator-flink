@@ -1167,7 +1167,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			null,
 			jobGraph,
 			jobMasterConfiguration.getConfiguration(),
-			getMainThreadExecutor(),
+			getUnfencedMainThreadExecutor(),
 			scheduledExecutorService,
 			scheduledExecutorService,
 			slotPool.getSlotProvider(),

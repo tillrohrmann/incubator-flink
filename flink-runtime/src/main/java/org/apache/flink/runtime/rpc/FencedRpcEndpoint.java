@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.rpc;
 
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nonnull;
@@ -28,7 +29,9 @@ import java.io.Serializable;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 /**
  * Base class for fenced {@link RpcEndpoint}. A fenced rpc endpoint expects all rpc messages
@@ -54,7 +57,7 @@ public abstract class FencedRpcEndpoint<F extends Serializable> extends RpcEndpo
 
 		// no fencing token == no leadership
 		this.fencingToken = null;
-		this.unfencedMainThreadExecutor = new UnfencedMainThreadExecutor((FencedMainThreadExecutable) rpcServer);
+		this.unfencedMainThreadExecutor = new UnfencedMainThreadExecutor((FencedMainThreadExecutable) rpcServer, this::isCurrentMainThread);
 		this.fencedMainThreadExecutor = new MainThreadExecutor(
 			getRpcService().fenceRpcServer(
 				rpcServer,
@@ -103,7 +106,7 @@ public abstract class FencedRpcEndpoint<F extends Serializable> extends RpcEndpo
 	 *
 	 * @return MainThreadExecutor which is not bound to the fencing token
 	 */
-	protected Executor getUnfencedMainThreadExecutor() {
+	protected ComponentMainThreadExecutor getUnfencedMainThreadExecutor() {
 		return unfencedMainThreadExecutor;
 	}
 
@@ -144,17 +147,45 @@ public abstract class FencedRpcEndpoint<F extends Serializable> extends RpcEndpo
 	/**
 	 * Executor which executes {@link Runnable} in the main thread context without fencing.
 	 */
-	private static class UnfencedMainThreadExecutor implements Executor {
+	private static class UnfencedMainThreadExecutor implements ComponentMainThreadExecutor {
 
 		private final FencedMainThreadExecutable gateway;
+		private final BooleanSupplier mainThreadCheck;
 
-		UnfencedMainThreadExecutor(FencedMainThreadExecutable gateway) {
+		UnfencedMainThreadExecutor(FencedMainThreadExecutable gateway, BooleanSupplier mainThreadCheck) {
 			this.gateway = Preconditions.checkNotNull(gateway);
+			this.mainThreadCheck = mainThreadCheck;
 		}
 
 		@Override
 		public void execute(@Nonnull Runnable runnable) {
 			gateway.runAsyncWithoutFencing(runnable);
+		}
+
+		@Override
+		public boolean isMainThread() {
+			return mainThreadCheck.getAsBoolean();
+		}
+
+		@Override
+		public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+			gateway.scheduleRunAsyncWithoutFencing(command, unit.toMillis(delay));
+			return null;
+		}
+
+		@Override
+		public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+			throw new UnsupportedOperationException("Not implemented because the method is currently not required.");
+		}
+
+		@Override
+		public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+			throw new UnsupportedOperationException("Not implemented because the method is currently not required.");
+		}
+
+		@Override
+		public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
+			throw new UnsupportedOperationException("Not implemented because the method is currently not required.");
 		}
 	}
 }
