@@ -33,7 +33,6 @@ import org.apache.flink.runtime.rpc.messages.LocalRpcInvocation;
 import org.apache.flink.runtime.rpc.messages.RemoteHandshakeMessage;
 import org.apache.flink.runtime.rpc.messages.RpcInvocation;
 import org.apache.flink.runtime.rpc.messages.RunAsync;
-import org.apache.flink.util.ExceptionUtils;
 
 import akka.actor.ActorRef;
 import akka.actor.Status;
@@ -332,7 +331,8 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 					runAsync.getRunnable().run();
 				} catch (Throwable t) {
 					log.error("Caught exception while executing runnable in main thread.", t);
-					ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
+					System.exit(1);
+//					ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
 				}
 			}
 			else {

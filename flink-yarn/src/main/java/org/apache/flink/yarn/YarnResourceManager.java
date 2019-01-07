@@ -358,8 +358,9 @@ public class YarnResourceManager extends ResourceManager<YarnWorkerNode> impleme
 		runAsync(() -> {
 			for (Container container : containers) {
 				log.info(
-					"Received new container: {} - Remaining pending container requests: {}",
+					"Received new container: {} with capacity {} - Remaining pending container requests: {}",
 					container.getId(),
+					container.getResource(),
 					numPendingContainerRequests);
 				resourceManagerClient.removeContainerRequest(new AMRMClient.ContainerRequest(
 						container.getResource(), null, null, container.getPriority()));
