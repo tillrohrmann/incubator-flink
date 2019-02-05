@@ -22,6 +22,8 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobSubmissionResult;
 import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.configuration.ClusterOptions;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.highavailability.nonha.embedded.TestingEmbeddedHaServices;
 import org.apache.flink.runtime.jobgraph.JobGraph;
@@ -41,6 +43,8 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -55,6 +59,8 @@ import static org.junit.Assert.fail;
  * Tests which verify the cluster behaviour in case of leader changes.
  */
 public class LeaderChangeClusterComponentsTest extends TestLogger {
+
+	private static final Logger LOG = LoggerFactory.getLogger(LeaderChangeClusterComponentsTest.class);
 
 	private static final Duration TESTING_TIMEOUT = Duration.ofMinutes(2L);
 
@@ -74,8 +80,13 @@ public class LeaderChangeClusterComponentsTest extends TestLogger {
 	public static void setupClass() throws Exception  {
 		highAvailabilityServices = new TestingEmbeddedHaServices(TestingUtils.defaultExecutor());
 
+		final Configuration configuration = new Configuration();
+		configuration.setLong(ClusterOptions.REFUSED_REGISTRATION_DELAY, 10L);
+		configuration.setLong(ClusterOptions.ERROR_REGISTRATION_DELAY, 10L);
+
 		miniCluster = new TestingMiniCluster(
 			new TestingMiniClusterConfiguration.Builder()
+				.setConfiguration(configuration)
 				.setNumTaskManagers(NUM_TMS)
 				.setNumSlotsPerTaskManager(SLOTS_PER_TM)
 				.build(),
@@ -131,22 +142,29 @@ public class LeaderChangeClusterComponentsTest extends TestLogger {
 
 	@Test
 	public void testReelectionOfJobMaster() throws Exception {
-		final CompletableFuture<JobSubmissionResult> submissionFuture = miniCluster.submitJob(jobGraph);
+		int repetitions = 10;
+		for (int i = 0; i < repetitions; i++) {
+			LOG.info("Repeat testReelectionOfJobMaster #{}/{}.", i, repetitions);
+			jobGraph = createJobGraph(PARALLELISM);
+			jobId = jobGraph.getJobID();
 
-		submissionFuture.get();
+			final CompletableFuture<JobSubmissionResult> submissionFuture = miniCluster.submitJob(jobGraph);
 
-		CompletableFuture<JobResult> jobResultFuture = miniCluster.requestJobResult(jobId);
+			submissionFuture.get();
 
-		highAvailabilityServices.revokeJobMasterLeadership(jobId).get();
+			CompletableFuture<JobResult> jobResultFuture = miniCluster.requestJobResult(jobId);
 
-		assertThat(jobResultFuture.isDone(), is(false));
-		BlockingOperator.isBlocking = false;
+			highAvailabilityServices.revokeJobMasterLeadership(jobId).get();
 
-		highAvailabilityServices.grantJobMasterLeadership(jobId);
+			assertThat(jobResultFuture.isDone(), is(false));
+			BlockingOperator.isBlocking = false;
 
-		JobResult jobResult = jobResultFuture.get();
+			highAvailabilityServices.grantJobMasterLeadership(jobId);
 
-		assertThat(jobResult.isSuccess(), is(true));
+			JobResult jobResult = jobResultFuture.get();
+
+			assertThat(jobResult.isSuccess(), is(true));
+		}
 	}
 
 	@Test
