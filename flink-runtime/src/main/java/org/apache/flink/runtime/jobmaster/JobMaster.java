@@ -95,7 +95,7 @@ import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureSta
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStatsResponse;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
-import org.apache.flink.runtime.rpc.FencedRpcEndpoint;
+import org.apache.flink.runtime.rpc.PermanentlyFencedRpcEndpoint;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.rpc.akka.AkkaRpcServiceUtils;
@@ -119,7 +119,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -147,7 +146,7 @@ import static org.apache.flink.util.Preconditions.checkState;
  * given task</li>
  * </ul>
  */
-public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMasterGateway, JobMasterService {
+public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId> implements JobMasterGateway, JobMasterService {
 
 	/** Default names for Flink's distributed components. */
 	public static final String JOB_MANAGER_NAME = "jobmanager";
@@ -227,6 +226,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	public JobMaster(
 			RpcService rpcService,
+			JobMasterId jobMasterId,
 			JobMasterConfiguration jobMasterConfiguration,
 			ResourceID resourceId,
 			JobGraph jobGraph,
@@ -240,7 +240,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			FatalErrorHandler fatalErrorHandler,
 			ClassLoader userCodeLoader) throws Exception {
 
-		super(rpcService, AkkaRpcServiceUtils.createRandomName(JOB_MANAGER_NAME));
+		super(rpcService, AkkaRpcServiceUtils.createRandomName(JOB_MANAGER_NAME), jobMasterId);
 
 		final JobMasterGateway selfGateway = getSelfGateway(JobMasterGateway.class);
 
@@ -310,19 +310,6 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	//----------------------------------------------------------------------------------------------
 
 	/**
-	 * Start the rpc service and begin to run the job.
-	 *
-	 * @param newJobMasterId The necessary fencing token to run the job
-	 * @return Future acknowledge if the job could be started. Otherwise the future contains an exception
-	 */
-	public CompletableFuture<Acknowledge> start(final JobMasterId newJobMasterId) throws Exception {
-		// make sure we receive RPC and async calls
-		start();
-
-		return callAsyncWithoutFencing(() -> startJobExecution(newJobMasterId), RpcUtils.INF_TIMEOUT);
-	}
-
-	/**
 	 * Suspending job, all the running tasks will be cancelled, and communication with other components
 	 * will be disposed.
 	 *
@@ -340,6 +327,47 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 				RpcUtils.INF_TIMEOUT);
 
 		return suspendFuture.whenComplete((acknowledge, throwable) -> stop());
+	}
+
+	@Override
+	public void onStart() throws Exception {
+		try {
+			super.onStart();
+			startJobMasterServices();
+			startJobExecution();
+		} catch (Exception e) {
+			final JobMasterException jobMasterException = new JobMasterException(String.format("Could not start the JobMaster %s", getAddress()), e);
+			handleJobMasterError(jobMasterException);
+			throw jobMasterException;
+		}
+	}
+
+	private void startJobMasterServices() throws Exception {
+		try {
+			// start the slot pool make sure the slot pool now accepts messages for this leader
+			slotPool.start(getFencingToken(), getAddress(), getMainThreadExecutor());
+			scheduler.start(getMainThreadExecutor());
+
+			//TODO: Remove once the ZooKeeperLeaderRetrieval returns the stored address upon start
+			// try to reconnect to previously known leader
+			reconnectToResourceManager(new FlinkException("Starting JobMaster component."));
+
+			// job is ready to go, try to establish connection with resource manager
+			//   - activate leader retrieval for the resource manager
+			//   - on notification of the leader, the connection will be established and
+			//     the slot pool will start requesting slots
+			resourceManagerLeaderRetriever.start(new ResourceManagerLeaderListener());
+		} catch (Exception e) {
+			Exception exception = e;
+
+			try {
+				stopJobMasterServices();
+			} catch (Exception inner) {
+				exception = ExceptionUtils.firstOrSuppressed(exception, inner);
+			}
+
+			throw exception;
+		}
 	}
 
 	/**
@@ -364,18 +392,30 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		// make sure there is a graceful exit
 		suspendExecution(new FlinkException("JobManager is shutting down."));
 
+		Exception exception = null;
+
+		try {
+			stopJobMasterServices();
+		} catch (Exception e) {
+			exception = e;
+		}
+
+		if (lastInternalSavepoint != null) {
+			disposeSavepoint(lastInternalSavepoint);
+		}
+
+		if (exception != null) {
+			return FutureUtils.completedExceptionally(new JobMasterException(String.format("Could not properly terminate the JobMaster %s", getAddress()), exception));
+		} else {
+			return CompletableFuture.completedFuture(null);
+		}
+	}
+
+	private void stopJobMasterServices() throws Exception {
 		// shut down will internally release all registered slots
 		slotPool.close();
 
-		final CompletableFuture<Void> disposeInternalSavepointFuture;
-
-		if (lastInternalSavepoint != null) {
-			disposeInternalSavepointFuture = CompletableFuture.runAsync(() -> disposeSavepoint(lastInternalSavepoint));
-		} else {
-			disposeInternalSavepointFuture = CompletableFuture.completedFuture(null);
-		}
-
-		return FutureUtils.completeAll(Collections.singletonList(disposeInternalSavepointFuture));
+		resourceManagerLeaderRetriever.stop();
 	}
 
 	//----------------------------------------------------------------------------------------------
@@ -1005,7 +1045,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		}
 
 		Object accumulator = accumulators.get(aggregateName);
-		if(null == accumulator) {
+		if (null == accumulator) {
 			accumulator = aggregateFunction.createAccumulator();
 		}
 		accumulator = aggregateFunction.add(aggregand, accumulator);
@@ -1019,56 +1059,13 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 
 	//-- job starting and stopping  -----------------------------------------------------------------
 
-	private Acknowledge startJobExecution(JobMasterId newJobMasterId) throws Exception {
+	private Acknowledge startJobExecution() throws Exception {
 
-		validateRunsInMainThread();
-
-		checkNotNull(newJobMasterId, "The new JobMasterId must not be null.");
-
-		if (Objects.equals(getFencingToken(), newJobMasterId)) {
-			log.info("Already started the job execution with JobMasterId {}.", newJobMasterId);
-
-			return Acknowledge.get();
-		}
-
-		setNewFencingToken(newJobMasterId);
-
-		startJobMasterServices();
-
-		log.info("Starting execution of job {} ({}) under job master id {}.", jobGraph.getName(), jobGraph.getJobID(), newJobMasterId);
+		log.info("Starting execution of job {} ({}) under job master id {}.", jobGraph.getName(), jobGraph.getJobID(), getFencingToken());
 
 		resetAndScheduleExecutionGraph();
 
 		return Acknowledge.get();
-	}
-
-	private void startJobMasterServices() throws Exception {
-		// start the slot pool make sure the slot pool now accepts messages for this leader
-		slotPool.start(getFencingToken(), getAddress(), getMainThreadExecutor());
-		scheduler.start(getMainThreadExecutor());
-
-		//TODO: Remove once the ZooKeeperLeaderRetrieval returns the stored address upon start
-		// try to reconnect to previously known leader
-		reconnectToResourceManager(new FlinkException("Starting JobMaster component."));
-
-		// job is ready to go, try to establish connection with resource manager
-		//   - activate leader retrieval for the resource manager
-		//   - on notification of the leader, the connection will be established and
-		//     the slot pool will start requesting slots
-		resourceManagerLeaderRetriever.start(new ResourceManagerLeaderListener());
-	}
-
-	private void setNewFencingToken(JobMasterId newJobMasterId) {
-		if (getFencingToken() != null) {
-			log.info("Restarting old job with JobMasterId {}. The new JobMasterId is {}.", getFencingToken(), newJobMasterId);
-
-			// first we have to suspend the current execution
-			suspendExecution(new FlinkException("Old job with JobMasterId " + getFencingToken() +
-				" is restarted with a new JobMasterId " + newJobMasterId + '.'));
-		}
-
-		// set new leader id
-		setFencingToken(newJobMasterId);
 	}
 
 	/**

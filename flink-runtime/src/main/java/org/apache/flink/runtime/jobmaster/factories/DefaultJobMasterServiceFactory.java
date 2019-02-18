@@ -26,6 +26,7 @@ import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.JobMaster;
 import org.apache.flink.runtime.jobmaster.JobMasterConfiguration;
+import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.jobmaster.slotpool.SchedulerFactory;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPoolFactory;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
@@ -76,9 +77,14 @@ public class DefaultJobMasterServiceFactory implements JobMasterServiceFactory {
 	}
 
 	@Override
-	public JobMaster createJobMasterService(JobGraph jobGraph, OnCompletionActions jobCompletionActions, ClassLoader userCodeClassloader) throws Exception {
+	public JobMaster createJobMasterService(
+			JobMasterId jobMasterId,
+			JobGraph jobGraph,
+			OnCompletionActions jobCompletionActions,
+			ClassLoader userCodeClassloader) throws Exception {
 		return new JobMaster(
 			rpcService,
+			jobMasterId,
 			jobMasterConfiguration,
 			ResourceID.generate(),
 			jobGraph,

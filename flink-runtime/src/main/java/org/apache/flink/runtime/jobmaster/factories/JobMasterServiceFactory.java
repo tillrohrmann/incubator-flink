@@ -20,6 +20,7 @@ package org.apache.flink.runtime.jobmaster.factories;
 
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
+import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.jobmaster.JobMasterService;
 
 /**
@@ -28,6 +29,7 @@ import org.apache.flink.runtime.jobmaster.JobMasterService;
 public interface JobMasterServiceFactory {
 
 	JobMasterService createJobMasterService(
+		JobMasterId jobMasterId,
 		JobGraph jobGraph,
 		OnCompletionActions jobCompletionActions,
 		ClassLoader userCodeClassloader) throws Exception;

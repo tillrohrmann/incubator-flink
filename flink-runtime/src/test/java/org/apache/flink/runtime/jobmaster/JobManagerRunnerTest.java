@@ -253,46 +253,6 @@ public class JobManagerRunnerTest extends TestLogger {
 		leaderFuture.get();
 	}
 
-	/**
-	 * Tests that the {@link JobManagerRunner} always waits for the previous leadership operation
-	 * (granting or revoking leadership) to finish before starting a new leadership operation.
-	 */
-	@Test
-	public void testConcurrentLeadershipOperationsBlockingGainLeadership() throws Exception {
-		final CompletableFuture<Exception> suspendFuture = new CompletableFuture<>();
-		final CompletableFuture<Acknowledge> startFuture = new CompletableFuture<>();
-
-		TestingJobMasterServiceFactory jobMasterServiceFactory = new TestingJobMasterServiceFactory(
-			() -> new TestingJobMasterService(
-				"localhost",
-				e -> {
-					suspendFuture.complete(e);
-					return CompletableFuture.completedFuture(Acknowledge.get());
-				},
-				ignored -> startFuture));
-		JobManagerRunner jobManagerRunner = createJobManagerRunner(jobMasterServiceFactory);
-
-		jobManagerRunner.start();
-
-		leaderElectionService.isLeader(UUID.randomUUID());
-
-		leaderElectionService.notLeader();
-
-		// suspending should wait for the start to happen first
-		assertThat(suspendFuture.isDone(), is(false));
-
-		try {
-			suspendFuture.get(1L, TimeUnit.MILLISECONDS);
-			fail("Suspended leadership even though the JobMaster has not been started.");
-		} catch (TimeoutException expected) {
-			// expected
-		}
-
-		startFuture.complete(Acknowledge.get());
-
-		suspendFuture.get();
-	}
-
 	@Nonnull
 	private JobManagerRunner createJobManagerRunner(LibraryCacheManager libraryCacheManager) throws Exception {
 		return createJobManagerRunner(defaultJobMasterServiceFactory, libraryCacheManager);

@@ -29,13 +29,9 @@ import java.util.concurrent.CompletableFuture;
 public interface JobMasterService extends AutoCloseableAsync {
 
 	/**
-	 * Start the JobMaster service with the given {@link JobMasterId}.
-	 *
-	 * @param jobMasterId to start the service with
-	 * @return Future which is completed once the JobMaster service has been started
-	 * @throws Exception if the JobMaster service could not be started
+	 * Start the JobMaster service.
 	 */
-	CompletableFuture<Acknowledge> start(JobMasterId jobMasterId) throws Exception;
+	void start();
 
 	/**
 	 * Suspend the JobMaster service. This means that the service will stop to react

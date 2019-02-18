@@ -39,21 +39,15 @@ public class TestingJobMasterService implements JobMasterService {
 	private final Function<Exception, CompletableFuture<Acknowledge>> suspendFunction;
 
 	@Nonnull
-	private final Function<JobMasterId, CompletableFuture<Acknowledge>> startFunction;
-
-	private JobMasterGateway jobMasterGateway;
-
-	public TestingJobMasterService(@Nonnull String address, @Nonnull Function<Exception, CompletableFuture<Acknowledge>> suspendFunction) {
-		this(address, suspendFunction, ignored -> CompletableFuture.completedFuture(Acknowledge.get()));
-	}
+	private final JobMasterGateway jobMasterGateway;
 
 	public TestingJobMasterService(
 		@Nonnull String address,
-		@Nonnull Function<Exception, CompletableFuture<Acknowledge>> suspendFunction,
-		@Nonnull Function<JobMasterId, CompletableFuture<Acknowledge>> startFunction) {
+		@Nonnull Function<Exception, CompletableFuture<Acknowledge>> suspendFunction) {
 		this.address = address;
 		this.suspendFunction = suspendFunction;
-		this.startFunction = startFunction;
+
+		jobMasterGateway = new TestingJobMasterGatewayBuilder().build();
 	}
 
 	public TestingJobMasterService() {
@@ -63,14 +57,10 @@ public class TestingJobMasterService implements JobMasterService {
 	}
 
 	@Override
-	public CompletableFuture<Acknowledge> start(JobMasterId jobMasterId) {
-			jobMasterGateway = new TestingJobMasterGatewayBuilder().build();
-			return startFunction.apply(jobMasterId);
-	}
+	public void start() {}
 
 	@Override
 	public CompletableFuture<Acknowledge> suspend(Exception cause) {
-		jobMasterGateway = null;
 		return suspendFunction.apply(cause);
 	}
 
@@ -87,7 +77,6 @@ public class TestingJobMasterService implements JobMasterService {
 
 	@Override
 	public CompletableFuture<Void> closeAsync() {
-		jobMasterGateway = null;
 		return CompletableFuture.completedFuture(null);
 	}
 }
