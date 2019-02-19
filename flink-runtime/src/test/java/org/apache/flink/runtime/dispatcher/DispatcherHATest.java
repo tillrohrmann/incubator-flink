@@ -135,6 +135,9 @@ public class DispatcherHATest extends TestLogger {
 		dispatcher.start();
 
 		try {
+			// wait until the election service has been started
+			dispatcherLeaderElectionService.isStarted().get();
+
 			final UUID leaderId = UUID.randomUUID();
 			dispatcherLeaderElectionService.isLeader(leaderId);
 

@@ -271,25 +271,41 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 	// ------------------------------------------------------------------------
 
 	@Override
-	public void start() throws Exception {
-		super.start();
-
-		// start by connecting to the ResourceManager
+	public void onStart() throws Exception {
 		try {
-			resourceManagerLeaderRetriever.start(new ResourceManagerLeaderListener());
+			super.onStart();
+			startTaskExecutorServices();
 		} catch (Exception e) {
-			onFatalError(e);
+			final TaskManagerException exception = new TaskManagerException(String.format("Could not start the TaskExecutor %s", getAddress()), e);
+			onFatalError(exception);
+			throw exception;
 		}
 
-		// tell the task slot table who's responsible for the task slot actions
-		taskSlotTable.start(new SlotActionsImpl());
-
-		// start the job leader service
-		jobLeaderService.start(getAddress(), getRpcService(), haServices, new JobLeaderListenerImpl());
-
-		fileCache = new FileCache(taskManagerConfiguration.getTmpDirectories(), blobCacheService.getPermanentBlobService());
-
 		startRegistrationTimeout();
+	}
+
+	private void startTaskExecutorServices() throws Exception {
+		try {
+			// start by connecting to the ResourceManager
+			resourceManagerLeaderRetriever.start(new ResourceManagerLeaderListener());
+
+			// tell the task slot table who's responsible for the task slot actions
+			taskSlotTable.start(new SlotActionsImpl());
+
+			// start the job leader service
+			jobLeaderService.start(getAddress(), getRpcService(), haServices, new JobLeaderListenerImpl());
+
+			fileCache = new FileCache(taskManagerConfiguration.getTmpDirectories(), blobCacheService.getPermanentBlobService());
+		} catch (Exception e) {
+			Exception exception = e;
+			try {
+				stopTaskExecutorServices();
+			} catch (Exception inner) {
+				exception = ExceptionUtils.firstOrSuppressed(inner, exception);
+			}
+
+			throw exception;
+		}
 	}
 
 	/**
@@ -318,20 +334,10 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 		resourceManagerHeartbeatManager.stop();
 
 		try {
-			resourceManagerLeaderRetriever.stop();
+			stopTaskExecutorServices();
 		} catch (Exception e) {
 			throwable = ExceptionUtils.firstOrSuppressed(e, throwable);
 		}
-
-		try {
-			taskExecutorServices.shutDown();
-			fileCache.shutdown();
-		} catch (Throwable t) {
-			throwable = ExceptionUtils.firstOrSuppressed(t, throwable);
-		}
-
-		// it will call close() recursively from the parent to children
-		taskManagerMetricGroup.close();
 
 		if (throwable != null) {
 			return FutureUtils.completedExceptionally(new FlinkException("Error while shutting the TaskExecutor down.", throwable));
@@ -339,6 +345,41 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 			log.info("Stopped TaskExecutor {}.", getAddress());
 			return CompletableFuture.completedFuture(null);
 		}
+	}
+
+	private void stopTaskExecutorServices() throws Exception {
+		Exception exception = null;
+
+		try {
+			jobLeaderService.stop();
+		} catch (Exception e) {
+			exception = ExceptionUtils.firstOrSuppressed(e, exception);
+		}
+
+		taskSlotTable.stop();
+
+		try {
+			resourceManagerLeaderRetriever.stop();
+		} catch (Exception e) {
+			exception = ExceptionUtils.firstOrSuppressed(e, exception);
+		}
+
+		try {
+			taskExecutorServices.shutDown();
+		} catch (Exception e) {
+			exception = ExceptionUtils.firstOrSuppressed(e, exception);
+		}
+
+		try {
+			fileCache.shutdown();
+		} catch (Exception e) {
+			exception = ExceptionUtils.firstOrSuppressed(e, exception);
+		}
+
+		// it will call close() recursively from the parent to children
+		taskManagerMetricGroup.close();
+
+		ExceptionUtils.tryRethrowException(exception);
 	}
 
 	// ======================================================================

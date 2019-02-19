@@ -30,10 +30,12 @@ import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.rpc.TestingRpcService;
 import org.apache.flink.runtime.rpc.akka.exceptions.AkkaRpcException;
 import org.apache.flink.runtime.rpc.exceptions.RpcConnectionException;
+import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TestLogger;
+import org.apache.flink.util.function.ThrowingConsumer;
 
 import akka.actor.ActorSystem;
 import org.hamcrest.core.Is;
@@ -41,7 +43,10 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import javax.annotation.Nullable;
+
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -358,6 +363,49 @@ public class AkkaRpcActorTest extends TestLogger {
 		}
 	}
 
+	/**
+	 * Tests that the {@link RpcEndpoint#onStart()} method is called when the {@link RpcEndpoint}
+	 * is started.
+	 */
+	@Test
+	public void testOnStartIsCalledWhenRpcEndpointStarts() throws Exception {
+		runOnStartTest(
+			onStartEndpoint -> assertThat(onStartEndpoint.getTerminationFuture().isDone(), is(false)),
+			null);
+	}
+
+	/**
+	 * Tests that a exceptionally completed onStart future is propagated to the caller.
+	 */
+	@Test
+	public void testOnStartFails() {
+		final FlinkException testException = new FlinkException("Test exception");
+
+		try {
+			runOnStartTest(
+				ignored -> {},
+				testException);
+			fail("Expected that the rpc endpoint terminates.");
+		} catch (Exception e) {
+			assertThat(ExceptionUtils.findThrowable(e, exception -> exception.equals(testException)).isPresent(), is(true));
+		}
+	}
+
+	private void runOnStartTest(ThrowingConsumer<OnStartEndpoint, Exception> endpointConsumer, @Nullable Exception exception) throws Exception {
+		final CountDownLatch countDownLatch = new CountDownLatch(1);
+		final OnStartEndpoint onStartEndpoint = new OnStartEndpoint(akkaRpcService, countDownLatch, exception);
+
+		try {
+			onStartEndpoint.start();
+
+			countDownLatch.await();
+
+			endpointConsumer.accept(onStartEndpoint);
+		} finally {
+			RpcUtils.terminateRpcEndpoint(onStartEndpoint, timeout);
+		}
+	}
+
 	// ------------------------------------------------------------------------
 	//  Test Actors and Interfaces
 	// ------------------------------------------------------------------------
@@ -541,6 +589,29 @@ public class AkkaRpcActorTest extends TestLogger {
 
 		int getNumberAsyncOperationCalls() {
 			return asyncOperationCounter.get();
+		}
+	}
+
+	// ------------------------------------------------------------------------
+
+	private static class OnStartEndpoint extends RpcEndpoint {
+
+		private final CountDownLatch countDownLatch;
+
+		@Nullable
+		private final Exception exception;
+
+		OnStartEndpoint(RpcService rpcService, CountDownLatch countDownLatch, @Nullable Exception exception) {
+			super(rpcService);
+			this.countDownLatch = countDownLatch;
+			this.exception = exception;
+		}
+
+		@Override
+		public void onStart() throws Exception {
+			countDownLatch.countDown();
+
+			ExceptionUtils.tryRethrowException(exception);
 		}
 	}
 }

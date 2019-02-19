@@ -202,31 +202,52 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 	// ------------------------------------------------------------------------
 
 	@Override
-	public void start() throws Exception {
-		// start a leader
-		super.start();
-
-		leaderElectionService = highAvailabilityServices.getResourceManagerLeaderElectionService();
-
-		initialize();
-
+	public void onStart() throws Exception {
 		try {
+			super.onStart();
+			startResourceManagerServices();
+		} catch (Exception e) {
+			final ResourceManagerException exception = new ResourceManagerException(String.format("Could not start the ResourceManager %s", getAddress()), e);
+			onFatalError(exception);
+			throw exception;
+		}
+	}
+
+	private void startResourceManagerServices() throws Exception {
+		try {
+			leaderElectionService = highAvailabilityServices.getResourceManagerLeaderElectionService();
+
+			initialize();
+
 			leaderElectionService.start(this);
-		} catch (Exception e) {
-			throw new ResourceManagerException("Could not start the leader election service.", e);
-		}
-
-		try {
 			jobLeaderIdService.start(new JobLeaderIdActionsImpl());
-		} catch (Exception e) {
-			throw new ResourceManagerException("Could not start the job leader id service.", e);
-		}
 
-		registerSlotAndTaskExecutorMetrics();
+			registerSlotAndTaskExecutorMetrics();
+		} catch (Exception e) {
+			Exception exception = e;
+			try {
+				stopResourceManagerServices();
+			} catch (Exception inner) {
+				exception = ExceptionUtils.firstOrSuppressed(inner, exception);
+			}
+
+			throw exception;
+		}
 	}
 
 	@Override
 	public CompletableFuture<Void> onStop() {
+		try {
+			stopResourceManagerServices();
+		} catch (Exception exception) {
+			return FutureUtils.completedExceptionally(
+				new FlinkException("Could not properly shut down the ResourceManager.", exception));
+		}
+
+		return CompletableFuture.completedFuture(null);
+	}
+
+	private void stopResourceManagerServices() throws Exception {
 		Exception exception = null;
 
 		taskManagerHeartbeatManager.stop();
@@ -253,12 +274,7 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 
 		clearStateInternal();
 
-		if (exception != null) {
-			return FutureUtils.completedExceptionally(
-				new FlinkException("Could not properly shut down the ResourceManager.", exception));
-		} else {
-			return CompletableFuture.completedFuture(null);
-		}
+		ExceptionUtils.tryRethrowException(exception);
 	}
 
 	// ------------------------------------------------------------------------

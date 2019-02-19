@@ -45,14 +45,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import scala.concurrent.duration.FiniteDuration;
 import scala.concurrent.impl.Promise;
@@ -93,11 +94,10 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 
 	private final long maximumFramesize;
 
+	private final AtomicReference<Optional<Throwable>> rpcEndpointTerminationResult;
+
 	@Nonnull
 	private State state;
-
-	@Nullable
-	private CompletableFuture<Void> rpcEndpointTerminationFuture;
 
 	AkkaRpcActor(
 			final T rpcEndpoint,
@@ -111,27 +111,26 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 		this.terminationFuture = checkNotNull(terminationFuture);
 		this.version = version;
 		this.maximumFramesize = maximumFramesize;
+		this.rpcEndpointTerminationResult = new AtomicReference<>(null);
 		this.state = StoppedState.INSTANCE;
-		this.rpcEndpointTerminationFuture = null;
 	}
 
 	@Override
 	public void postStop() throws Exception {
 		super.postStop();
 
-		if (rpcEndpointTerminationFuture != null && rpcEndpointTerminationFuture.isDone()) {
-			rpcEndpointTerminationFuture.whenComplete(
-				(Void value, Throwable throwable) -> {
-					if (throwable != null) {
-						terminationFuture.completeExceptionally(throwable);
-					} else {
-						terminationFuture.complete(null);
-					}
-				});
-		} else {
+		final Optional<Throwable> terminationResult = rpcEndpointTerminationResult.get();
+
+		if (terminationResult == null) {
 			terminationFuture.completeExceptionally(
 				new AkkaRpcException(
 					String.format("RpcEndpoint %s has not been properly stopped.", rpcEndpoint.getEndpointId())));
+		} else {
+			if (terminationResult.isPresent()) {
+				terminationFuture.completeExceptionally(terminationResult.get());
+			} else {
+				terminationFuture.complete(null);
+			}
 		}
 
 		state = state.finishTermination();
@@ -164,7 +163,7 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 	private void handleControlMessage(ControlMessages controlMessage) {
 		switch (controlMessage) {
 			case START:
-				state = state.start();
+				state = state.start(this);
 				break;
 			case STOP:
 				state = state.stop();
@@ -284,45 +283,13 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 						return;
 					}
 
-					final boolean isRemoteSender = isRemoteSender();
 					final String methodName = rpcMethod.getName();
 
 					if (result instanceof CompletableFuture) {
-						final CompletableFuture<?> future = (CompletableFuture<?>) result;
-						Promise.DefaultPromise<Object> promise = new Promise.DefaultPromise<>();
-
-						future.whenComplete(
-							(value, throwable) -> {
-								if (throwable != null) {
-									promise.failure(throwable);
-								} else {
-									if (isRemoteSender) {
-										Either<SerializedValue<?>, AkkaRpcException> serializedResult = serializeRemoteResultAndVerifySize(value, methodName);
-
-										if (serializedResult.isLeft()) {
-											promise.success(serializedResult.left());
-										} else {
-											promise.failure(serializedResult.right());
-										}
-									} else {
-										promise.success(value);
-									}
-								}
-							});
-
-						Patterns.pipe(promise.future(), getContext().dispatcher()).to(getSender());
+						final CompletableFuture<?> responseFuture = (CompletableFuture<?>) result;
+						sendAsyncResponse(responseFuture, methodName);
 					} else {
-						if (isRemoteSender) {
-							Either<SerializedValue<?>, AkkaRpcException> serializedResult = serializeRemoteResultAndVerifySize(result, methodName);
-
-							if (serializedResult.isLeft()) {
-								getSender().tell(new Status.Success(serializedResult.left()), getSelf());
-							} else {
-								getSender().tell(new Status.Failure(serializedResult.right()), getSelf());
-							}
-						} else {
-							getSender().tell(new Status.Success(result), getSelf());
-						}
+						sendSyncResponse(result, methodName);
 					}
 				}
 			} catch (Throwable e) {
@@ -333,8 +300,48 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 		}
 	}
 
-	private boolean isRemoteSender() {
-		return !getSender().path().address().hasLocalScope();
+	private void sendSyncResponse(Object response, String methodName) {
+		if (isRemoteSender(getSender())) {
+			Either<SerializedValue<?>, AkkaRpcException> serializedResult = serializeRemoteResultAndVerifySize(response, methodName);
+
+			if (serializedResult.isLeft()) {
+				getSender().tell(new Status.Success(serializedResult.left()), getSelf());
+			} else {
+				getSender().tell(new Status.Failure(serializedResult.right()), getSelf());
+			}
+		} else {
+			getSender().tell(new Status.Success(response), getSelf());
+		}
+	}
+
+	private void sendAsyncResponse(CompletableFuture<?> asyncResponse, String methodName) {
+		final ActorRef sender = getSender();
+		Promise.DefaultPromise<Object> promise = new Promise.DefaultPromise<>();
+
+		asyncResponse.whenComplete(
+			(value, throwable) -> {
+				if (throwable != null) {
+					promise.failure(throwable);
+				} else {
+					if (isRemoteSender(sender)) {
+						Either<SerializedValue<?>, AkkaRpcException> serializedResult = serializeRemoteResultAndVerifySize(value, methodName);
+
+						if (serializedResult.isLeft()) {
+							promise.success(serializedResult.left());
+						} else {
+							promise.failure(serializedResult.right());
+						}
+					} else {
+						promise.success(value);
+					}
+				}
+			});
+
+		Patterns.pipe(promise.future(), getContext().dispatcher()).to(sender);
+	}
+
+	private boolean isRemoteSender(ActorRef sender) {
+		return !sender.path().address().hasLocalScope();
 	}
 
 	private Either<SerializedValue<?>, AkkaRpcException> serializeRemoteResultAndVerifySize(Object result, String methodName) {
@@ -439,7 +446,8 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 	/**
 	 * Stop the actor immediately.
 	 */
-	private void stop() {
+	private void stop(Optional<Throwable> terminationResult) {
+		rpcEndpointTerminationResult.compareAndSet(null, terminationResult);
 		getContext().stop(getSelf());
 	}
 
@@ -448,7 +456,7 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 	// ---------------------------------------------------------------------------
 
 	interface State {
-		default State start() {
+		default State start(AkkaRpcActor<?> akkaRpcActor) {
 			throw new AkkaRpcInvalidStateException(invalidStateTransitionMessage(StartedState.INSTANCE));
 		}
 
@@ -478,7 +486,7 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 		INSTANCE;
 
 		@Override
-		public State start() {
+		public State start(AkkaRpcActor<?> akkaRpcActor) {
 			return INSTANCE;
 		}
 
@@ -491,10 +499,11 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 		public State terminate(AkkaRpcActor<?> akkaRpcActor) {
 			akkaRpcActor.mainThreadValidator.enterMainThread();
 
+			CompletableFuture<Void> terminationFuture;
 			try {
-				akkaRpcActor.rpcEndpointTerminationFuture = akkaRpcActor.rpcEndpoint.onStop();
+				terminationFuture = akkaRpcActor.rpcEndpoint.onStop();
 			} catch (Throwable t) {
-				akkaRpcActor.rpcEndpointTerminationFuture = FutureUtils.completedExceptionally(
+				terminationFuture = FutureUtils.completedExceptionally(
 					new AkkaRpcException(
 						String.format("Failure while stopping RpcEndpoint %s.", akkaRpcActor.rpcEndpoint.getEndpointId()),
 						t));
@@ -507,7 +516,7 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 			// future.
 			// Complete the termination future so that others know that we've stopped.
 
-			akkaRpcActor.rpcEndpointTerminationFuture.whenComplete((ignored, throwable) -> akkaRpcActor.stop());
+			terminationFuture.whenComplete((ignored, throwable) -> akkaRpcActor.stop(Optional.ofNullable(throwable)));
 
 			return TerminatingState.INSTANCE;
 		}
@@ -523,7 +532,21 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 		INSTANCE;
 
 		@Override
-		public State start() {
+		public State start(AkkaRpcActor<?> akkaRpcActor) {
+			akkaRpcActor.mainThreadValidator.enterMainThread();
+
+			try {
+				akkaRpcActor.rpcEndpoint.onStart();
+			} catch (Throwable throwable) {
+				akkaRpcActor.stop(
+					Optional.of(
+						new AkkaRpcException(
+							String.format("Could not start RpcEndpoint %s.", akkaRpcActor.rpcEndpoint.getEndpointId()),
+							throwable)));
+			} finally {
+				akkaRpcActor.mainThreadValidator.exitMainThread();
+			}
+
 			return StartedState.INSTANCE;
 		}
 
@@ -534,8 +557,7 @@ class AkkaRpcActor<T extends RpcEndpoint & RpcGateway> extends UntypedActor {
 
 		@Override
 		public State terminate(AkkaRpcActor<?> akkaRpcActor) {
-			akkaRpcActor.rpcEndpointTerminationFuture = CompletableFuture.completedFuture(null);
-			akkaRpcActor.stop();
+			akkaRpcActor.stop(Optional.empty());
 
 			return TerminatingState.INSTANCE;
 		}
