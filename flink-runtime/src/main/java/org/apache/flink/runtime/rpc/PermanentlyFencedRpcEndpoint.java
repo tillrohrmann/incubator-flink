@@ -32,12 +32,24 @@ public class PermanentlyFencedRpcEndpoint<F extends Serializable> extends Fenced
 
 	protected PermanentlyFencedRpcEndpoint(RpcService rpcService, String endpointId, F fencingToken) {
 		super(rpcService, endpointId);
-		super.setFencingToken(fencingToken);
+
+		runInMainThread(() -> super.setFencingToken(fencingToken));
 	}
 
 	protected PermanentlyFencedRpcEndpoint(RpcService rpcService, F fencingToken) {
 		super(rpcService);
 		super.setFencingToken(fencingToken);
+	}
+
+	private void runInMainThread(Runnable runnable) {
+		MainThreadValidatorUtil mainThreadValidatorUtil = new MainThreadValidatorUtil(this);
+
+		mainThreadValidatorUtil.enterMainThread();
+		try {
+			runnable.run();
+		} finally {
+			mainThreadValidatorUtil.exitMainThread();
+		}
 	}
 
 	@Override
