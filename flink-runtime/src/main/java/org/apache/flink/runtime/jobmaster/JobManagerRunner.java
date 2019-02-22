@@ -40,6 +40,8 @@ import org.apache.flink.util.function.FunctionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -86,6 +88,7 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 
 	private CompletableFuture<Void> leadershipOperation;
 
+	@Nullable
 	private JobMasterService jobMasterService;
 
 	/** flag marking the runner as shut down. */
@@ -189,7 +192,7 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 				setNewLeaderGatewayFuture();
 				leaderGatewayFuture.completeExceptionally(new FlinkException("JobMaster has been shut down."));
 
-				final CompletableFuture<Void> jobManagerTerminationFuture = jobMasterService.closeAsync();
+				final CompletableFuture<Void> jobManagerTerminationFuture = terminateJobMasterServer();
 
 				jobManagerTerminationFuture.whenComplete(
 					(Void ignored, Throwable throwable) -> {
@@ -216,6 +219,14 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 			}
 
 			return terminationFuture;
+		}
+	}
+
+	private CompletableFuture<Void> terminateJobMasterServer() {
+		if (jobMasterService != null) {
+			return jobMasterService.closeAsync();
+		} else {
+			return CompletableFuture.completedFuture(null);
 		}
 	}
 
@@ -328,7 +339,9 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 
 		jobMasterService.start();
 
-		confirmLeaderSessionIdIfStillLeader(leaderSessionId, leaderGatewayFuture);
+		if (confirmLeaderSessionIdIfStillLeader(leaderSessionId)) {
+			leaderGatewayFuture.complete(jobMasterService.getGateway());
+		}
 	}
 
 	private void jobAlreadyDone() {
@@ -348,12 +361,13 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 		}
 	}
 
-	private void confirmLeaderSessionIdIfStillLeader(UUID leaderSessionId, CompletableFuture<JobMasterGateway> currentLeaderGatewayFuture) {
+	private boolean confirmLeaderSessionIdIfStillLeader(UUID leaderSessionId) {
 		if (leaderElectionService.hasLeadership(leaderSessionId)) {
-			currentLeaderGatewayFuture.complete(jobMasterService.getGateway());
 			leaderElectionService.confirmLeaderSessionID(leaderSessionId);
+			return true;
 		} else {
 			log.debug("Ignoring confirmation of leader session id because {} is no longer the leader.", getAddress());
+			return false;
 		}
 	}
 
@@ -382,9 +396,17 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 
 		setNewLeaderGatewayFuture();
 
-		return jobMasterService
-			.suspend(new FlinkException("JobManager is no longer the leader."))
-			.thenApply(FunctionUtils.nullFn());
+		return suspendJobMasterService();
+	}
+
+	private CompletableFuture<Void> suspendJobMasterService() {
+		if (jobMasterService != null) {
+			return jobMasterService
+				.suspend(new FlinkException("JobManager is no longer the leader."))
+				.thenApply(FunctionUtils.nullFn());
+		} else {
+			return CompletableFuture.completedFuture(null);
+		}
 	}
 
 	private void handleException(CompletableFuture<Void> leadershipOperation, String message) {
@@ -415,7 +437,11 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 
 	@Override
 	public String getAddress() {
-		return jobMasterService.getAddress();
+		if (jobMasterService != null) {
+			return jobMasterService.getAddress();
+		} else {
+			return "JobMasterService has not been started yet.";
+		}
 	}
 
 	@Override
