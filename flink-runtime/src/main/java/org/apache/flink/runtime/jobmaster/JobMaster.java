@@ -1085,9 +1085,6 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId> impleme
 			return Acknowledge.get();
 		}
 
-		// not leader anymore --> set the JobMasterId to null
-		setFencingToken(null);
-
 		try {
 			resourceManagerLeaderRetriever.stop();
 			resourceManagerAddress = null;
