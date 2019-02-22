@@ -34,7 +34,6 @@ import org.apache.flink.runtime.jobmaster.factories.JobMasterServiceFactory;
 import org.apache.flink.runtime.jobmaster.factories.TestingJobMasterServiceFactory;
 import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
 import org.apache.flink.runtime.leaderretrieval.SettableLeaderRetrievalService;
-import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.rest.handler.legacy.utils.ArchivedExecutionGraphBuilder;
 import org.apache.flink.runtime.testingUtils.TestingUtils;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
@@ -221,13 +220,13 @@ public class JobManagerRunnerTest extends TestLogger {
 	 * (granting or revoking leadership) to finish before starting a new leadership operation.
 	 */
 	@Test
-	public void testConcurrentLeadershipOperationsBlockingSuspend() throws Exception {
-		final CompletableFuture<Acknowledge> suspendedFuture = new CompletableFuture<>();
+	public void testConcurrentLeadershipOperationsBlockingStop() throws Exception {
+		final CompletableFuture<Void> stopFuture = new CompletableFuture<>();
 
 		TestingJobMasterServiceFactory jobMasterServiceFactory = new TestingJobMasterServiceFactory(
 			() -> new TestingJobMasterService(
 				"localhost",
-				e -> suspendedFuture));
+				() -> stopFuture));
 		JobManagerRunner jobManagerRunner = createJobManagerRunner(jobMasterServiceFactory);
 
 		jobManagerRunner.start();
@@ -248,7 +247,7 @@ public class JobManagerRunnerTest extends TestLogger {
 			// expected
 		}
 
-		suspendedFuture.complete(Acknowledge.get());
+		stopFuture.complete(null);
 
 		leaderFuture.get();
 	}

@@ -19,13 +19,12 @@
 package org.apache.flink.runtime.jobmaster;
 
 import org.apache.flink.runtime.jobmaster.utils.TestingJobMasterGatewayBuilder;
-import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nonnull;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Implementation of the {@link JobMasterService} for testing purposes.
@@ -36,16 +35,16 @@ public class TestingJobMasterService implements JobMasterService {
 	private final String address;
 
 	@Nonnull
-	private final Function<Exception, CompletableFuture<Acknowledge>> suspendFunction;
+	private final Supplier<CompletableFuture<Void>> stopFunction;
 
 	@Nonnull
 	private final JobMasterGateway jobMasterGateway;
 
 	public TestingJobMasterService(
 		@Nonnull String address,
-		@Nonnull Function<Exception, CompletableFuture<Acknowledge>> suspendFunction) {
+		@Nonnull Supplier<CompletableFuture<Void>> stopFunction) {
 		this.address = address;
-		this.suspendFunction = suspendFunction;
+		this.stopFunction = stopFunction;
 
 		jobMasterGateway = new TestingJobMasterGatewayBuilder().build();
 	}
@@ -53,16 +52,11 @@ public class TestingJobMasterService implements JobMasterService {
 	public TestingJobMasterService() {
 		this(
 			"localhost",
-			e -> CompletableFuture.completedFuture(Acknowledge.get()));
+			() -> CompletableFuture.completedFuture(null));
 	}
 
 	@Override
 	public void start() {}
-
-	@Override
-	public CompletableFuture<Acknowledge> suspend(Exception cause) {
-		return suspendFunction.apply(cause);
-	}
 
 	@Override
 	public JobMasterGateway getGateway() {
@@ -77,6 +71,6 @@ public class TestingJobMasterService implements JobMasterService {
 
 	@Override
 	public CompletableFuture<Void> closeAsync() {
-		return CompletableFuture.completedFuture(null);
+		return stopFunction.get();
 	}
 }

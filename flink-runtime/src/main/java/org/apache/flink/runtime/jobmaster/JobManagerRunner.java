@@ -192,7 +192,7 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 				setNewLeaderGatewayFuture();
 				leaderGatewayFuture.completeExceptionally(new FlinkException("JobMaster has been shut down."));
 
-				final CompletableFuture<Void> jobManagerTerminationFuture = terminateJobMasterServer();
+				final CompletableFuture<Void> jobManagerTerminationFuture = terminateJobMasterService();
 
 				jobManagerTerminationFuture.whenComplete(
 					(Void ignored, Throwable throwable) -> {
@@ -222,7 +222,7 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 		}
 	}
 
-	private CompletableFuture<Void> terminateJobMasterServer() {
+	private CompletableFuture<Void> terminateJobMasterService() {
 		if (jobMasterService != null) {
 			return jobMasterService.closeAsync();
 		} else {
@@ -396,17 +396,7 @@ public class JobManagerRunner implements LeaderContender, OnCompletionActions, A
 
 		setNewLeaderGatewayFuture();
 
-		return suspendJobMasterService();
-	}
-
-	private CompletableFuture<Void> suspendJobMasterService() {
-		if (jobMasterService != null) {
-			return jobMasterService
-				.suspend(new FlinkException("JobManager is no longer the leader."))
-				.thenApply(FunctionUtils.nullFn());
-		} else {
-			return CompletableFuture.completedFuture(null);
-		}
+		return terminateJobMasterService();
 	}
 
 	private void handleException(CompletableFuture<Void> leadershipOperation, String message) {

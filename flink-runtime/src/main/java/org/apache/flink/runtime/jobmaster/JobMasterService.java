@@ -18,10 +18,7 @@
 
 package org.apache.flink.runtime.jobmaster;
 
-import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.util.AutoCloseableAsync;
-
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Interface which specifies the JobMaster service.
@@ -32,15 +29,6 @@ public interface JobMasterService extends AutoCloseableAsync {
 	 * Start the JobMaster service.
 	 */
 	void start();
-
-	/**
-	 * Suspend the JobMaster service. This means that the service will stop to react
-	 * to messages.
-	 *
-	 * @param cause for the suspension
-	 * @return Future which is completed once the JobMaster service has been suspended
-	 */
-	CompletableFuture<Acknowledge> suspend(Exception cause);
 
 	/**
 	 * Get the {@link JobMasterGateway} belonging to this service.
