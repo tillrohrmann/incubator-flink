@@ -20,13 +20,8 @@ package org.apache.flink.kubernetes.kubeclient.fabric8.decorators;
 
 import org.apache.flink.kubernetes.FlinkKubernetesOptions;
 import org.apache.flink.kubernetes.kubeclient.fabric8.FlinkPod;
-import org.apache.flink.util.Preconditions;
 
-import io.fabric8.kubernetes.api.model.ObjectMeta;
-import io.fabric8.kubernetes.api.model.OwnerReferenceBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
-
-import java.util.Arrays;
 
 /**
  * for GC.
@@ -36,22 +31,22 @@ public class OwnerReferenceDecorator extends Decorator<Pod, FlinkPod> {
 	@Override
 	protected Pod doDecorate(Pod resource, FlinkKubernetesOptions flinkKubernetesOptions) {
 
-		Preconditions.checkNotNull(flinkKubernetesOptions.getServiceUUID());
-
-		if (resource.getMetadata() == null) {
-			resource.setMetadata(new ObjectMeta());
-		}
-
-		resource.getMetadata().setOwnerReferences(Arrays.asList(
-			new OwnerReferenceBuilder()
-			.withName(flinkKubernetesOptions.getClusterId())
-			.withController(true)
-			.withBlockOwnerDeletion(true)
-			.withKind("service")
-			.withApiVersion(resource.getApiVersion())
-			.withUid(flinkKubernetesOptions.getServiceUUID())
-			.build()
-		));
+//		Preconditions.checkNotNull(flinkKubernetesOptions.getServiceUUID());
+//
+//		if (resource.getMetadata() == null) {
+//			resource.setMetadata(new ObjectMeta());
+//		}
+//
+//		resource.getMetadata().setOwnerReferences(Arrays.asList(
+//			new OwnerReferenceBuilder()
+//			.withName(flinkKubernetesOptions.getClusterId())
+//			.withController(true)
+//			.withBlockOwnerDeletion(true)
+//			.withKind("service")
+//			.withApiVersion(resource.getApiVersion())
+//			.withUid(flinkKubernetesOptions.getServiceUUID())
+//			.build()
+//		));
 
 		return resource;
 	}

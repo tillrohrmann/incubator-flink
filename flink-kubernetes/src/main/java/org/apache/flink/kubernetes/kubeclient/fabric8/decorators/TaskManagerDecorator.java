@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
  * */
 public class TaskManagerDecorator extends Decorator<Pod, FlinkPod> {
 
-	private static final String CONTAINER_NAME = "TaskManager";
+	private static final String CONTAINER_NAME = "taskmanager";
 
 	TaskManagerPodParameter parameter;
 

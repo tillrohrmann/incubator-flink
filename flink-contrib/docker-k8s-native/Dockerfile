@@ -16,7 +16,7 @@
 # limitations under the License.
 ################################################################################
 
-FROM java:8-jre-alpine
+FROM java:8-jdk-alpine
 
 # Install requirements
 RUN apk add --no-cache bash snappy

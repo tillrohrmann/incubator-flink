@@ -139,7 +139,7 @@ public class KubernetesResourceManager extends ResourceManager<KubernetesResourc
 			return slotsPerWorker;
 		} catch (Exception e) {
 			this.kubeClient.logException(e);
-			throw new FlinkRuntimeException("Could not start new worker");
+			throw new FlinkRuntimeException("Could not start new worker", e);
 		}
 	}
 

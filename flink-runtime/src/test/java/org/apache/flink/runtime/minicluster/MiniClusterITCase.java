@@ -22,15 +22,25 @@ import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobSubmissionResult;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.common.time.Time;
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.configuration.RestOptions;
+import org.apache.flink.runtime.checkpoint.CheckpointMetaData;
+import org.apache.flink.runtime.checkpoint.CheckpointOptions;
+import org.apache.flink.runtime.checkpoint.CheckpointRetentionPolicy;
 import org.apache.flink.runtime.client.JobExecutionException;
+import org.apache.flink.runtime.dispatcher.DispatcherGateway;
+import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.ScheduleMode;
+import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
+import org.apache.flink.runtime.jobgraph.tasks.CheckpointCoordinatorConfiguration;
+import org.apache.flink.runtime.jobgraph.tasks.JobCheckpointingSettings;
 import org.apache.flink.runtime.jobmanager.Tasks.AgnosticBinaryReceiver;
 import org.apache.flink.runtime.jobmanager.Tasks.AgnosticReceiver;
 import org.apache.flink.runtime.jobmanager.Tasks.AgnosticTertiaryReceiver;
@@ -41,16 +51,21 @@ import org.apache.flink.runtime.jobmanager.Tasks.InstantiationErrorSender;
 import org.apache.flink.runtime.jobmanager.scheduler.NoResourceAvailableException;
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.jobmaster.JobResult;
+import org.apache.flink.runtime.jobmaster.RescalingBehaviour;
 import org.apache.flink.runtime.jobmaster.TestingAbstractInvokables.Receiver;
 import org.apache.flink.runtime.jobmaster.TestingAbstractInvokables.Sender;
+import org.apache.flink.runtime.testingUtils.TestingUtils;
 import org.apache.flink.runtime.testtasks.BlockingNoOpInvokable;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.runtime.testtasks.WaitingNoOpInvokable;
 import org.apache.flink.util.TestLogger;
 
+import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -63,6 +78,38 @@ import static org.junit.Assert.fail;
  * Integration test cases for the {@link MiniCluster}.
  */
 public class MiniClusterITCase extends TestLogger {
+
+	@ClassRule
+	public static TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+	@Test
+	public void testRescaling() throws Exception {
+		final Configuration cfg = new Configuration();
+		cfg.setString(CheckpointingOptions.SAVEPOINT_DIRECTORY, temporaryFolder.newFolder().toURI().toURL().toString());
+		final MiniClusterConfiguration configuration = new MiniClusterConfiguration.Builder()
+			.setNumTaskManagers(2)
+			.setNumSlotsPerTaskManager(1)
+			.setConfiguration(cfg)
+			.build();
+
+		try (final MiniCluster miniCluster = new MiniCluster(configuration)) {
+			miniCluster.start();
+
+			final DispatcherGateway dispatcherGateway = miniCluster.getDispatcherGatewayFuture().get();
+			final JobGraph simpleJob = getSimpleJob(1);
+			dispatcherGateway.submitJob(simpleJob, Time.seconds(10)).get();
+
+			dispatcherGateway.rescaleJob(simpleJob.getJobID(), 2, RescalingBehaviour.STRICT, Time.seconds(10)).get();
+
+			Thread.sleep(100L);
+
+			final CompletableFuture<JobResult> jobResultCompletableFuture = dispatcherGateway.requestJobResult(simpleJob.getJobID(), TestingUtils.infiniteTime());
+
+			dispatcherGateway.cancelJob(simpleJob.getJobID(), Time.seconds(10)).get();
+
+			jobResultCompletableFuture.get();
+		}
+	}
 
 	@Test
 	public void runJobWithSingleRpcService() throws Exception {
@@ -579,8 +626,8 @@ public class MiniClusterITCase extends TestLogger {
 	private static JobGraph getSimpleJob(int parallelism) throws IOException {
 		final JobVertex task = new JobVertex("Test task");
 		task.setParallelism(parallelism);
-		task.setMaxParallelism(parallelism);
-		task.setInvokableClass(NoOpInvokable.class);
+		task.setMaxParallelism(2);
+		task.setInvokableClass(NormalInvokable.class);
 
 		final JobGraph jg = new JobGraph(new JobID(), "Test Job", task);
 		jg.setScheduleMode(ScheduleMode.EAGER);
@@ -588,8 +635,52 @@ public class MiniClusterITCase extends TestLogger {
 		final ExecutionConfig executionConfig = new ExecutionConfig();
 		executionConfig.setRestartStrategy(RestartStrategies.fixedDelayRestart(Integer.MAX_VALUE, 1000));
 		jg.setExecutionConfig(executionConfig);
+		jg.setSnapshotSettings(new JobCheckpointingSettings(
+			Collections.singletonList(task.getID()),
+			Collections.singletonList(task.getID()),
+			Collections.singletonList(task.getID()),
+			new CheckpointCoordinatorConfiguration(100L, 1000L, 100L, 5, CheckpointRetentionPolicy.NEVER_RETAIN_AFTER_TERMINATION, true),
+			null
+		));
+
+		jg.setAllowQueuedScheduling(true);
 
 		return jg;
+	}
+
+	/**
+	 * Foobar.
+	 */
+	public static class NormalInvokable extends AbstractInvokable {
+
+		private volatile boolean running = true;
+
+		/**
+		 * Create an Invokable task and set its environment.
+		 *
+		 * @param environment The environment assigned to this invokable.
+		 */
+		public NormalInvokable(Environment environment) {
+			super(environment);
+		}
+
+		@Override
+		public void invoke() throws Exception {
+			while (running) {
+				Thread.sleep(100L);
+			}
+		}
+
+		@Override
+		public void cancel() throws Exception {
+			super.cancel();
+			running = false;
+		}
+
+		@Override
+		public boolean triggerCheckpoint(CheckpointMetaData checkpointMetaData, CheckpointOptions checkpointOptions) throws Exception {
+			return true;
+		}
 	}
 
 	private static class WaitOnFinalizeJobVertex extends JobVertex {

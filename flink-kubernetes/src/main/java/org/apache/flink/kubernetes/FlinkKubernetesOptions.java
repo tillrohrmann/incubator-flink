@@ -104,6 +104,7 @@ public class FlinkKubernetesOptions {
 		Preconditions.checkArgument(configuration != null);
 		this.configuration = configuration;
 		this.clusterId = clusterId;
+		this.serviceUUID = "foobar";
 	}
 
 	public String getServiceUUID() {
