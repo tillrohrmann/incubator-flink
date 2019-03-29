@@ -113,6 +113,7 @@ public class ZooKeeperHADispatcherTest extends TestLogger {
 
 	@After
 	public void teardown() throws Exception {
+		Thread.sleep(500L);
 		if (testingFatalErrorHandler != null) {
 			testingFatalErrorHandler.rethrowError();
 		}
@@ -257,6 +258,8 @@ public class ZooKeeperHADispatcherTest extends TestLogger {
 				// change leadership
 				leaderElectionService1.notLeader();
 				leaderElectionService2.isLeader(UUID.randomUUID()).get();
+
+				Thread.sleep(500L);
 
 				// Dispatcher 2 should not recover any jobs
 				final DispatcherGateway dispatcherGateway2 = dispatcher2.getSelfGateway(DispatcherGateway.class);

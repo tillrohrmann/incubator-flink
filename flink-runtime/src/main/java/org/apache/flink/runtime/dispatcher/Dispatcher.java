@@ -231,6 +231,7 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId> impleme
 
 	private void stopDispatcherServices() throws Exception {
 		Exception exception = null;
+
 		try {
 			jobManagerSharedServices.shutdown();
 		} catch (Exception e) {
@@ -641,6 +642,8 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId> impleme
 			try {
 				submittedJobGraphStore.removeJobGraph(jobId);
 
+				Thread.sleep(100L);
+
 				// only clean up the HA blobs if we could remove the job from HA storage
 				cleanupHABlobs = true;
 			} catch (Exception e) {
@@ -966,6 +969,11 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId> impleme
 	 */
 	@Override
 	public void revokeLeadership() {
+		try {
+			Thread.sleep(10L);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 		runAsyncWithoutFencing(
 			() -> {
 				log.info("Dispatcher {} was revoked leadership.", getAddress());
@@ -990,14 +998,27 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId> impleme
 
 	@Override
 	public void onAddedJobGraph(final JobID jobId) {
+		log.warn("OnAddedJobGraph was called for " + getAddress());
+		try {
+			Thread.sleep(200L);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		log.warn("OnAddedJobGraph was called: " + getFencingToken() + " " + getAddress());
 		runAsync(
 			() -> {
+				log.warn("Run onAddedJobGraph callback");
 				if (!jobManagerRunnerFutures.containsKey(jobId)) {
+					log.warn("onAddedJobGraph Try to recover job " + jobId);
 					// IMPORTANT: onAddedJobGraph can generate false positives and, thus, we must expect that
 					// the specified job is already removed from the SubmittedJobGraphStore. In this case,
 					// SubmittedJobGraphStore.recoverJob returns null.
 					final CompletableFuture<Optional<JobGraph>> recoveredJob = recoveryOperation.thenApplyAsync(
-						FunctionUtils.uncheckedFunction(ignored -> Optional.ofNullable(recoverJob(jobId))),
+						FunctionUtils.uncheckedFunction(ignored -> {
+							Thread.sleep(600L);
+							return Optional.ofNullable(recoverJob(jobId));
+						}),
 						getRpcService().getExecutor());
 
 					final DispatcherId dispatcherId = getFencingToken();
