@@ -92,7 +92,7 @@ trap cleanup EXIT
 mkdir -p "${TMPDIR}"
 
 JOB_JAR_TARGET="${TMPDIR}/job.jar"
-cp ${JOB_JAR_PATH} ${JOB_JAR_TARGET}
+cp "${JOB_JAR_PATH}" "${JOB_JAR_TARGET}"
 
 if [ -n "${FROM_RELEASE}" ]; then
 

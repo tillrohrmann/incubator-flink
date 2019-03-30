@@ -498,6 +498,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 				// check if the ExecutionGraph is still the same
 				if (executionGraph == currentExecutionGraph) {
 					clearExecutionGraphFields();
+					restoredExecutionGraph.start(getMainThreadExecutor());
 					assignExecutionGraph(restoredExecutionGraph, newJobManagerJobMetricGroup);
 					scheduleExecutionGraph();
 
