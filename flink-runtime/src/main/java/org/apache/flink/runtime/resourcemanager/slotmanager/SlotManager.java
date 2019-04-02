@@ -50,7 +50,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -91,7 +90,7 @@ public class SlotManager implements AutoCloseable {
 	private final HashMap<SlotID, TaskManagerSlot> slots;
 
 	/** Index of all currently free slots. */
-	private final LinkedHashMap<SlotID, TaskManagerSlot> freeSlots;
+	private final SlotCollection freeSlots;
 
 	/** All currently registered task managers. */
 	private final HashMap<InstanceID, TaskManagerRegistration> taskManagerRegistrations;
@@ -131,7 +130,7 @@ public class SlotManager implements AutoCloseable {
 		this.taskManagerTimeout = Preconditions.checkNotNull(taskManagerTimeout);
 
 		slots = new HashMap<>(16);
-		freeSlots = new LinkedHashMap<>(16);
+		freeSlots = new EvenlySpreadOutSlotCollection();
 		taskManagerRegistrations = new HashMap<>(4);
 		fulfilledSlotRequests = new HashMap<>(16);
 		pendingSlotRequests = new HashMap<>(16);
@@ -353,6 +352,7 @@ public class SlotManager implements AutoCloseable {
 				reportedSlots);
 
 			taskManagerRegistrations.put(taskExecutorConnection.getInstanceID(), taskManagerRegistration);
+			freeSlots.registerTaskManager(taskExecutorConnection.getResourceID(), reportedSlots.size());
 
 			// next register the new slots
 			for (SlotStatus slotStatus : initialSlotReport) {
@@ -495,24 +495,7 @@ public class SlotManager implements AutoCloseable {
 	 * slot available.
 	 */
 	protected TaskManagerSlot findMatchingSlot(ResourceProfile requestResourceProfile) {
-		Iterator<Map.Entry<SlotID, TaskManagerSlot>> iterator = freeSlots.entrySet().iterator();
-
-		while (iterator.hasNext()) {
-			TaskManagerSlot taskManagerSlot = iterator.next().getValue();
-
-			// sanity check
-			Preconditions.checkState(
-				taskManagerSlot.getState() == TaskManagerSlot.State.FREE,
-				"TaskManagerSlot %s is not in state FREE but %s.",
-				taskManagerSlot.getSlotId(), taskManagerSlot.getState());
-
-			if (taskManagerSlot.getResourceProfile().isMatching(requestResourceProfile)) {
-				iterator.remove();
-				return taskManagerSlot;
-			}
-		}
-
-		return null;
+		return freeSlots.findMatchingSlot(requestResourceProfile);
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -1056,6 +1039,7 @@ public class SlotManager implements AutoCloseable {
 		Preconditions.checkNotNull(taskManagerRegistration);
 
 		removeSlots(taskManagerRegistration.getSlots());
+		freeSlots.unregisterTaskManager(taskManagerRegistration.getTaskManagerConnection().getResourceID());
 	}
 
 	private boolean checkDuplicateRequest(AllocationID allocationId) {
