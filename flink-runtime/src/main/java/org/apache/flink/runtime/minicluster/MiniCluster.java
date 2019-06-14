@@ -26,6 +26,8 @@ import org.apache.flink.api.common.io.FileOutputFormat;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.JobManagerOptions;
+import org.apache.flink.configuration.UnmodifiableConfiguration;
 import org.apache.flink.runtime.akka.AkkaUtils;
 import org.apache.flink.runtime.blob.BlobCacheService;
 import org.apache.flink.runtime.blob.BlobClient;
@@ -114,6 +116,8 @@ import static org.apache.flink.util.Preconditions.checkState;
  */
 public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 
+	private static final String SCHEDULER_TYPE_KEY = "schedulerType";
+
 	private static final Logger LOG = LoggerFactory.getLogger(MiniCluster.class);
 
 	/** The lock to guard startup / shutdown / manipulation methods. */
@@ -123,6 +127,8 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 	private final MiniClusterConfiguration miniClusterConfiguration;
 
 	private final Time rpcTimeout;
+
+	private final UnmodifiableConfiguration flinkConfiguration;
 
 	@GuardedBy("lock")
 	private final List<TaskExecutor> taskManagers;
@@ -199,6 +205,17 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 		running = false;
 
 		this.taskManagers = new ArrayList<>(miniClusterConfiguration.getNumTaskManagers());
+
+		this.flinkConfiguration = createFlinkConfiguration(miniClusterConfiguration.getConfiguration());
+	}
+
+	private UnmodifiableConfiguration createFlinkConfiguration(UnmodifiableConfiguration configuration) {
+		final Configuration finalConfiguration = new Configuration(configuration);
+		final String schedulerType = System.getProperty(SCHEDULER_TYPE_KEY, "legacy");
+
+		finalConfiguration.setString(JobManagerOptions.SCHEDULER, schedulerType);
+
+		return new UnmodifiableConfiguration(finalConfiguration);
 	}
 
 	public CompletableFuture<URI> getRestAddress() {
@@ -254,7 +271,7 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 			LOG.info("Starting Flink Mini Cluster");
 			LOG.debug("Using configuration {}", miniClusterConfiguration);
 
-			final Configuration configuration = miniClusterConfiguration.getConfiguration();
+			final Configuration configuration = getFlinkConfiguration();
 			final boolean useSingleRpcService = miniClusterConfiguration.getRpcServiceSharing() == RpcServiceSharing.SHARED;
 
 			try {
@@ -364,6 +381,10 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 		}
 	}
 
+	private UnmodifiableConfiguration getFlinkConfiguration() {
+		return flinkConfiguration;
+	}
+
 	@VisibleForTesting
 	protected Collection<? extends DispatcherResourceManagerComponent<?>> createDispatcherResourceManagerComponents(
 			Configuration configuration,
@@ -416,7 +437,7 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 			if (running) {
 				LOG.info("Shutting down Flink Mini Cluster");
 				try {
-					final long shutdownTimeoutMillis = miniClusterConfiguration.getConfiguration().getLong(ClusterOptions.CLUSTER_SERVICES_SHUTDOWN_TIMEOUT);
+					final long shutdownTimeoutMillis = getFlinkConfiguration().getLong(ClusterOptions.CLUSTER_SERVICES_SHUTDOWN_TIMEOUT);
 					final int numComponents = 2 + miniClusterConfiguration.getNumTaskManagers();
 					final Collection<CompletableFuture<Void>> componentTerminationFutures = new ArrayList<>(numComponents);
 
@@ -487,7 +508,7 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 	@VisibleForTesting
 	void startTaskExecutor() throws Exception {
 		synchronized (lock) {
-			final Configuration configuration = miniClusterConfiguration.getConfiguration();
+			final Configuration configuration = getFlinkConfiguration();
 
 			final TaskExecutor taskExecutor = TaskManagerRunner.startTaskManager(
 				configuration,
@@ -670,7 +691,7 @@ public class MiniCluster implements JobExecutorService, AutoCloseableAsync {
 	private CompletableFuture<Void> uploadAndSetJobFiles(final CompletableFuture<InetSocketAddress> blobServerAddressFuture, final JobGraph job) {
 		return blobServerAddressFuture.thenAccept(blobServerAddress -> {
 			try {
-				ClientUtils.extractAndUploadJobGraphFiles(job, () -> new BlobClient(blobServerAddress, miniClusterConfiguration.getConfiguration()));
+				ClientUtils.extractAndUploadJobGraphFiles(job, () -> new BlobClient(blobServerAddress, getFlinkConfiguration()));
 			} catch (FlinkException e) {
 				throw new CompletionException(e);
 			}

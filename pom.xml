@@ -142,6 +142,8 @@ under the License.
 		<generated.docs.dir>./docs/_includes/generated</generated.docs.dir>
 		<hive.version>2.3.4</hive.version>
 		<hivemetastore.hadoop.version>2.7.2</hivemetastore.hadoop.version>
+		<test.groups></test.groups>
+		<scheduler.type>legacy</scheduler.type>
 	</properties>
 
 	<dependencies>
@@ -624,6 +626,18 @@ under the License.
 	</dependencyManagement>
 
 	<profiles>
+		<profile>
+			<id>ng</id>
+			<properties>
+				<scheduler.type>ng</scheduler.type>
+				<test.groups>org.apache.flink.testutils.junit.category.AlsoRunWithSchedulerNG</test.groups>
+			</properties>
+			<activation>
+				<property>
+					<name>ng</name>
+				</property>
+			</activation>
+		</profile>
 
 		<profile>
 			<id>scala-2.11</id>
@@ -1401,11 +1415,13 @@ under the License.
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>2.22.1</version>
 				<configuration>
+					<groups>${test.groups}</groups>
 					<forkCount>${flink.forkCount}</forkCount>
 					<reuseForks>${flink.reuseForks}</reuseForks>
 					<systemPropertyVariables>
 						<forkNumber>0${surefire.forkNumber}</forkNumber>
 						<log4j.configuration>${log4j.configuration}</log4j.configuration>
+						<schedulerType>${scheduler.type}</schedulerType>
 					</systemPropertyVariables>
 					<argLine>-Xms256m -Xmx2048m -Dmvn.forkNumber=${surefire.forkNumber} -XX:+UseG1GC</argLine>
 				</configuration>
