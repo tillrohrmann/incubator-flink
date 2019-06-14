@@ -24,6 +24,7 @@ STAGE_LIBRARIES="libraries"
 STAGE_CONNECTORS="connectors"
 STAGE_TESTS="tests"
 STAGE_MISC="misc"
+STAGE_NG="ng"
 STAGE_CLEANUP="cleanup"
 
 MODULES_CORE="\
@@ -120,6 +121,8 @@ flink-libraries/flink-gelly-scala,\
 flink-libraries/flink-gelly-examples,\
 flink-tests"
 
+MODULES_NG="$MODULES_CORE,flink-tests"
+
 if [[ ${PROFILE} == *"include-kinesis"* ]]; then
     MODULES_CONNECTORS="$MODULES_CONNECTORS,flink-connectors/flink-connector-kinesis"
 fi
@@ -149,6 +152,9 @@ function get_compile_modules_for_stage() {
         ;;
         (${STAGE_TESTS})
             echo "-pl $MODULES_TESTS -am"
+        ;;
+        (${STAGE_NG})
+            echo "-pl $MODULES_NG -am"
         ;;
         (${STAGE_MISC})
             # compile everything; using the -am switch does not work with negated module lists!
@@ -188,6 +194,9 @@ function get_test_modules_for_stage() {
         ;;
         (${STAGE_TESTS})
             echo "-pl $modules_tests"
+        ;;
+        (${STAGE_NG})
+            echo "-pl $MODULES_NG"
         ;;
         (${STAGE_MISC})
             echo "-pl $modules_misc"
