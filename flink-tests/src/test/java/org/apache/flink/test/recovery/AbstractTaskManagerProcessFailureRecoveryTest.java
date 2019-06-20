@@ -104,7 +104,7 @@ public abstract class AbstractTaskManagerProcessFailureRecoveryTest extends Test
 			config.setString(AkkaOptions.ASK_TIMEOUT, "100 s");
 			config.setString(JobManagerOptions.ADDRESS, "localhost");
 			config.setString(RestOptions.BIND_PORT, "0");
-			config.setLong(HeartbeatManagerOptions.HEARTBEAT_INTERVAL, 500L);
+			config.setLong(HeartbeatManagerOptions.HEARTBEAT_INTERVAL, 50L);
 			config.setLong(HeartbeatManagerOptions.HEARTBEAT_TIMEOUT, 10000L);
 			config.setString(HighAvailabilityOptions.HA_MODE, "zookeeper");
 			config.setString(HighAvailabilityOptions.HA_ZOOKEEPER_QUORUM, zooKeeperResource.getConnectString());
