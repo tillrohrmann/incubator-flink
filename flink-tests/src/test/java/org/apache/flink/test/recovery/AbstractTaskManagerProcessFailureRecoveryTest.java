@@ -92,6 +92,7 @@ public abstract class AbstractTaskManagerProcessFailureRecoveryTest extends Test
 
 		for (int i = 0; i < numTests; i++) {
 			LOG.debug("Starting testTaskManagerFailure test run {}.", i);
+			System.out.println("Starting testTaskManagerFailure test run " + i + '.');
 
 			TestProcess taskManagerProcess1 = null;
 			TestProcess taskManagerProcess2 = null;
