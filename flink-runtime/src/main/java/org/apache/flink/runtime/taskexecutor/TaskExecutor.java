@@ -1086,10 +1086,9 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 					e.printStackTrace();
 				}
 
-				FutureUtils.whenCompleteAsyncIfNotDone(
-					acceptedSlotsFuture,
-					getMainThreadExecutor(),
-					handleAcceptedSlotOffers(jobId, jobMasterGateway, jobMasterId, reservedSlots));
+				acceptedSlotsFuture.whenCompleteAsync(
+					handleAcceptedSlotOffers(jobId, jobMasterGateway, jobMasterId, reservedSlots),
+					getMainThreadExecutor());
 			} else {
 				log.debug("There are no unassigned slots for the job {}.", jobId);
 			}
