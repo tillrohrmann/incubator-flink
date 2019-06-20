@@ -27,6 +27,8 @@ import org.apache.flink.util.function.RunnableWithException;
 import org.apache.flink.util.function.SupplierWithException;
 
 import akka.dispatch.OnComplete;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -60,6 +62,8 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * A collection of utilities that expand the usage of {@link CompletableFuture}.
  */
 public class FutureUtils {
+
+	private static final Logger LOG = LoggerFactory.getLogger(FutureUtils.class);
 
 	// ------------------------------------------------------------------------
 	//  retrying operations
@@ -881,9 +885,12 @@ public class FutureUtils {
 		CompletableFuture<IN> completableFuture,
 		Executor executor,
 		BiConsumer<? super IN, ? super Throwable> whenCompleteFun) {
-		return completableFuture.isDone() ?
-			completableFuture.whenComplete(whenCompleteFun) :
-			completableFuture.whenCompleteAsync(whenCompleteFun, executor);
+		if (completableFuture.isDone()) {
+			LOG.debug("whenCompleteAsyncIfNotDone is called on completed future.");
+			return completableFuture.whenComplete(whenCompleteFun);
+		} else {
+			return completableFuture.whenCompleteAsync(whenCompleteFun, executor);
+		}
 	}
 
 	/**
