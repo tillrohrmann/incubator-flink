@@ -69,6 +69,8 @@ import static org.junit.Assert.fail;
  */
 public abstract class AbstractTaskManagerProcessFailureRecoveryTest extends TestLogger {
 
+	private static final Logger LOG = LoggerFactory.getLogger(AbstractTaskManagerProcessFailureRecoveryTest.class);
+
 	protected static final String READY_MARKER_FILE_PREFIX = "ready_";
 	protected static final String PROCEED_MARKER_FILE = "proceed";
 
@@ -86,140 +88,141 @@ public abstract class AbstractTaskManagerProcessFailureRecoveryTest extends Test
 	@Test
 	public void testTaskManagerProcessFailure() throws Exception {
 
-		TestProcess taskManagerProcess1 = null;
-		TestProcess taskManagerProcess2 = null;
-		TestProcess taskManagerProcess3 = null;
+		final int numTests = 10;
 
-		File coordinateTempDir = null;
+		for (int i = 0; i < numTests; i++) {
+			LOG.debug("Starting testTaskManagerFailure test run {}.", i);
 
-		Configuration config = new Configuration();
-		config.setString(AkkaOptions.ASK_TIMEOUT, "100 s");
-		config.setString(JobManagerOptions.ADDRESS, "localhost");
-		config.setString(RestOptions.BIND_PORT, "0");
-		config.setLong(HeartbeatManagerOptions.HEARTBEAT_INTERVAL, 500L);
-		config.setLong(HeartbeatManagerOptions.HEARTBEAT_TIMEOUT, 10000L);
-		config.setString(HighAvailabilityOptions.HA_MODE, "zookeeper");
-		config.setString(HighAvailabilityOptions.HA_ZOOKEEPER_QUORUM, zooKeeperResource.getConnectString());
-		config.setString(HighAvailabilityOptions.HA_STORAGE_PATH, temporaryFolder.newFolder().getAbsolutePath());
-		config.setInteger(TaskManagerOptions.NUM_TASK_SLOTS, 2);
-		config.setString(TaskManagerOptions.MANAGED_MEMORY_SIZE, "4m");
-		config.setInteger(NettyShuffleEnvironmentOptions.NETWORK_NUM_BUFFERS, 100);
+			TestProcess taskManagerProcess1 = null;
+			TestProcess taskManagerProcess2 = null;
+			TestProcess taskManagerProcess3 = null;
 
-		try (final StandaloneSessionClusterEntrypoint clusterEntrypoint = new StandaloneSessionClusterEntrypoint(config)) {
+			File coordinateTempDir = null;
 
-			// check that we run this test only if the java command
-			// is available on this machine
-			String javaCommand = getJavaCommandPath();
-			if (javaCommand == null) {
-				System.out.println("---- Skipping Process Failure test : Could not find java executable ----");
-				return;
-			}
+			Configuration config = new Configuration();
+			config.setString(AkkaOptions.ASK_TIMEOUT, "100 s");
+			config.setString(JobManagerOptions.ADDRESS, "localhost");
+			config.setString(RestOptions.BIND_PORT, "0");
+			config.setLong(HeartbeatManagerOptions.HEARTBEAT_INTERVAL, 500L);
+			config.setLong(HeartbeatManagerOptions.HEARTBEAT_TIMEOUT, 10000L);
+			config.setString(HighAvailabilityOptions.HA_MODE, "zookeeper");
+			config.setString(HighAvailabilityOptions.HA_ZOOKEEPER_QUORUM, zooKeeperResource.getConnectString());
+			config.setString(HighAvailabilityOptions.HA_STORAGE_PATH, temporaryFolder.newFolder().getAbsolutePath());
+			config.setInteger(TaskManagerOptions.NUM_TASK_SLOTS, 2);
+			config.setString(TaskManagerOptions.MANAGED_MEMORY_SIZE, "4m");
+			config.setInteger(NettyShuffleEnvironmentOptions.NETWORK_NUM_BUFFERS, 100);
 
-			clusterEntrypoint.startCluster();
+			try (final StandaloneSessionClusterEntrypoint clusterEntrypoint = new StandaloneSessionClusterEntrypoint(config)) {
 
-			// coordination between the processes goes through a directory
-			coordinateTempDir = temporaryFolder.newFolder();
+				// check that we run this test only if the java command
+				// is available on this machine
+				String javaCommand = getJavaCommandPath();
+				if (javaCommand == null) {
+					System.out.println("---- Skipping Process Failure test : Could not find java executable ----");
+					return;
+				}
 
-			TestProcessBuilder taskManagerProcessBuilder = new TestProcessBuilder(TaskExecutorProcessEntryPoint.class.getName());
+				clusterEntrypoint.startCluster();
 
-			taskManagerProcessBuilder.addConfigAsMainClassArgs(config);
+				// coordination between the processes goes through a directory
+				coordinateTempDir = temporaryFolder.newFolder();
 
-			// start the first two TaskManager processes
-			taskManagerProcess1 = taskManagerProcessBuilder.start();
-			taskManagerProcess2 = taskManagerProcessBuilder.start();
+				TestProcessBuilder taskManagerProcessBuilder = new TestProcessBuilder(TaskExecutorProcessEntryPoint.class.getName());
 
-			// the program will set a marker file in each of its parallel tasks once they are ready, so that
-			// this coordinating code is aware of this.
-			// the program will very slowly consume elements until the marker file (later created by the
-			// test driver code) is present
-			final File coordinateDirClosure = coordinateTempDir;
-			final AtomicReference<Throwable> errorRef = new AtomicReference<>();
+				taskManagerProcessBuilder.addConfigAsMainClassArgs(config);
 
-			// we trigger program execution in a separate thread
-			Thread programTrigger = new Thread("Program Trigger") {
-				@Override
-				public void run() {
-					try {
-						testTaskManagerFailure(config, coordinateDirClosure);
+				// start the first two TaskManager processes
+				taskManagerProcess1 = taskManagerProcessBuilder.start();
+				taskManagerProcess2 = taskManagerProcessBuilder.start();
+
+				// the program will set a marker file in each of its parallel tasks once they are ready, so that
+				// this coordinating code is aware of this.
+				// the program will very slowly consume elements until the marker file (later created by the
+				// test driver code) is present
+				final File coordinateDirClosure = coordinateTempDir;
+				final AtomicReference<Throwable> errorRef = new AtomicReference<>();
+
+				// we trigger program execution in a separate thread
+				Thread programTrigger = new Thread("Program Trigger") {
+					@Override
+					public void run() {
+						try {
+							testTaskManagerFailure(config, coordinateDirClosure);
+						} catch (Throwable t) {
+							t.printStackTrace();
+							errorRef.set(t);
+						}
 					}
-					catch (Throwable t) {
-						t.printStackTrace();
-						errorRef.set(t);
+				};
+
+				//start the test program
+				programTrigger.start();
+
+				// wait until all marker files are in place, indicating that all tasks have started
+				// max 20 seconds
+				if (!waitForMarkerFiles(coordinateTempDir, READY_MARKER_FILE_PREFIX, PARALLELISM, 120000)) {
+					// check if the program failed for some reason
+					if (errorRef.get() != null) {
+						Throwable error = errorRef.get();
+						error.printStackTrace();
+						fail("The program encountered a " + error.getClass().getSimpleName() + " : " + error.getMessage());
+					} else {
+						// no error occurred, simply a timeout
+						fail("The tasks were not started within time (" + 120000 + "msecs)");
 					}
 				}
-			};
 
-			//start the test program
-			programTrigger.start();
+				// start the third TaskManager
+				taskManagerProcess3 = taskManagerProcessBuilder.start();
 
-			// wait until all marker files are in place, indicating that all tasks have started
-			// max 20 seconds
-			if (!waitForMarkerFiles(coordinateTempDir, READY_MARKER_FILE_PREFIX, PARALLELISM, 120000)) {
-				// check if the program failed for some reason
+				// kill one of the previous TaskManagers, triggering a failure and recovery
+				taskManagerProcess1.destroy();
+				waitForShutdown("TaskManager 1", taskManagerProcess1);
+
+				// we create the marker file which signals the program functions tasks that they can complete
+				touchFile(new File(coordinateTempDir, PROCEED_MARKER_FILE));
+
+				// wait for at most 5 minutes for the program to complete
+				programTrigger.join(300000);
+
+				// check that the program really finished
+				assertFalse("The program did not finish in time", programTrigger.isAlive());
+
+				// check whether the program encountered an error
 				if (errorRef.get() != null) {
 					Throwable error = errorRef.get();
 					error.printStackTrace();
 					fail("The program encountered a " + error.getClass().getSimpleName() + " : " + error.getMessage());
 				}
-				else {
-					// no error occurred, simply a timeout
-					fail("The tasks were not started within time (" + 120000 + "msecs)");
+
+				// all seems well :-)
+			} catch (Exception e) {
+				e.printStackTrace();
+				printProcessLog("TaskManager 1", taskManagerProcess1);
+				printProcessLog("TaskManager 2", taskManagerProcess2);
+				printProcessLog("TaskManager 3", taskManagerProcess3);
+				fail(e.getMessage());
+			} catch (Error e) {
+				e.printStackTrace();
+				printProcessLog("TaskManager 1", taskManagerProcess1);
+				printProcessLog("TaskManager 2", taskManagerProcess2);
+				printProcessLog("TaskManager 3", taskManagerProcess3);
+				throw e;
+			} finally {
+				if (taskManagerProcess1 != null) {
+					taskManagerProcess1.destroy();
 				}
+				if (taskManagerProcess2 != null) {
+					taskManagerProcess2.destroy();
+				}
+				if (taskManagerProcess3 != null) {
+					taskManagerProcess3.destroy();
+				}
+
+				waitForShutdown("TaskManager 1", taskManagerProcess1);
+				waitForShutdown("TaskManager 2", taskManagerProcess2);
+				waitForShutdown("TaskManager 3", taskManagerProcess3);
 			}
-
-			// start the third TaskManager
-			taskManagerProcess3 = taskManagerProcessBuilder.start();
-
-			// kill one of the previous TaskManagers, triggering a failure and recovery
-			taskManagerProcess1.destroy();
-			waitForShutdown("TaskManager 1", taskManagerProcess1);
-
-			// we create the marker file which signals the program functions tasks that they can complete
-			touchFile(new File(coordinateTempDir, PROCEED_MARKER_FILE));
-
-			// wait for at most 5 minutes for the program to complete
-			programTrigger.join(300000);
-
-			// check that the program really finished
-			assertFalse("The program did not finish in time", programTrigger.isAlive());
-
-			// check whether the program encountered an error
-			if (errorRef.get() != null) {
-				Throwable error = errorRef.get();
-				error.printStackTrace();
-				fail("The program encountered a " + error.getClass().getSimpleName() + " : " + error.getMessage());
-			}
-
-			// all seems well :-)
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-			printProcessLog("TaskManager 1", taskManagerProcess1);
-			printProcessLog("TaskManager 2", taskManagerProcess2);
-			printProcessLog("TaskManager 3", taskManagerProcess3);
-			fail(e.getMessage());
-		}
-		catch (Error e) {
-			e.printStackTrace();
-			printProcessLog("TaskManager 1", taskManagerProcess1);
-			printProcessLog("TaskManager 2", taskManagerProcess2);
-			printProcessLog("TaskManager 3", taskManagerProcess3);
-			throw e;
-		}
-		finally {
-			if (taskManagerProcess1 != null) {
-				taskManagerProcess1.destroy();
-			}
-			if (taskManagerProcess2 != null) {
-				taskManagerProcess2.destroy();
-			}
-			if (taskManagerProcess3 != null) {
-				taskManagerProcess3.destroy();
-			}
-
-			waitForShutdown("TaskManager 1", taskManagerProcess1);
-			waitForShutdown("TaskManager 2", taskManagerProcess2);
-			waitForShutdown("TaskManager 3", taskManagerProcess3);
 		}
 	}
 
