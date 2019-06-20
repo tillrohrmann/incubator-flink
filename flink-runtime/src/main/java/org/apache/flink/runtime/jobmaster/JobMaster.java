@@ -1135,7 +1135,7 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 		public AllocatedSlotReport retrievePayload(ResourceID resourceID) {
 			validateRunsInMainThread();
 			final AllocatedSlotReport allocatedSlotReport = slotPool.createAllocatedSlotReport(resourceID);
-			log.debug("Created allocated slot report {}.", allocatedSlotReport);
+			log.debug("Created allocated slot report {} for {}.", allocatedSlotReport, resourceID);
 
 			return allocatedSlotReport;
 		}
