@@ -1080,6 +1080,12 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 					reservedSlots,
 					taskManagerConfiguration.getTimeout());
 
+				try {
+					Thread.sleep(50);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+
 				FutureUtils.whenCompleteAsyncIfNotDone(
 					acceptedSlotsFuture,
 					getMainThreadExecutor(),

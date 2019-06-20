@@ -479,6 +479,8 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			final Collection<SlotOffer> slots,
 			final Time timeout) {
 
+		log.debug("Received offered slots {} from {}.", slots, taskManagerId);
+
 		Tuple2<TaskManagerLocation, TaskExecutorGateway> taskManager = registeredTaskManagers.get(taskManagerId);
 
 		if (taskManager == null) {
