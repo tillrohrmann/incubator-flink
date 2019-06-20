@@ -129,6 +129,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
@@ -1079,66 +1080,71 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 					reservedSlots,
 					taskManagerConfiguration.getTimeout());
 
-				acceptedSlotsFuture.whenCompleteAsync(
-					(Iterable<SlotOffer> acceptedSlots, Throwable throwable) -> {
-						if (throwable != null) {
-							if (throwable instanceof TimeoutException) {
-								log.info("Slot offering to JobManager did not finish in time. Retrying the slot offering.");
-								// We ran into a timeout. Try again.
-								offerSlotsToJobManager(jobId);
-							} else {
-								log.warn("Slot offering to JobManager failed. Freeing the slots " +
-									"and returning them to the ResourceManager.", throwable);
-
-								// We encountered an exception. Free the slots and return them to the RM.
-								for (SlotOffer reservedSlot: reservedSlots) {
-									freeSlotInternal(reservedSlot.getAllocationId(), throwable);
-								}
-							}
-						} else {
-							// check if the response is still valid
-							if (isJobManagerConnectionValid(jobId, jobMasterId)) {
-								// mark accepted slots active
-								for (SlotOffer acceptedSlot : acceptedSlots) {
-									try {
-										if (!taskSlotTable.markSlotActive(acceptedSlot.getAllocationId())) {
-											// the slot is either free or releasing at the moment
-											final String message = "Could not mark slot " + jobId + " active.";
-											log.debug(message);
-											jobMasterGateway.failSlot(
-												getResourceID(),
-												acceptedSlot.getAllocationId(),
-												new FlinkException(message));
-										}
-									} catch (SlotNotFoundException e) {
-										final String message = "Could not mark slot " + jobId + " active.";
-										jobMasterGateway.failSlot(
-											getResourceID(),
-											acceptedSlot.getAllocationId(),
-											new FlinkException(message));
-									}
-
-									reservedSlots.remove(acceptedSlot);
-								}
-
-								final Exception e = new Exception("The slot was rejected by the JobManager.");
-
-								for (SlotOffer rejectedSlot : reservedSlots) {
-									freeSlotInternal(rejectedSlot.getAllocationId(), e);
-								}
-							} else {
-								// discard the response since there is a new leader for the job
-								log.debug("Discard offer slot response since there is a new leader " +
-									"for the job {}.", jobId);
-							}
-						}
-					},
-					getMainThreadExecutor());
-
+				FutureUtils.whenCompleteAsyncIfNotDone(
+					acceptedSlotsFuture,
+					getMainThreadExecutor(),
+					handleAcceptedSlotOffers(jobId, jobMasterGateway, jobMasterId, reservedSlots));
 			} else {
 				log.debug("There are no unassigned slots for the job {}.", jobId);
 			}
 		}
+	}
+
+	@Nonnull
+	private BiConsumer<Iterable<SlotOffer>, Throwable> handleAcceptedSlotOffers(JobID jobId, JobMasterGateway jobMasterGateway, JobMasterId jobMasterId, Collection<SlotOffer> offeredSlots) {
+		return (Iterable<SlotOffer> acceptedSlots, Throwable throwable) -> {
+			if (throwable != null) {
+				if (throwable instanceof TimeoutException) {
+					log.info("Slot offering to JobManager did not finish in time. Retrying the slot offering.");
+					// We ran into a timeout. Try again.
+					offerSlotsToJobManager(jobId);
+				} else {
+					log.warn("Slot offering to JobManager failed. Freeing the slots " +
+						"and returning them to the ResourceManager.", throwable);
+
+					// We encountered an exception. Free the slots and return them to the RM.
+					for (SlotOffer reservedSlot: offeredSlots) {
+						freeSlotInternal(reservedSlot.getAllocationId(), throwable);
+					}
+				}
+			} else {
+				// check if the response is still valid
+				if (isJobManagerConnectionValid(jobId, jobMasterId)) {
+					// mark accepted slots active
+					for (SlotOffer acceptedSlot : acceptedSlots) {
+						try {
+							if (!taskSlotTable.markSlotActive(acceptedSlot.getAllocationId())) {
+								// the slot is either free or releasing at the moment
+								final String message = "Could not mark slot " + jobId + " active.";
+								log.debug(message);
+								jobMasterGateway.failSlot(
+									getResourceID(),
+									acceptedSlot.getAllocationId(),
+									new FlinkException(message));
+							}
+						} catch (SlotNotFoundException e) {
+							final String message = "Could not mark slot " + jobId + " active.";
+							jobMasterGateway.failSlot(
+								getResourceID(),
+								acceptedSlot.getAllocationId(),
+								new FlinkException(message));
+						}
+
+						offeredSlots.remove(acceptedSlot);
+					}
+
+					final Exception e = new Exception("The slot was rejected by the JobManager.");
+
+					for (SlotOffer rejectedSlot : offeredSlots) {
+						freeSlotInternal(rejectedSlot.getAllocationId(), e);
+					}
+				} else {
+					// discard the response since there is a new leader for the job
+					log.debug("Discard offer slot response since there is a new leader " +
+						"for the job {}.", jobId);
+				}
+			}
+		};
 	}
 
 	private void establishJobManagerConnection(JobID jobId, final JobMasterGateway jobMasterGateway, JMTMRegistrationSuccess registrationSuccess) {
@@ -1442,6 +1448,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 	 * @param allocatedSlotReport represents the JobMaster's view on the current slot allocation state
 	 */
 	private void syncSlotsWithSnapshotFromJobMaster(AllocatedSlotReport allocatedSlotReport) {
+		log.debug("syncSlotsWithSnapshotFromJobMaster {}", allocatedSlotReport);
 		JobManagerConnection jobManagerConnection = jobManagerTable.get(allocatedSlotReport.getJobId());
 		if (jobManagerConnection != null) {
 			final JobMasterGateway jobMasterGateway = jobManagerConnection.getJobManagerGateway();
@@ -1462,6 +1469,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 					allocatedSlotInfo.getSlotIndex(),
 					allocatedSlotReport.getJobId(),
 					allocationId)) {
+				log.debug("Fail slot {}", allocationId);
 				jobMasterGateway.failSlot(
 						getResourceID(),
 						allocationId,
@@ -1484,6 +1492,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 		final Sets.SetView<AllocationID> difference = Sets.difference(activeSlots, reportedSlots);
 
 		for (AllocationID allocationID : difference) {
+			log.debug("Free slot {}", allocationID);
 			freeSlotInternal(
 				allocationID,
 				new FlinkException(

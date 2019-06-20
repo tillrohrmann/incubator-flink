@@ -1674,7 +1674,7 @@ public class TaskExecutorTest extends TestLogger {
 	 * Tests that the TaskExecutor syncs its slots view with the JobMaster's view
 	 * via the AllocatedSlotReport reported by the heartbeat (See FLINK-11059).
 	 */
-	@Test(timeout = 10000L)
+	@Test
 	public void testSyncSlotsWithJobMasterByHeartbeat() throws Exception {
 		final TaskSlotTable taskSlotTable = new TaskSlotTable(
 				Arrays.asList(ResourceProfile.UNKNOWN, ResourceProfile.UNKNOWN),
