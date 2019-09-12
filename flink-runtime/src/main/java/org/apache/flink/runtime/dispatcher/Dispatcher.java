@@ -1010,42 +1010,43 @@ public abstract class Dispatcher extends FencedRpcEndpoint<DispatcherId> impleme
 
 	@Override
 	public void onAddedJobGraph(final JobID jobId) {
-		runAsync(
-			() -> {
-				if (!jobManagerRunnerFutures.containsKey(jobId)) {
-					// IMPORTANT: onAddedJobGraph can generate false positives and, thus, we must expect that
-					// the specified job is already removed from the JobGraphStore. In this case,
-					// JobGraphStore.recoverJob returns null.
-					final CompletableFuture<Optional<JobGraph>> recoveredJob = recoveryOperation.thenApplyAsync(
-						FunctionUtils.uncheckedFunction(ignored -> Optional.ofNullable(recoverJob(jobId))),
-						getRpcService().getExecutor());
-
-					final DispatcherId dispatcherId = getFencingToken();
-					final CompletableFuture<Void> submissionFuture = recoveredJob.thenComposeAsync(
-						(Optional<JobGraph> jobGraphOptional) -> jobGraphOptional.map(
-							FunctionUtils.uncheckedFunction(jobGraph -> tryRunRecoveredJobGraph(jobGraph, dispatcherId).thenAcceptAsync(
-								FunctionUtils.uncheckedConsumer((Boolean isRecoveredJobRunning) -> {
-										if (!isRecoveredJobRunning) {
-											jobGraphStore.releaseJobGraph(jobId);
-										}
-									}),
-									getRpcService().getExecutor())))
-							.orElse(CompletableFuture.completedFuture(null)),
-						getUnfencedMainThreadExecutor());
-
-					submissionFuture.whenComplete(
-						(Void ignored, Throwable throwable) -> {
-							if (throwable != null) {
-								onFatalError(
-									new DispatcherException(
-										String.format("Could not start the added job %s", jobId),
-										ExceptionUtils.stripCompletionException(throwable)));
-							}
-						});
-
-					recoveryOperation = submissionFuture;
-				}
-			});
+		onFatalError(new FlinkException("onAddedJobGraph for job " + jobId + " was called."));
+//		runAsync(
+//			() -> {
+//				if (!jobManagerRunnerFutures.containsKey(jobId)) {
+//					// IMPORTANT: onAddedJobGraph can generate false positives and, thus, we must expect that
+//					// the specified job is already removed from the JobGraphStore. In this case,
+//					// JobGraphStore.recoverJob returns null.
+//					final CompletableFuture<Optional<JobGraph>> recoveredJob = recoveryOperation.thenApplyAsync(
+//						FunctionUtils.uncheckedFunction(ignored -> Optional.ofNullable(recoverJob(jobId))),
+//						getRpcService().getExecutor());
+//
+//					final DispatcherId dispatcherId = getFencingToken();
+//					final CompletableFuture<Void> submissionFuture = recoveredJob.thenComposeAsync(
+//						(Optional<JobGraph> jobGraphOptional) -> jobGraphOptional.map(
+//							FunctionUtils.uncheckedFunction(jobGraph -> tryRunRecoveredJobGraph(jobGraph, dispatcherId).thenAcceptAsync(
+//								FunctionUtils.uncheckedConsumer((Boolean isRecoveredJobRunning) -> {
+//										if (!isRecoveredJobRunning) {
+//											jobGraphStore.releaseJobGraph(jobId);
+//										}
+//									}),
+//									getRpcService().getExecutor())))
+//							.orElse(CompletableFuture.completedFuture(null)),
+//						getUnfencedMainThreadExecutor());
+//
+//					submissionFuture.whenComplete(
+//						(Void ignored, Throwable throwable) -> {
+//							if (throwable != null) {
+//								onFatalError(
+//									new DispatcherException(
+//										String.format("Could not start the added job %s", jobId),
+//										ExceptionUtils.stripCompletionException(throwable)));
+//							}
+//						});
+//
+//					recoveryOperation = submissionFuture;
+//				}
+//			});
 	}
 
 	private CompletableFuture<Boolean> tryRunRecoveredJobGraph(JobGraph jobGraph, DispatcherId dispatcherId) throws Exception {
