@@ -156,52 +156,6 @@ public class DispatcherHATest extends TestLogger {
 	}
 
 	/**
-	 * Tests that all JobManagerRunner are terminated if the leadership of the
-	 * Dispatcher is revoked.
-	 */
-	@Test
-	public void testRevokeLeadershipTerminatesJobManagerRunners() throws Exception {
-
-		final TestingLeaderElectionService leaderElectionService = new TestingLeaderElectionService();
-		final TestingHighAvailabilityServices highAvailabilityServices = new TestingHighAvailabilityServicesBuilder()
-			.setDispatcherLeaderElectionService(leaderElectionService)
-			.build();
-
-		final ArrayBlockingQueue<DispatcherId> fencingTokens = new ArrayBlockingQueue<>(2);
-		final HATestingDispatcher dispatcher = createDispatcherWithObservableFencingTokens(
-			highAvailabilityServices,
-			fencingTokens);
-
-		dispatcher.start();
-
-		try {
-			// grant leadership and submit a single job
-			final DispatcherId expectedDispatcherId = DispatcherId.generate();
-
-			leaderElectionService.isLeader(expectedDispatcherId.toUUID()).get();
-
-			assertThat(fencingTokens.take(), is(equalTo(expectedDispatcherId)));
-
-			final DispatcherGateway dispatcherGateway = dispatcher.getSelfGateway(DispatcherGateway.class);
-
-			final CompletableFuture<Acknowledge> submissionFuture = dispatcherGateway.submitJob(createNonEmptyJobGraph(), timeout);
-
-			submissionFuture.get();
-
-			assertThat(dispatcher.getNumberJobs(timeout).get(), is(1));
-
-			// revoke the leadership --> this should stop all running JobManagerRunners
-			leaderElectionService.notLeader();
-
-			assertThat(fencingTokens.take(), is(equalTo(NULL_FENCING_TOKEN)));
-
-			assertThat(dispatcher.getNumberJobs(timeout).get(), is(0));
-		} finally {
-			RpcUtils.terminateRpcEndpoint(dispatcher, timeout);
-		}
-	}
-
-	/**
 	 * Tests that a Dispatcher does not remove the JobGraph from the submitted job graph store
 	 * when losing leadership and recovers it when regaining leadership.
 	 */
