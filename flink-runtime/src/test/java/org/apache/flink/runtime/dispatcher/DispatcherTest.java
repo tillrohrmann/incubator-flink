@@ -304,30 +304,6 @@ public class DispatcherTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that the dispatcher takes part in the leader election.
-	 */
-	@Test
-	@Ignore
-	public void testLeaderElection() throws Exception {
-		CompletableFuture<Void> jobIdsFuture = new CompletableFuture<>();
-		final JobGraphStore jobGraphStore = TestingJobGraphStore.newBuilder()
-			.setJobIdsFunction(
-				(Collection<JobID> jobIds) -> {
-					jobIdsFuture.complete(null);
-					return jobIds;
-				})
-			.build();
-
-		haServices.setJobGraphStore(jobGraphStore);
-		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
-
-		electDispatcher();
-
-		// wait that we asked the JobGraphStore for the stored jobs
-		jobIdsFuture.get(TIMEOUT.toMilliseconds(), TimeUnit.MILLISECONDS);
-	}
-
-	/**
 	 * Test that {@link JobResult} is cached when the job finishes.
 	 */
 	@Test
