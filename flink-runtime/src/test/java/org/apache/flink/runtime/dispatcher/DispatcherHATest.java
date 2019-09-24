@@ -26,27 +26,19 @@ import org.apache.flink.runtime.blob.BlobServer;
 import org.apache.flink.runtime.blob.VoidBlobStore;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
-import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServices;
-import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServicesBuilder;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmanager.JobGraphStore;
-import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
-import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.metrics.groups.JobManagerMetricGroup;
 import org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.resourcemanager.utils.TestingResourceManagerGateway;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
-import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.rpc.TestingRpcService;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
-import org.apache.flink.runtime.testutils.TestingJobGraphStore;
 import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.runtime.webmonitor.retriever.GatewayRetriever;
-import org.apache.flink.util.ExceptionUtils;
-import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TestLogger;
 
@@ -54,7 +46,6 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Test;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -64,15 +55,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Queue;
 import java.util.UUID;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
-
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertThat;
 
 /**
  * Tests the HA behaviour of the {@link Dispatcher}.
@@ -108,50 +93,6 @@ public class DispatcherHATest extends TestLogger {
 		if (rpcService != null) {
 			rpcService.stopService().get();
 			rpcService = null;
-		}
-	}
-
-	/**
-	 * Tests that interleaved granting and revoking of the leadership won't interfere
-	 * with the job recovery and the resulting internal state of the Dispatcher.
-	 */
-	@Test
-	public void testGrantingRevokingLeadership() throws Exception {
-		final TestingHighAvailabilityServices highAvailabilityServices = new TestingHighAvailabilityServices();
-		final JobGraph nonEmptyJobGraph = createNonEmptyJobGraph();
-
-		final OneShotLatch enterGetJobIdsLatch = new OneShotLatch();
-		final OneShotLatch proceedGetJobIdsLatch = new OneShotLatch();
-		highAvailabilityServices.setJobGraphStore(new BlockingJobGraphStore(nonEmptyJobGraph, enterGetJobIdsLatch, proceedGetJobIdsLatch));
-		final TestingLeaderElectionService dispatcherLeaderElectionService = new TestingLeaderElectionService();
-		highAvailabilityServices.setDispatcherLeaderElectionService(dispatcherLeaderElectionService);
-
-		final BlockingQueue<DispatcherId> fencingTokens = new ArrayBlockingQueue<>(2);
-
-		final HATestingDispatcher dispatcher = createDispatcherWithObservableFencingTokens(highAvailabilityServices, fencingTokens);
-
-		dispatcher.start();
-
-		try {
-			// wait until the election service has been started
-			dispatcherLeaderElectionService.getStartFuture().get();
-
-			final UUID leaderId = UUID.randomUUID();
-			dispatcherLeaderElectionService.isLeader(leaderId);
-
-			dispatcherLeaderElectionService.notLeader();
-
-			final DispatcherId firstFencingToken = fencingTokens.take();
-
-			assertThat(firstFencingToken, equalTo(NULL_FENCING_TOKEN));
-
-			enterGetJobIdsLatch.await();
-			proceedGetJobIdsLatch.trigger();
-
-			assertThat(dispatcher.getNumberJobs(timeout).get(), is(0));
-
-		} finally {
-			RpcUtils.terminateRpcEndpoint(dispatcher, timeout);
 		}
 	}
 
