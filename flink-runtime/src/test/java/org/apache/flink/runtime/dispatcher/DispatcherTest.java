@@ -203,31 +203,69 @@ public class DispatcherTest extends TestLogger {
 	}
 
 	@Nonnull
-	private TestingDispatcher createAndStartDispatcher(HeartbeatServices heartbeatServices, TestingHighAvailabilityServices haServices, JobManagerRunnerFactory jobManagerRunnerFactory) throws Exception {
-		final TestingDispatcher dispatcher = createDispatcher(heartbeatServices, haServices, jobManagerRunnerFactory);
+	private TestingDispatcher createAndStartDispatcher(
+			HeartbeatServices heartbeatServices,
+			TestingHighAvailabilityServices haServices,
+			JobManagerRunnerFactory jobManagerRunnerFactory) throws Exception {
+		final TestingDispatcher dispatcher = new TestingDispatcherBuilder()
+			.setHaServices(haServices)
+			.setHeartbeatServices(heartbeatServices)
+			.setJobManagerRunnerFactory(jobManagerRunnerFactory)
+			.build();
 		dispatcher.start();
 
 		return dispatcher;
 	}
 
-	@Nonnull
-	private TestingDispatcher createDispatcher(HeartbeatServices heartbeatServices, TestingHighAvailabilityServices haServices, JobManagerRunnerFactory jobManagerRunnerFactory) throws Exception {
-		TestingResourceManagerGateway resourceManagerGateway = new TestingResourceManagerGateway();
-		return new TestingDispatcher(
-			rpcService,
-			Dispatcher.DISPATCHER_NAME + '_' + name.getMethodName(),
-			DispatcherId.generate(),
-			Collections.emptyList(),
-			configuration,
-			haServices,
-			() -> CompletableFuture.completedFuture(resourceManagerGateway),
-			blobServer,
-			heartbeatServices,
-			UnregisteredMetricGroups.createUnregisteredJobManagerMetricGroup(),
-			null,
-			new MemoryArchivedExecutionGraphStore(),
-			jobManagerRunnerFactory,
-			fatalErrorHandler);
+	private class TestingDispatcherBuilder {
+
+		private Collection<JobGraph> initialJobGraphs = Collections.emptyList();
+
+		private HeartbeatServices heartbeatServices = DispatcherTest.this.heartbeatServices;
+
+		private HighAvailabilityServices haServices = DispatcherTest.this.haServices;
+
+		private JobManagerRunnerFactory jobManagerRunnerFactory = DefaultJobManagerRunnerFactory.INSTANCE;
+
+		public TestingDispatcherBuilder setHeartbeatServices(HeartbeatServices heartbeatServices) {
+			this.heartbeatServices = heartbeatServices;
+			return this;
+		}
+
+		public TestingDispatcherBuilder setHaServices(HighAvailabilityServices haServices) {
+			this.haServices = haServices;
+			return this;
+		}
+
+		TestingDispatcherBuilder setInitialJobGraphs(Collection<JobGraph> initialJobGraphs) {
+			this.initialJobGraphs = initialJobGraphs;
+			return this;
+		}
+
+		public TestingDispatcherBuilder setJobManagerRunnerFactory(JobManagerRunnerFactory jobManagerRunnerFactory) {
+			this.jobManagerRunnerFactory = jobManagerRunnerFactory;
+			return this;
+		}
+
+		TestingDispatcher build() throws Exception {
+			TestingResourceManagerGateway resourceManagerGateway = new TestingResourceManagerGateway();
+
+			return new TestingDispatcher(
+				rpcService,
+				Dispatcher.DISPATCHER_NAME + '_' + name.getMethodName(),
+				DispatcherId.generate(),
+				initialJobGraphs,
+				configuration,
+				haServices,
+				() -> CompletableFuture.completedFuture(resourceManagerGateway),
+				blobServer,
+				heartbeatServices,
+				UnregisteredMetricGroups.createUnregisteredJobManagerMetricGroup(),
+				null,
+				new MemoryArchivedExecutionGraphStore(),
+				jobManagerRunnerFactory,
+				fatalErrorHandler);
+		}
 	}
 
 	@After
@@ -447,23 +485,20 @@ public class DispatcherTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that the {@link Dispatcher} fails fatally if the job submission of a recovered job fails.
+	 * Tests that the {@link Dispatcher} fails fatally if the recoverd jobs cannot be started.
 	 * See FLINK-9097.
 	 */
 	@Test
-	@Ignore
-	public void testJobSubmissionErrorAfterJobRecovery() throws Exception {
+	public void testFatalErrorIfRecoveredJobsCannotBeStarted() throws Exception {
 		final FlinkException testException = new FlinkException("Test exception");
-
-		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
-
-		dispatcher.waitUntilStarted();
 
 		final JobGraph failingJobGraph = createFailingJobGraph(testException);
 
-		jobGraphStore.putJobGraph(failingJobGraph);
+		dispatcher = new TestingDispatcherBuilder()
+			.setInitialJobGraphs(Collections.singleton(failingJobGraph))
+			.build();
 
-		electDispatcher();
+		dispatcher.start();
 
 		final Throwable error = fatalErrorHandler.getErrorFuture().get(TIMEOUT.toMilliseconds(), TimeUnit.MILLISECONDS);
 
