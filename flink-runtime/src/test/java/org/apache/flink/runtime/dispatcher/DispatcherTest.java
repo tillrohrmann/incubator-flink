@@ -39,7 +39,6 @@ import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServices
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobStatus;
 import org.apache.flink.runtime.jobgraph.JobVertex;
-import org.apache.flink.runtime.jobmanager.JobGraphStore;
 import org.apache.flink.runtime.jobmanager.StandaloneJobGraphStore;
 import org.apache.flink.runtime.jobmaster.JobManagerRunner;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
@@ -445,34 +444,6 @@ public class DispatcherTest extends TestLogger {
 		jobMasterLeaderElectionService.isLeader(UUID.randomUUID()).get();
 
 		assertThat(jobStatusFuture.get(), notNullValue());
-	}
-
-	/**
-	 * Tests that the {@link Dispatcher} terminates if it cannot recover jobs ids from
-	 * the {@link JobGraphStore}. See FLINK-8943.
-	 */
-	@Test
-	@Ignore
-	public void testFatalErrorAfterJobIdRecoveryFailure() throws Exception {
-		final FlinkException testException = new FlinkException("Test exception");
-		final JobGraphStore jobGraphStore = TestingJobGraphStore.newBuilder()
-			.setJobIdsFunction(
-				(Collection<JobID> jobIds) -> {
-					throw testException;
-				})
-			.build();
-
-		haServices.setJobGraphStore(jobGraphStore);
-		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
-
-		electDispatcher();
-
-		// we expect that a fatal error occurred
-		final Throwable error = fatalErrorHandler.getErrorFuture().get(TIMEOUT.toMilliseconds(), TimeUnit.MILLISECONDS);
-
-		assertThat(ExceptionUtils.findThrowableWithMessage(error, testException.getMessage()).isPresent(), is(true));
-
-		fatalErrorHandler.clearError();
 	}
 
 	/**

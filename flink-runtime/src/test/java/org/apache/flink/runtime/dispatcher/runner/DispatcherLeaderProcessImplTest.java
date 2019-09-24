@@ -346,6 +346,23 @@ public class DispatcherLeaderProcessImplTest extends TestLogger {
 			.setInitialJobGraphs(Collections.singleton(JOB_GRAPH))
 			.build();
 
+		runJobRecoveryFailureTest(testException);
+	}
+
+	@Test
+	public void recoverJobs_withJobIdRecoveryFailure_failsFatally() throws Exception {
+		final FlinkException testException = new FlinkException("Test exception");
+		jobGraphStore = TestingJobGraphStore.newBuilder()
+			.setJobIdsFunction(
+				ignored -> {
+					throw testException;
+				})
+			.build();
+
+		runJobRecoveryFailureTest(testException);
+	}
+
+	private void runJobRecoveryFailureTest(FlinkException testException) throws Exception {
 		try (final DispatcherLeaderProcessImpl dispatcherLeaderProcess = createDispatcherLeaderProcess()) {
 			dispatcherLeaderProcess.start();
 
