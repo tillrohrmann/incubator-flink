@@ -626,14 +626,11 @@ public class DispatcherTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that a submitted job is suspended if the Dispatcher loses leadership.
+	 * Tests that a submitted job is suspended if the Dispatcher is terminated.
 	 */
 	@Test
-	@Ignore
-	public void testJobSuspensionWhenDispatcherLosesLeadership() throws Exception {
+	public void testJobSuspensionWhenDispatcherIsTerminated() throws Exception {
 		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
-
-		dispatcherLeaderElectionService.isLeader(UUID.randomUUID()).get();
 
 		DispatcherGateway dispatcherGateway = dispatcher.getSelfGateway(DispatcherGateway.class);
 
@@ -643,7 +640,7 @@ public class DispatcherTest extends TestLogger {
 
 		assertThat(jobResultFuture.isDone(), is(false));
 
-		dispatcherLeaderElectionService.notLeader();
+		dispatcher.closeAsync();
 
 		try {
 			jobResultFuture.get();
