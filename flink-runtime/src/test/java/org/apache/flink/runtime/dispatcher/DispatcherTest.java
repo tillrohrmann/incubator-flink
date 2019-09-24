@@ -93,7 +93,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -465,38 +464,6 @@ public class DispatcherTest extends TestLogger {
 
 		haServices.setJobGraphStore(jobGraphStore);
 		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
-
-		electDispatcher();
-
-		// we expect that a fatal error occurred
-		final Throwable error = fatalErrorHandler.getErrorFuture().get(TIMEOUT.toMilliseconds(), TimeUnit.MILLISECONDS);
-
-		assertThat(ExceptionUtils.findThrowableWithMessage(error, testException.getMessage()).isPresent(), is(true));
-
-		fatalErrorHandler.clearError();
-	}
-
-	/**
-	 * Tests that the {@link Dispatcher} terminates if it cannot recover jobs from
-	 * the {@link JobGraphStore}. See FLINK-8943.
-	 */
-	@Test
-	@Ignore
-	public void testFatalErrorAfterJobRecoveryFailure() throws Exception {
-		final FlinkException testException = new FlinkException("Test exception");
-		final TestingJobGraphStore jobGraphStore = TestingJobGraphStore.newBuilder()
-			.setRecoverJobGraphFunction(
-				(JobID jobId, Map<JobID, JobGraph> jobGraphs) -> {
-					throw testException;
-				})
-			.build();
-
-		haServices.setJobGraphStore(jobGraphStore);
-		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
-
-		dispatcher.waitUntilStarted();
-
-		jobGraphStore.putJobGraph(jobGraph);
 
 		electDispatcher();
 
