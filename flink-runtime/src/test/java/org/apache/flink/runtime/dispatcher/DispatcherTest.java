@@ -34,7 +34,6 @@ import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ErrorInfo;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
-import org.apache.flink.runtime.highavailability.RunningJobsRegistry;
 import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServices;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobStatus;
@@ -106,7 +105,6 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -132,13 +130,7 @@ public class DispatcherTest extends TestLogger {
 
 	private TestingFatalErrorHandler fatalErrorHandler;
 
-	private TestingJobGraphStore jobGraphStore;
-
-	private TestingLeaderElectionService dispatcherLeaderElectionService;
-
 	private TestingLeaderElectionService jobMasterLeaderElectionService;
-
-	private RunningJobsRegistry runningJobsRegistry;
 
 	private CountDownLatch createdJobManagerRunnerLatch;
 
@@ -176,18 +168,14 @@ public class DispatcherTest extends TestLogger {
 
 		fatalErrorHandler = new TestingFatalErrorHandler();
 		heartbeatServices = new HeartbeatServices(1000L, 10000L);
-		jobGraphStore = TestingJobGraphStore.newBuilder().build();
 
-		dispatcherLeaderElectionService = new TestingLeaderElectionService();
 		jobMasterLeaderElectionService = new TestingLeaderElectionService();
 
 		haServices = new TestingHighAvailabilityServices();
-		haServices.setDispatcherLeaderElectionService(dispatcherLeaderElectionService);
 		haServices.setJobGraphStore(new StandaloneJobGraphStore());
 		haServices.setJobMasterLeaderElectionService(TEST_JOB_ID, jobMasterLeaderElectionService);
 		haServices.setCheckpointRecoveryFactory(new StandaloneCheckpointRecoveryFactory());
 		haServices.setResourceManagerLeaderRetriever(new SettableLeaderRetrievalService());
-		runningJobsRegistry = haServices.getRunningJobsRegistry();
 
 		configuration = new Configuration();
 
@@ -224,12 +212,12 @@ public class DispatcherTest extends TestLogger {
 
 		private JobManagerRunnerFactory jobManagerRunnerFactory = DefaultJobManagerRunnerFactory.INSTANCE;
 
-		public TestingDispatcherBuilder setHeartbeatServices(HeartbeatServices heartbeatServices) {
+		TestingDispatcherBuilder setHeartbeatServices(HeartbeatServices heartbeatServices) {
 			this.heartbeatServices = heartbeatServices;
 			return this;
 		}
 
-		public TestingDispatcherBuilder setHaServices(HighAvailabilityServices haServices) {
+		TestingDispatcherBuilder setHaServices(HighAvailabilityServices haServices) {
 			this.haServices = haServices;
 			return this;
 		}
@@ -239,7 +227,7 @@ public class DispatcherTest extends TestLogger {
 			return this;
 		}
 
-		public TestingDispatcherBuilder setJobManagerRunnerFactory(JobManagerRunnerFactory jobManagerRunnerFactory) {
+		TestingDispatcherBuilder setJobManagerRunnerFactory(JobManagerRunnerFactory jobManagerRunnerFactory) {
 			this.jobManagerRunnerFactory = jobManagerRunnerFactory;
 			return this;
 		}
@@ -591,7 +579,7 @@ public class DispatcherTest extends TestLogger {
 		dispatcher.getShutDownFuture().get();
 	}
 
-	private final class BlockingJobManagerRunnerFactory extends TestingJobManagerRunnerFactory {
+	private static final class BlockingJobManagerRunnerFactory extends TestingJobManagerRunnerFactory {
 
 		@Nonnull
 		private final ThrowingRunnable<Exception> jobManagerRunnerCreationLatch;
@@ -606,14 +594,6 @@ public class DispatcherTest extends TestLogger {
 
 			return super.createJobManagerRunner(jobGraph, configuration, rpcService, highAvailabilityServices, heartbeatServices, jobManagerSharedServices, jobManagerJobMetricGroupFactory, fatalErrorHandler);
 		}
-	}
-
-	private void electDispatcher() {
-		UUID expectedLeaderSessionId = UUID.randomUUID();
-
-		assertNull(dispatcherLeaderElectionService.getConfirmationFuture());
-
-		dispatcherLeaderElectionService.isLeader(expectedLeaderSessionId);
 	}
 
 	private JobGraph createFailingJobGraph(Exception failureCause) {
