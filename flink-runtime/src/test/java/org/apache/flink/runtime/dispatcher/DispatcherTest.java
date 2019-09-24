@@ -75,7 +75,6 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -101,10 +100,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.core.Is.is;
@@ -378,45 +375,6 @@ public class DispatcherTest extends TestLogger {
 			final Throwable throwable = ExceptionUtils.stripExecutionException(e);
 			assertThat(throwable, instanceOf(FlinkJobNotFoundException.class));
 		}
-	}
-
-	/**
-	 * Tests that a reelected Dispatcher can recover jobs.
-	 */
-	@Test
-	@Ignore
-	public void testJobRecovery() throws Exception {
-		dispatcher = createAndStartDispatcher(heartbeatServices, haServices, new ExpectedJobIdJobManagerRunnerFactory(TEST_JOB_ID, createdJobManagerRunnerLatch));
-
-		final DispatcherGateway dispatcherGateway = dispatcher.getSelfGateway(DispatcherGateway.class);
-
-		// elect the initial dispatcher as the leader
-		dispatcherLeaderElectionService.isLeader(UUID.randomUUID()).get();
-
-		// submit the job to the current leader
-		dispatcherGateway.submitJob(jobGraph, TIMEOUT).get();
-
-		// check that the job has been persisted
-		assertThat(jobGraphStore.getJobIds(), contains(jobGraph.getJobID()));
-
-		jobMasterLeaderElectionService.isLeader(UUID.randomUUID()).get();
-
-		assertThat(runningJobsRegistry.getJobSchedulingStatus(jobGraph.getJobID()), is(RunningJobsRegistry.JobSchedulingStatus.RUNNING));
-
-		// revoke the leadership which will stop all currently running jobs
-		dispatcherLeaderElectionService.notLeader();
-
-		// re-grant the leadership, this should trigger the job recovery
-		dispatcherLeaderElectionService.isLeader(UUID.randomUUID()).get();
-
-		// wait until we have recovered the job
-		createdJobManagerRunnerLatch.await();
-
-		// check whether the job has been recovered
-		final Collection<JobID> jobIds = dispatcherGateway.listJobs(TIMEOUT).get();
-
-		assertThat(jobIds, hasSize(1));
-		assertThat(jobIds, contains(jobGraph.getJobID()));
 	}
 
 	/**
