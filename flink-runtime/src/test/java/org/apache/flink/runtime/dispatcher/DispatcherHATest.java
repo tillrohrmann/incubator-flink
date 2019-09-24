@@ -265,27 +265,6 @@ public class DispatcherHATest extends TestLogger {
 		}
 	}
 
-	/**
-	 * Tests that a fatal error is reported if the job recovery fails.
-	 */
-	@Test
-	public void testFailingRecoveryIsAFatalError() throws Exception {
-		final String exceptionMessage = "Job recovery test failure.";
-		final Supplier<Exception> exceptionSupplier = () -> new FlinkException(exceptionMessage);
-		final TestingHighAvailabilityServices haServices = new TestingHighAvailabilityServicesBuilder()
-			.setJobGraphStore(new FailingJobGraphStore(exceptionSupplier))
-			.build();
-
-		final HATestingDispatcher dispatcher = createDispatcher(haServices);
-		dispatcher.start();
-
-		final Throwable failure = testingFatalErrorHandler.getErrorFuture().get();
-
-		assertThat(ExceptionUtils.findThrowableWithMessage(failure, exceptionMessage).isPresent(), is(true));
-
-		testingFatalErrorHandler.clearError();
-	}
-
 	@Nonnull
 	private HATestingDispatcher createDispatcherWithObservableFencingTokens(HighAvailabilityServices highAvailabilityServices, Queue<DispatcherId> fencingTokens) throws Exception {
 		return createDispatcher(highAvailabilityServices, fencingTokens, createTestingJobManagerRunnerFactory());
