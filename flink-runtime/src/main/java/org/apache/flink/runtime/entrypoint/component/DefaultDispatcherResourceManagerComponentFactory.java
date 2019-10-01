@@ -183,17 +183,13 @@ public class DefaultDispatcherResourceManagerComponentFactory implements Dispatc
 
 			final HistoryServerArchivist historyServerArchivist = HistoryServerArchivist.createHistoryServerArchivist(configuration, webMonitorEndpoint);
 
-			jobManagerMetricGroup = MetricUtils.instantiateJobManagerMetricGroup(
-				metricRegistry,
-				hostname);
-
 			final PartialDispatcherServices partialDispatcherServices = new PartialDispatcherServices(
 				configuration,
 				highAvailabilityServices,
 				resourceManagerGatewayRetriever,
 				blobServer,
 				heartbeatServices,
-				jobManagerMetricGroup,
+				() -> MetricUtils.instantiateJobManagerMetricGroup(metricRegistry, hostname),
 				archivedExecutionGraphStore,
 				fatalErrorHandler,
 				historyServerArchivist,
