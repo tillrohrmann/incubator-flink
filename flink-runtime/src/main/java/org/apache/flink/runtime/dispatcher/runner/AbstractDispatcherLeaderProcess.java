@@ -109,7 +109,7 @@ abstract class AbstractDispatcherLeaderProcess implements DispatcherLeaderProces
 	}
 
 	@Override
-	public final CompletableFuture<String> getConfirmLeaderSessionFuture() {
+	public final CompletableFuture<String> getLeaderAddressFuture() {
 		return confirmLeaderSessionFuture;
 	}
 
