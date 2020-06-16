@@ -582,7 +582,14 @@ public class CheckpointCoordinator {
 
 							return null;
 						},
-						timer));
+						timer)
+					.exceptionally((throwable) -> {
+						// filter out throwables which occur after the shut down
+						if (!isShutdown()) {
+							throw new CompletionException(throwable);
+						}
+						return null;
+					}));
 		} catch (Throwable throwable) {
 			onTriggerFailure(request, throwable);
 		}
