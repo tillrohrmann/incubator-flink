@@ -107,7 +107,7 @@ readFromConfig() {
 DEFAULT_ENV_PID_DIR="/tmp"                          # Directory to store *.pid files to
 DEFAULT_ENV_LOG_MAX=5                               # Maximum number of old log files to keep
 DEFAULT_ENV_JAVA_OPTS=""                            # Optional JVM args
-DEFAULT_ENV_JAVA_OPTS_JM=""                         # Optional JVM args (JobManager)
+DEFAULT_ENV_JAVA_OPTS_JM="-XX:+ExitOnOutOfMemoryError" # Optional JVM args (JobManager)
 DEFAULT_ENV_JAVA_OPTS_TM=""                         # Optional JVM args (TaskManager)
 DEFAULT_ENV_JAVA_OPTS_HS=""                         # Optional JVM args (HistoryServer)
 DEFAULT_ENV_JAVA_OPTS_CLI=""                        # Optional JVM args (Client)

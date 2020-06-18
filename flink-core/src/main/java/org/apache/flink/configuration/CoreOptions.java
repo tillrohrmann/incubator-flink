@@ -175,7 +175,7 @@ public class CoreOptions {
 	public static final ConfigOption<String> FLINK_JM_JVM_OPTIONS = ConfigOptions
 		.key("env.java.opts.jobmanager")
 		.stringType()
-		.defaultValue("")
+		.defaultValue("-XX:+ExitOnOutOfMemoryError")
 		.withDescription(Description.builder().text("Java options to start the JVM of the JobManager with.").build());
 
 	public static final ConfigOption<String> FLINK_TM_JVM_OPTIONS = ConfigOptions
