@@ -58,4 +58,8 @@ public interface SchedulingStrategy {
 	 * @param resultPartitionId The id of the result partition
 	 */
 	void onPartitionConsumable(IntermediateResultPartitionID resultPartitionId);
+
+	default void updateTopology(SchedulingTopology schedulingTopology) {
+		throw new UnsupportedOperationException("updateTopology");
+	}
 }

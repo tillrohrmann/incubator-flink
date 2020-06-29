@@ -75,7 +75,7 @@ import org.apache.flink.runtime.taskexecutor.BackPressureSampleableTask;
 import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
 import org.apache.flink.runtime.taskexecutor.KvStateService;
 import org.apache.flink.runtime.taskexecutor.PartitionProducerStateChecker;
-import org.apache.flink.util.TaskManagerExceptionUtils;
+import org.apache.flink.runtime.taskexecutor.TaskExecutorActions;
 import org.apache.flink.runtime.taskexecutor.slot.TaskSlotPayload;
 import org.apache.flink.runtime.util.FatalExitExceptionHandler;
 import org.apache.flink.types.Either;
@@ -84,6 +84,7 @@ import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.SerializedValue;
+import org.apache.flink.util.TaskManagerExceptionUtils;
 import org.apache.flink.util.WrappingRuntimeException;
 
 import org.slf4j.Logger;
@@ -247,6 +248,8 @@ public class Task implements Runnable, TaskSlotPayload, TaskActions, PartitionPr
 	/** Executor to run future callbacks. */
 	private final Executor executor;
 
+	private final TaskExecutorActions taskExecutorActions;
+
 	/** Future that is completed once {@link #run()} exits. */
 	private final CompletableFuture<ExecutionState> terminationFuture = new CompletableFuture<>();
 
@@ -312,7 +315,8 @@ public class Task implements Runnable, TaskSlotPayload, TaskActions, PartitionPr
 		@Nonnull TaskMetricGroup metricGroup,
 		ResultPartitionConsumableNotifier resultPartitionConsumableNotifier,
 		PartitionProducerStateChecker partitionProducerStateChecker,
-		Executor executor) {
+		Executor executor,
+		TaskExecutorActions taskExecutorActions) {
 
 		Preconditions.checkNotNull(jobInformation);
 		Preconditions.checkNotNull(taskInformation);
@@ -363,6 +367,7 @@ public class Task implements Runnable, TaskSlotPayload, TaskActions, PartitionPr
 		this.fileCache = Preconditions.checkNotNull(fileCache);
 		this.kvStateService = Preconditions.checkNotNull(kvStateService);
 		this.taskManagerConfig = Preconditions.checkNotNull(taskManagerConfig);
+		this.taskExecutorActions = Preconditions.checkNotNull(taskExecutorActions);
 
 		this.metrics = metricGroup;
 
@@ -688,7 +693,8 @@ public class Task implements Runnable, TaskSlotPayload, TaskActions, PartitionPr
 				taskManagerConfig,
 				metrics,
 				this,
-				externalResourceInfoProvider);
+				externalResourceInfoProvider,
+				taskExecutorActions);
 
 			// Make sure the user code classloader is accessible thread-locally.
 			// We are setting the correct context class loader before instantiating the invokable

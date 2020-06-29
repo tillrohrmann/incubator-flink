@@ -64,6 +64,7 @@ import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
@@ -445,11 +446,18 @@ public abstract class SchedulerBase implements SchedulerNG {
 	// ------------------------------------------------------------------------
 
 	@Override
+	public void attachVertices(List<JobVertex> vertices) throws Exception {
+		executionGraph.attachJobGraph(vertices);
+	}
+
+	@Override
 	public void setMainThreadExecutor(final ComponentMainThreadExecutor mainThreadExecutor) {
 		this.mainThreadExecutor = checkNotNull(mainThreadExecutor);
 		initializeOperatorCoordinators(mainThreadExecutor);
-		executionGraph.start(mainThreadExecutor);
+		executionGraph.start(mainThreadExecutor, this::updateTopology);
 	}
+
+	protected void updateTopology(SchedulingTopology schedulingTopology) {}
 
 	@Override
 	public void registerJobStatusListener(final JobStatusListener jobStatusListener) {

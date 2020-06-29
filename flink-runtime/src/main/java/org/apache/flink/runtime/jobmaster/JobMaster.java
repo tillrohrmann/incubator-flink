@@ -46,6 +46,7 @@ import org.apache.flink.runtime.io.network.partition.PartitionTrackerFactory;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
@@ -102,6 +103,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -693,6 +695,17 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 			log.info("Error while requesting operator back pressure stats", e);
 			return FutureUtils.completedExceptionally(e);
 		}
+	}
+
+	@Override
+	public CompletableFuture<Void> executeTask(JobVertex taskVertex, Time timeout) {
+		try {
+			schedulerNG.attachVertices(Collections.singletonList(taskVertex));
+		} catch (Exception e) {
+			return FutureUtils.completedExceptionally(e);
+		}
+
+		return CompletableFuture.completedFuture(null);
 	}
 
 	@Override

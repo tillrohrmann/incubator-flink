@@ -109,6 +109,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -312,6 +313,7 @@ public class ExecutionGraph implements AccessExecutionGraph {
 
 	/** Shuffle master to register partitions for task deployment. */
 	private final ShuffleMaster<?> shuffleMaster;
+	private Consumer<SchedulingTopology> updateTopologyNotifier;
 
 	// --------------------------------------------------------------------------------------------
 	//   Constructors
@@ -393,7 +395,12 @@ public class ExecutionGraph implements AccessExecutionGraph {
 	}
 
 	public void start(@Nonnull ComponentMainThreadExecutor jobMasterMainThreadExecutor) {
+		this.start(jobMasterMainThreadExecutor, ignored -> {});
+	}
+
+	public void start(@Nonnull ComponentMainThreadExecutor jobMasterMainThreadExecutor, Consumer<SchedulingTopology> updateTopologyNotifier) {
 		this.jobMasterMainThreadExecutor = jobMasterMainThreadExecutor;
+		this.updateTopologyNotifier = updateTopologyNotifier;
 	}
 
 	// --------------------------------------------------------------------------------------------
@@ -844,7 +851,9 @@ public class ExecutionGraph implements AccessExecutionGraph {
 		// the topology assigning should happen before notifying new vertices to failoverStrategy
 		executionTopology = new DefaultExecutionTopology(this);
 
-		failoverStrategy.notifyNewVertices(newExecJobVertices);
+		if (updateTopologyNotifier != null) {
+			updateTopologyNotifier.accept(executionTopology);
+		}
 
 		partitionReleaseStrategy = partitionReleaseStrategyFactory.createInstance(getSchedulingTopology());
 	}

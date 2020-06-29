@@ -610,6 +610,10 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 				throw new TaskSubmissionException("Could not submit task.", e);
 			}
 
+			final TaskExecutorActions taskExecutorActions = new DefaultTaskExecutorActions(
+				jobManagerConnection.getJobManagerGateway(),
+				taskManagerConfiguration.getTimeout());
+
 			Task task = new Task(
 				jobInformation,
 				taskInformation,
@@ -639,7 +643,8 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 				taskMetricGroup,
 				resultPartitionConsumableNotifier,
 				partitionStateChecker,
-				getRpcService().getExecutor());
+				getRpcService().getExecutor(),
+				taskExecutorActions);
 
 			taskMetricGroup.gauge(MetricNames.IS_BACKPRESSURED, task::isBackPressured);
 

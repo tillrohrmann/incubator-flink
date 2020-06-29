@@ -42,6 +42,7 @@ import org.apache.flink.runtime.metrics.groups.TaskMetricGroup;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
 import org.apache.flink.runtime.state.TaskStateManager;
 import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
+import org.apache.flink.runtime.taskexecutor.TaskExecutorActions;
 
 import java.util.Map;
 import java.util.concurrent.Future;
@@ -91,6 +92,7 @@ public class RuntimeEnvironment implements Environment {
 	private final TaskMetricGroup metrics;
 
 	private final Task containingTask;
+	private final TaskExecutorActions taskExecutorActions;
 
 	// ------------------------------------------------------------------------
 
@@ -120,7 +122,8 @@ public class RuntimeEnvironment implements Environment {
 			TaskManagerRuntimeInfo taskManagerInfo,
 			TaskMetricGroup metrics,
 			Task containingTask,
-			ExternalResourceInfoProvider externalResourceInfoProvider) {
+			ExternalResourceInfoProvider externalResourceInfoProvider,
+			TaskExecutorActions taskExecutorActions) {
 
 		this.jobId = checkNotNull(jobId);
 		this.jobVertexId = checkNotNull(jobVertexId);
@@ -148,6 +151,7 @@ public class RuntimeEnvironment implements Environment {
 		this.containingTask = containingTask;
 		this.metrics = metrics;
 		this.externalResourceInfoProvider = checkNotNull(externalResourceInfoProvider);
+		this.taskExecutorActions = checkNotNull(taskExecutorActions);
 	}
 
 	// ------------------------------------------------------------------------
@@ -270,6 +274,11 @@ public class RuntimeEnvironment implements Environment {
 	@Override
 	public TaskEventDispatcher getTaskEventDispatcher() {
 		return taskEventDispatcher;
+	}
+
+	@Override
+	public TaskExecutorActions getTaskExecutorActions() {
+		return taskExecutorActions;
 	}
 
 	@Override

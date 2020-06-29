@@ -49,6 +49,7 @@ import org.apache.flink.runtime.shuffle.ShuffleEnvironment;
 import org.apache.flink.runtime.state.TestTaskStateManager;
 import org.apache.flink.runtime.taskexecutor.KvStateService;
 import org.apache.flink.runtime.taskexecutor.NoOpPartitionProducerStateChecker;
+import org.apache.flink.runtime.taskexecutor.NoOpTaskExecutorActions;
 import org.apache.flink.runtime.taskexecutor.PartitionProducerStateChecker;
 import org.apache.flink.runtime.taskexecutor.TestGlobalAggregateManager;
 import org.apache.flink.runtime.testingUtils.TestingUtils;
@@ -229,7 +230,8 @@ public final class TestTaskBuilder {
 			taskMetricGroup,
 			consumableNotifier,
 			partitionProducerStateChecker,
-			executor);
+			executor,
+			NoOpTaskExecutorActions.INSTANCE);
 	}
 
 	public static void setTaskState(Task task, ExecutionState state) {

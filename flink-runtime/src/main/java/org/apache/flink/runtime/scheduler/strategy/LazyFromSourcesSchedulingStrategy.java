@@ -25,6 +25,9 @@ import org.apache.flink.runtime.scheduler.ExecutionVertexDeploymentOption;
 import org.apache.flink.runtime.scheduler.SchedulerOperations;
 import org.apache.flink.util.IterableUtils;
 
+import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
+
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -46,7 +49,7 @@ public class LazyFromSourcesSchedulingStrategy implements SchedulingStrategy {
 
 	private final SchedulerOperations schedulerOperations;
 
-	private final SchedulingTopology schedulingTopology;
+	private SchedulingTopology schedulingTopology;
 
 	private final Map<ExecutionVertexID, DeploymentOption> deploymentOptions;
 
@@ -64,10 +67,17 @@ public class LazyFromSourcesSchedulingStrategy implements SchedulingStrategy {
 
 	@Override
 	public void startScheduling() {
+		final Iterable<? extends SchedulingExecutionVertex> vertices = schedulingTopology.getVertices();
+		updateInternalStructures(Lists.newArrayList(vertices));
+
+		allocateSlotsAndDeployExecutionVertices(schedulingTopology.getVertices());
+	}
+
+	private void updateInternalStructures(Collection<? extends SchedulingExecutionVertex> vertices) {
 		final DeploymentOption updateOption = new DeploymentOption(true);
 		final DeploymentOption nonUpdateOption = new DeploymentOption(false);
 
-		for (SchedulingExecutionVertex schedulingVertex : schedulingTopology.getVertices()) {
+		for (SchedulingExecutionVertex schedulingVertex : vertices) {
 			DeploymentOption option = nonUpdateOption;
 			for (SchedulingResultPartition srp : schedulingVertex.getProducedResults()) {
 				if (srp.getResultType().isPipelined()) {
@@ -77,8 +87,24 @@ public class LazyFromSourcesSchedulingStrategy implements SchedulingStrategy {
 			}
 			deploymentOptions.put(schedulingVertex.getId(), option);
 		}
+	}
 
-		allocateSlotsAndDeployExecutionVertices(schedulingTopology.getVertices());
+	@Override
+	public void updateTopology(SchedulingTopology newSchedulingTopology) {
+		final Map<ExecutionVertexID, SchedulingExecutionVertex> vertices = new HashMap<>();
+
+		for (SchedulingExecutionVertex vertex : newSchedulingTopology.getVertices()) {
+			vertices.put(vertex.getId(), vertex);
+		}
+
+		for (SchedulingExecutionVertex vertex : schedulingTopology.getVertices()) {
+			vertices.remove(vertex.getId());
+		}
+
+		this.schedulingTopology = newSchedulingTopology;
+		updateInternalStructures(vertices.values());
+
+		allocateSlotsAndDeployExecutionVertices(vertices.values());
 	}
 
 	@Override

@@ -32,6 +32,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.io.network.partition.ResultPartition;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
+import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -290,4 +291,8 @@ public interface JobMasterGateway extends
 		OperatorID operatorId,
 		SerializedValue<CoordinationRequest> serializedRequest,
 		@RpcTimeout Time timeout);
+
+	default CompletableFuture<Void> executeTask(JobVertex taskVertex, @RpcTimeout Time timeout) {
+		throw new UnsupportedOperationException();
+	}
 }
