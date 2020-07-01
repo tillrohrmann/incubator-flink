@@ -21,6 +21,7 @@ package org.apache.flink.runtime.taskexecutor;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmaster.JobMasterGateway;
+import org.apache.flink.runtime.messages.Acknowledge;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -39,7 +40,7 @@ public class DefaultTaskExecutorActions implements TaskExecutorActions {
 	}
 
 	@Override
-	public CompletableFuture<Void> executeTask(JobVertex taskVertex) {
+	public CompletableFuture<Acknowledge> executeTask(JobVertex taskVertex) {
 		return jobMasterGateway.executeTask(taskVertex, rpcTimeout);
 	}
 }

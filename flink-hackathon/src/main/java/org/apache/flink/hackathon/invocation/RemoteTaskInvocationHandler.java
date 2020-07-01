@@ -20,7 +20,9 @@ package org.apache.flink.hackathon.invocation;
 
 import org.apache.flink.hackathon.Application;
 import org.apache.flink.hackathon.ApplicationContext;
+import org.apache.flink.hackathon.redis.RedisFuture;
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.util.AbstractID;
 import org.apache.flink.util.ExceptionUtils;
 
@@ -43,24 +45,32 @@ public class RemoteTaskInvocationHandler implements InvocationHandler {
 
 	@Override
 	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-		final JobVertex taskVertex = Utils.createTaskVertex(method, args, implementor, new AbstractID());
+		final AbstractID futureId;
+
+		if (Void.TYPE.equals(method.getReturnType())) {
+			futureId = null;
+		} else {
+			futureId = new AbstractID();
+		}
+
+		final JobVertex taskVertex = Utils.createTaskVertex(method, args, implementor, futureId);
 
 		if (method.getName().startsWith("toString")) {
 			System.out.println("damn it");
 		}
 
-		final CompletableFuture<Void> executeTaskFuture = applicationContext.executeTask(taskVertex);
+		final CompletableFuture<Acknowledge> executeTaskFuture = applicationContext.executeTask(taskVertex);
+
+		try {
+			executeTaskFuture.get();
+		} catch (ExecutionException ee) {
+			throw ExceptionUtils.stripExecutionException(ee);
+		}
 
 		if (Void.TYPE.equals(method.getReturnType())) {
-			try {
-				executeTaskFuture.get();
-			} catch (ExecutionException ee) {
-				throw ExceptionUtils.stripExecutionException(ee);
-			}
-
 			return null;
 		} else {
-			return executeTaskFuture.thenCompose(ignored -> new CompletableFuture<>());
+			return new RedisFuture<>(futureId);
 		}
 	}
 }

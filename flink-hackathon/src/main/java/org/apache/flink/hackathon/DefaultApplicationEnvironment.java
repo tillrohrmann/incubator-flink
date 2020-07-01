@@ -18,6 +18,8 @@
 
 package org.apache.flink.hackathon;
 
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.WebOptions;
 import org.apache.flink.hackathon.invocation.MiniClusterInvocationHandler;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.minicluster.MiniClusterConfiguration;
@@ -33,7 +35,10 @@ public class DefaultApplicationEnvironment implements ApplicationEnvironment {
 	private final MiniCluster miniCluster;
 
 	public DefaultApplicationEnvironment() throws Exception {
+		final Configuration configuration = new Configuration();
+		configuration.setLong(WebOptions.REFRESH_INTERVAL, 100);
 		this.miniCluster = new MiniCluster(new MiniClusterConfiguration.Builder()
+			.setConfiguration(configuration)
 			.setNumSlotsPerTaskManager(10)
 			.build());
 		miniCluster.start();

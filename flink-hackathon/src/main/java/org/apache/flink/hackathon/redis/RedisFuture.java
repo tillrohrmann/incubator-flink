@@ -16,22 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.flink.hackathon;
+package org.apache.flink.hackathon.redis;
 
-import org.apache.flink.types.Either;
+import org.apache.flink.hackathon.FutureReference;
+import org.apache.flink.hackathon.FutureValue;
 import org.apache.flink.util.AbstractID;
 
-import org.redisson.Redisson;
-import org.redisson.api.RMap;
+import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
-import org.redisson.config.Config;
 
 import java.io.Serializable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * RedisFuture.
@@ -40,13 +39,13 @@ import java.util.concurrent.atomic.AtomicReference;
 public class RedisFuture<V> implements Future<V>, Serializable {
 	private static final long serialVersionUID = 5077310196600837247L;
 
-	private final AtomicReference<Either<V, Throwable>> value;
+	private final CompletableFuture<V> result;
 
 	private final AbstractID futureId;
 
 	public RedisFuture(AbstractID futureId) {
 		this.futureId = futureId;
-		this.value = new AtomicReference<>();
+		this.result = new CompletableFuture<>();
 	}
 
 	public AbstractID getFutureId() {
@@ -54,57 +53,48 @@ public class RedisFuture<V> implements Future<V>, Serializable {
 	}
 
 	public boolean completeExceptionally(Throwable throwable) {
-		return value.compareAndSet(null, Either.Right(throwable));
+		return result.completeExceptionally(throwable);
 	}
 
 	@Override
 	public boolean cancel(boolean mayInterruptIfRunning) {
-		return false;
+		return result.cancel(mayInterruptIfRunning);
 	}
 
 	@Override
 	public boolean isCancelled() {
-		return false;
+		return result.isCancelled();
 	}
 
 	@Override
 	public boolean isDone() {
-		return value.get() != null;
+		return result.isDone();
 	}
 
 	@Override
 	public V get() throws InterruptedException, ExecutionException {
-		Config config = new Config();
-		config.useSingleServer().setAddress("redis://localhost:6379");
-		final RedissonClient redissonClient = Redisson.create(config);
-
-		final RMap<AbstractID, Object> hackathon = redissonClient.getMap("hackathon");
-		AbstractID currentFutureId = futureId;
+		final RedissonClient redissonClient = RedisUtils.createClient();
+		RBucket<Object> bucket = redissonClient.getBucket(futureId.toString());
 
 		while (true) {
 			while (true) {
-				final Object redisValue = hackathon.get(currentFutureId);
+				final Object redisValue = bucket.get();
 
 				if (redisValue == null) {
 					break;
 				} else if (redisValue instanceof FutureReference) {
-					currentFutureId = ((FutureReference) redisValue).getReferencedFutureId();
+					final AbstractID referencedFutureId = ((FutureReference) redisValue).getReferencedFutureId();
+					bucket = redissonClient.getBucket(referencedFutureId.toString());
 				} else if (redisValue instanceof FutureValue) {
-					value.compareAndSet(null, Either.Left(((FutureValue<V>) redisValue).getValue()));
+					result.complete(((FutureValue<V>) redisValue).getValue());
 					break;
 				} else {
-					throw new IllegalStateException(String.format("Unknown redis value type: %s", value.getClass().getName()));
+					throw new IllegalStateException(String.format("Unknown redis value type: %s", redisValue.getClass().getName()));
 				}
 			}
 
-			final Either<V, Throwable> eitherValue = this.value.get();
-
-			if (eitherValue != null) {
-				if (eitherValue.isLeft()) {
-					return eitherValue.left();
-				} else {
-					throw new ExecutionException(eitherValue.right());
-				}
+			if (result.isDone()) {
+				return result.get();
 			}
 
 			Thread.sleep(100);

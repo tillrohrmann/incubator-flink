@@ -18,14 +18,15 @@
 
 package org.apache.flink.hackathon;
 
+import org.apache.flink.hackathon.redis.RedisFuture;
+import org.apache.flink.hackathon.redis.RedisUtils;
 import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 import org.apache.flink.util.AbstractID;
 
-import org.redisson.Redisson;
+import org.redisson.api.RBucket;
 import org.redisson.api.RMap;
 import org.redisson.api.RedissonClient;
-import org.redisson.config.Config;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -70,14 +71,11 @@ public class TaskInvokable extends AbstractInvokable {
 
 		final Object result = method.invoke(application, remoteCall.getArguments());
 
-		Config config = new Config();
-		config.useSingleServer().setAddress("redis://127.0.0.1:6379");
-		final RedissonClient redissonClient = Redisson.create(config);
-
-		final RMap<AbstractID, Object> hackathon = redissonClient.getMap("hackathon");
+		final RedissonClient redissonClient = RedisUtils.createClient();
+		final RBucket<Object> bucket = redissonClient.getBucket(applicationConfig.getOutputId().toString());
 
 		if (result instanceof RedisFuture) {
-			hackathon.put(applicationConfig.getOutputId(), FutureReference.of(((RedisFuture<?>) result).getFutureId()));
+			bucket.set(FutureReference.of(((RedisFuture<?>) result).getFutureId()));
 		} else {
 			final Object value;
 			if (result instanceof Future) {
@@ -86,7 +84,7 @@ public class TaskInvokable extends AbstractInvokable {
 				value = result;
 			}
 
-			hackathon.put(applicationConfig.getOutputId(), FutureValue.of(value));
+			bucket.set(FutureValue.of(value));
 		}
 	}
 

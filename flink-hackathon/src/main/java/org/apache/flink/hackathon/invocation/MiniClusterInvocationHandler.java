@@ -19,7 +19,7 @@
 package org.apache.flink.hackathon.invocation;
 
 import org.apache.flink.api.common.JobSubmissionResult;
-import org.apache.flink.hackathon.RedisFuture;
+import org.apache.flink.hackathon.redis.RedisFuture;
 import org.apache.flink.hackathon.Utils;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;

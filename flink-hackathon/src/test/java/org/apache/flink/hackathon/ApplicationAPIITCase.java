@@ -41,11 +41,13 @@ public class ApplicationAPIITCase extends TestLogger {
 		try {
 			final ReinforcementLearner reinforcementLearner = env.remote(ReinforcementLearner.class, ReinforcementLearnerApplication.class);
 
-			final Future<Policy> policyFuture = reinforcementLearner.createPolicy();
+			final Future<Policy> policyFuture = reinforcementLearner.trainPolicy();
 
 			final Policy policy = policyFuture.get();
 
 			System.out.println(policy);
+
+			Thread.sleep(300000);
 		} finally {
 			env.close();
 		}
@@ -124,13 +126,13 @@ public class ApplicationAPIITCase extends TestLogger {
 			System.out.println("trainPolicy");
 			Future<Policy> policy = remoteTask().createPolicy();
 
-			final Simulator simulator = remoteActor(Simulator.class, DefaultSimulator.class);
-
-			for (int i = 0; i < 100; i++) {
-				final Future<Simulation> simulation = simulator.simulate(policy, 100);
-
-				policy = remoteTask().updatePolicy(policy, simulation);
-			}
+//			final Simulator simulator = remoteActor(Simulator.class, DefaultSimulator.class);
+//
+//			for (int i = 0; i < 100; i++) {
+//				final Future<Simulation> simulation = simulator.simulate(policy, 100);
+//
+//				policy = remoteTask().updatePolicy(policy, simulation);
+//			}
 
 			return policy;
 		}

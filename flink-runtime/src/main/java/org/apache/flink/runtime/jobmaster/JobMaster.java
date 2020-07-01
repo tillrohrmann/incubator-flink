@@ -698,14 +698,15 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	}
 
 	@Override
-	public CompletableFuture<Void> executeTask(JobVertex taskVertex, Time timeout) {
+	public CompletableFuture<Acknowledge> executeTask(JobVertex taskVertex, Time timeout) {
+		log.info("Execute task {}", taskVertex);
 		try {
 			schedulerNG.attachVertices(Collections.singletonList(taskVertex));
 		} catch (Exception e) {
 			return FutureUtils.completedExceptionally(e);
 		}
 
-		return CompletableFuture.completedFuture(null);
+		return CompletableFuture.completedFuture(Acknowledge.get());
 	}
 
 	@Override

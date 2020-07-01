@@ -292,7 +292,7 @@ public interface JobMasterGateway extends
 		SerializedValue<CoordinationRequest> serializedRequest,
 		@RpcTimeout Time timeout);
 
-	default CompletableFuture<Void> executeTask(JobVertex taskVertex, @RpcTimeout Time timeout) {
+	default CompletableFuture<Acknowledge> executeTask(JobVertex taskVertex, @RpcTimeout Time timeout) {
 		throw new UnsupportedOperationException();
 	}
 }

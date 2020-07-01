@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.taskexecutor;
 
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.runtime.messages.Acknowledge;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -27,5 +28,5 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface TaskExecutorActions {
 
-	CompletableFuture<Void> executeTask(JobVertex taskVertex);
+	CompletableFuture<Acknowledge> executeTask(JobVertex taskVertex);
 }

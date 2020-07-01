@@ -16,18 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.taskexecutor;
+package org.apache.flink.hackathon.redis;
 
-import org.apache.flink.runtime.jobgraph.JobVertex;
-import org.apache.flink.runtime.messages.Acknowledge;
+import org.redisson.Redisson;
+import org.redisson.api.RedissonClient;
+import org.redisson.config.Config;
 
-import java.util.concurrent.CompletableFuture;
-
-public enum NoOpTaskExecutorActions implements TaskExecutorActions {
-	INSTANCE;
-
-	@Override
-	public CompletableFuture<Acknowledge> executeTask(JobVertex taskVertex) {
-		return new CompletableFuture<>();
+/**
+ * Redis utils.
+ */
+public class RedisUtils {
+	public static RedissonClient createClient() {
+		Config config = new Config();
+		config.useSingleServer().setAddress("redis://127.0.0.1:6379");
+		return Redisson.create(config);
 	}
 }

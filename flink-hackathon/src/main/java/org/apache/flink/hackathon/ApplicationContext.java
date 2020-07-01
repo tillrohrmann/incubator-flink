@@ -19,6 +19,7 @@
 package org.apache.flink.hackathon;
 
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.runtime.messages.Acknowledge;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -31,5 +32,5 @@ public interface ApplicationContext {
 
 	<T extends Application<?>> ActorAddress startActor(Class<T> actorClass);
 
-	CompletableFuture<Void> executeTask(JobVertex taskVertex);
+	CompletableFuture<Acknowledge> executeTask(JobVertex taskVertex);
 }

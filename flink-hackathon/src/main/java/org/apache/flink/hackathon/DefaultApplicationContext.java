@@ -19,6 +19,7 @@
 package org.apache.flink.hackathon;
 
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorActions;
 
 import java.util.concurrent.CompletableFuture;
@@ -46,7 +47,7 @@ public class DefaultApplicationContext implements ApplicationContext {
 	}
 
 	@Override
-	public CompletableFuture<Void> executeTask(JobVertex taskVertex) {
+	public CompletableFuture<Acknowledge> executeTask(JobVertex taskVertex) {
 		return taskExecutorActions.executeTask(taskVertex);
 	}
 }

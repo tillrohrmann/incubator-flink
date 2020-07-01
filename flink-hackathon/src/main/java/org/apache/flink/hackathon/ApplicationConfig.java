@@ -23,6 +23,8 @@ import org.apache.flink.util.AbstractID;
 import org.apache.flink.util.InstantiationUtil;
 import org.apache.flink.util.Preconditions;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 
 /**
@@ -52,8 +54,14 @@ public class ApplicationConfig {
 		configuration.setBytes(OUTPUT_ID, outputId.getBytes());
 	}
 
+	@Nullable
 	public AbstractID getOutputId() {
-		final byte[] bytes = Preconditions.checkNotNull(configuration.getBytes(OUTPUT_ID, null), "output id cannot be null.");
-		return new AbstractID(bytes);
+		final byte[] bytes = configuration.getBytes(OUTPUT_ID, null);
+
+		if (bytes == null) {
+			return null;
+		} else {
+			return new AbstractID(bytes);
+		}
 	}
 }
