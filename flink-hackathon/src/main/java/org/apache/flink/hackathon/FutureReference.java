@@ -18,21 +18,27 @@
 
 package org.apache.flink.hackathon;
 
-import org.apache.flink.util.AutoCloseableAsync;
-import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.AbstractID;
+
+import java.io.Serializable;
 
 /**
- * ApplicationEnvironment.
+ * Future reference.
  */
-public interface ApplicationEnvironment extends AutoCloseableAsync {
-	<T, V extends Application<T>> T remote(Class<T> type, Class<V> implementor);
+public class FutureReference implements Serializable {
+	private static final long serialVersionUID = 1343216717846189757L;
 
-	static ApplicationEnvironment getEnvironment() {
-		try {
-			return new DefaultApplicationEnvironment();
-		} catch (Exception e) {
-			ExceptionUtils.rethrow(e);
-			return null;
-		}
+	private final AbstractID referencedFutureId;
+
+	public FutureReference(AbstractID referencedFutureId) {
+		this.referencedFutureId = referencedFutureId;
+	}
+
+	public AbstractID getReferencedFutureId() {
+		return referencedFutureId;
+	}
+
+	public static FutureReference of(AbstractID abstractId) {
+		return new FutureReference(abstractId);
 	}
 }

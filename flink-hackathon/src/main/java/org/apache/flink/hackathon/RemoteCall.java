@@ -22,6 +22,7 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 /**
  * RemoteCall.
@@ -79,5 +80,15 @@ public class RemoteCall implements Serializable {
 		}
 
 		return new RemoteCall(implementor.getName(), methodName, argumentTypes, args);
+	}
+
+	@Override
+	public String toString() {
+		return "RemoteCall{" +
+			"targetClassName='" + targetClassName + '\'' +
+			", methodName='" + methodName + '\'' +
+			", argumentTypes=" + Arrays.toString(argumentTypes) +
+			", arguments=" + Arrays.toString(arguments) +
+			'}';
 	}
 }

@@ -19,10 +19,12 @@
 package org.apache.flink.hackathon;
 
 import org.apache.flink.runtime.concurrent.FutureUtils;
+import org.apache.flink.util.AbstractID;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
 
+import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -36,27 +38,42 @@ public class ApplicationAPIITCase extends TestLogger {
 	public void testApplicationAPI() throws Exception {
 		final ApplicationEnvironment env = ApplicationEnvironment.getEnvironment();
 
-		final ReinforcementLearner reinforcementLearner = env.remote(ReinforcementLearner.class, ReinforcementLearnerApplication.class);
+		try {
+			final ReinforcementLearner reinforcementLearner = env.remote(ReinforcementLearner.class, ReinforcementLearnerApplication.class);
 
-		final Future<Policy> policyFuture = reinforcementLearner.trainPolicy();
+			final Future<Policy> policyFuture = reinforcementLearner.createPolicy();
 
-		final Policy policy = policyFuture.get();
+			final Policy policy = policyFuture.get();
 
-		System.out.println(policy);
+			System.out.println(policy);
+		} finally {
+			env.close();
+		}
 	}
 
 	/**
 	 * Policy.
 	 */
-	public static class Policy {
+	public static class Policy implements Serializable {
 
+		private static final long serialVersionUID = 8783989119806999887L;
+
+		private final AbstractID policyId = new AbstractID();
+
+		@Override
+		public String toString() {
+			return "Policy{" +
+				"policyId=" + policyId +
+				'}';
+		}
 	}
 
 	/**
 	 * Simulation.
 	 */
-	public static class Simulation {
+	public static class Simulation implements Serializable{
 
+		private static final long serialVersionUID = 2407311891360389324L;
 	}
 
 	public interface ReinforcementLearner {
@@ -107,12 +124,6 @@ public class ApplicationAPIITCase extends TestLogger {
 			System.out.println("trainPolicy");
 			Future<Policy> policy = remoteTask().createPolicy();
 
-			try {
-				Thread.sleep(10000L);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-
 			final Simulator simulator = remoteActor(Simulator.class, DefaultSimulator.class);
 
 			for (int i = 0; i < 100; i++) {
@@ -126,6 +137,7 @@ public class ApplicationAPIITCase extends TestLogger {
 
 		@Override
 		public Future<Policy> createPolicy() {
+			System.out.println("createPolicy");
 			return CompletableFuture.completedFuture(new Policy());
 		}
 

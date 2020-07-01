@@ -19,10 +19,12 @@
 package org.apache.flink.hackathon.invocation;
 
 import org.apache.flink.api.common.JobSubmissionResult;
+import org.apache.flink.hackathon.RedisFuture;
 import org.apache.flink.hackathon.Utils;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.minicluster.MiniCluster;
+import org.apache.flink.util.AbstractID;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.function.FunctionUtils;
 
@@ -52,7 +54,8 @@ public class MiniClusterInvocationHandler implements InvocationHandler {
 
 	@Override
 	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-		final JobGraph jobGraph = buildJobGraph(method, args);
+		final AbstractID futureId = new AbstractID();
+		final JobGraph jobGraph = buildJobGraph(method, args, futureId);
 		final CompletableFuture<JobSubmissionResult> jobSubmissionResult = miniCluster.submitJob(jobGraph);
 
 		if (Void.TYPE.equals(method.getReturnType())) {
@@ -63,10 +66,17 @@ public class MiniClusterInvocationHandler implements InvocationHandler {
 				throw ExceptionUtils.stripExecutionException(ee);
 			}
 		} else {
-			final CompletableFuture<Object> resultFuture = jobSubmissionResult
+			final RedisFuture<Object> resultFuture = new RedisFuture<>(futureId);
+			jobSubmissionResult
 				.thenCompose(ignored -> miniCluster.requestJobResult(jobGraph.getJobID()))
 				.thenApply(FunctionUtils.uncheckedFunction(jobResult -> jobResult.toJobExecutionResult(classLoader)))
-				.thenApply(jobExecutionResult -> jobExecutionResult.getAccumulatorResult("result"));
+				.handle((jobExecutionResult, throwable) -> {
+					if (throwable != null) {
+						resultFuture.completeExceptionally(throwable);
+					}
+
+					return null;
+				});
 
 			if (Future.class.isAssignableFrom(method.getReturnType())) {
 				return resultFuture;
@@ -76,9 +86,9 @@ public class MiniClusterInvocationHandler implements InvocationHandler {
 		}
 	}
 
-	private JobGraph buildJobGraph(Method method, Object[] args) throws IOException {
+	private JobGraph buildJobGraph(Method method, Object[] args, AbstractID outputId) throws IOException {
 		final JobGraph jobGraph = new JobGraph("Application: " + Utils.methodToString(method));
-		final JobVertex jobVertex = org.apache.flink.hackathon.invocation.Utils.createTaskVertex(method, args, implementor);
+		final JobVertex jobVertex = org.apache.flink.hackathon.invocation.Utils.createTaskVertex(method, args, implementor, outputId);
 		jobGraph.addVertex(jobVertex);
 
 		return jobGraph;

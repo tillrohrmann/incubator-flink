@@ -51,6 +51,12 @@
 			<artifactId>reflections</artifactId>
 		</dependency>
 
+		<dependency>
+			<groupId>org.redisson</groupId>
+			<artifactId>redisson</artifactId>
+			<version>3.13.1</version>
+		</dependency>
+
 		<!-- test dependencies -->
 
 		<dependency>

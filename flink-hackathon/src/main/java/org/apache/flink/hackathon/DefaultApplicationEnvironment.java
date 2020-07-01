@@ -21,7 +21,6 @@ package org.apache.flink.hackathon;
 import org.apache.flink.hackathon.invocation.MiniClusterInvocationHandler;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.minicluster.MiniClusterConfiguration;
-import org.apache.flink.util.AutoCloseableAsync;
 
 import java.lang.reflect.Proxy;
 import java.util.concurrent.CompletableFuture;
@@ -29,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Default {@link ApplicationEnvironment}.
  */
-public class DefaultApplicationEnvironment implements ApplicationEnvironment, AutoCloseableAsync {
+public class DefaultApplicationEnvironment implements ApplicationEnvironment {
 
 	private final MiniCluster miniCluster;
 

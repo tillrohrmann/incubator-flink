@@ -21,6 +21,7 @@ package org.apache.flink.hackathon.invocation;
 import org.apache.flink.hackathon.Application;
 import org.apache.flink.hackathon.ApplicationContext;
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.util.AbstractID;
 import org.apache.flink.util.ExceptionUtils;
 
 import java.lang.reflect.InvocationHandler;
@@ -42,7 +43,11 @@ public class RemoteTaskInvocationHandler implements InvocationHandler {
 
 	@Override
 	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-		final JobVertex taskVertex = Utils.createTaskVertex(method, args, implementor);
+		final JobVertex taskVertex = Utils.createTaskVertex(method, args, implementor, new AbstractID());
+
+		if (method.getName().startsWith("toString")) {
+			System.out.println("damn it");
+		}
 
 		final CompletableFuture<Void> executeTaskFuture = applicationContext.executeTask(taskVertex);
 

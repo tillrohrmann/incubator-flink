@@ -22,6 +22,7 @@ import org.apache.flink.hackathon.ApplicationConfig;
 import org.apache.flink.hackathon.RemoteCall;
 import org.apache.flink.hackathon.TaskInvokable;
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.util.AbstractID;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -30,13 +31,14 @@ import java.lang.reflect.Method;
  * Utils.
  */
 public class Utils {
-	static JobVertex createTaskVertex(Method method, Object[] args, Class<?> implementor) throws IOException {
+	static JobVertex createTaskVertex(Method method, Object[] args, Class<?> implementor, AbstractID outptuId) throws IOException {
 		final JobVertex jobVertex = new JobVertex(org.apache.flink.hackathon.Utils.methodToString(method));
 		jobVertex.setInvokableClass(TaskInvokable.class);
 		jobVertex.setParallelism(1);
 
 		final ApplicationConfig applicationConfig = new ApplicationConfig(jobVertex.getConfiguration());
 		applicationConfig.setRemoteCall(RemoteCall.create(implementor, method, args));
+		applicationConfig.setOutputId(outptuId);
 
 		return jobVertex;
 	}
