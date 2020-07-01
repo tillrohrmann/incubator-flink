@@ -16,7 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.flink.hackathon;
+package org.apache.flink.hackathon.messages;
+
+import org.apache.flink.util.AbstractID;
 
 import javax.annotation.Nullable;
 
@@ -25,30 +27,25 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 
 /**
- * RemoteCall.
+ * Actor call.
  */
-public class RemoteCall implements Serializable {
+public class ActorCall implements Serializable {
+	private static final long serialVersionUID = 7726567850037921677L;
 
-	private static final long serialVersionUID = -7504890723710499509L;
-
-	private final String targetClassName;
 	private final String methodName;
 
 	@Nullable
 	private final Class<?>[] argumentTypes;
-
 	@Nullable
 	private final Object[] arguments;
+	@Nullable
+	private final AbstractID outputId;
 
-	public RemoteCall(String targetClassName, String methodName, Class<?>[] argumentTypes, Object[] arguments) {
-		this.targetClassName = targetClassName;
+	public ActorCall(String methodName, @Nullable Class<?>[] argumentTypes, @Nullable Object[] arguments, @Nullable AbstractID outputId) {
 		this.methodName = methodName;
 		this.argumentTypes = argumentTypes;
 		this.arguments = arguments;
-	}
-
-	public String getTargetClass() {
-		return targetClassName;
+		this.outputId = outputId;
 	}
 
 	public String getMethodName() {
@@ -62,33 +59,29 @@ public class RemoteCall implements Serializable {
 
 	@Nullable
 	public Object[] getArguments() {
-		return arguments;
+		return MessageUtils.resolveRedisFutures(arguments);
 	}
 
-	public static RemoteCall create(Class<?> implementor, Method method, Object[] args) {
-		final String methodName = method.getName();
-		final Class<?>[] argumentTypes;
+	@Nullable
+	public AbstractID getOutputId() {
+		return outputId;
+	}
 
-		if (args != null) {
-			argumentTypes = new Class<?>[args.length];
-
-			for (int i = 0; i < args.length; i++) {
-				argumentTypes[i] = args[i].getClass();
-			}
-		} else {
-			argumentTypes = null;
-		}
-
-		return new RemoteCall(implementor.getName(), methodName, argumentTypes, args);
+	public static ActorCall create(Method method, Object[] arguments, @Nullable AbstractID outputId) {
+		return new ActorCall(
+			method.getName(),
+			method.getParameterTypes(),
+			MessageUtils.replaceRedisFutures(arguments),
+			outputId);
 	}
 
 	@Override
 	public String toString() {
-		return "RemoteCall{" +
-			"targetClassName='" + targetClassName + '\'' +
-			", methodName='" + methodName + '\'' +
+		return "ActorCall{" +
+			"methodName='" + methodName + '\'' +
 			", argumentTypes=" + Arrays.toString(argumentTypes) +
 			", arguments=" + Arrays.toString(arguments) +
+			", outputId=" + outputId +
 			'}';
 	}
 }

@@ -16,28 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.flink.hackathon;
+package org.apache.flink.hackathon.invokables;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.hackathon.messages.RemoteCall;
 import org.apache.flink.util.AbstractID;
 import org.apache.flink.util.InstantiationUtil;
-import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
 
 /**
- * ApplicationConfig.
+ * TaskConfiguration.
  */
-public class ApplicationConfig {
+public class TaskConfiguration {
 	private final Configuration configuration;
 
 	private static final String REMOTE_CALL = "remoteCall";
 	private static final String METHOD_NAME = "methodName";
 	private static final String OUTPUT_ID = "outputID";
 
-	public ApplicationConfig(Configuration configuration) {
+	public TaskConfiguration(Configuration configuration) {
 		this.configuration = configuration;
 	}
 

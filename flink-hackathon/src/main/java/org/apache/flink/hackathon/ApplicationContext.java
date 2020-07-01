@@ -30,7 +30,7 @@ public interface ApplicationContext {
 
 	ClassLoader getUserCodeClassLoader();
 
-	<T extends Application<?>> ActorAddress startActor(Class<T> actorClass);
+	<T extends Application<?>> CompletableFuture<Acknowledge> startActor(Class<T> actorClass, ActorAddress actorAddress);
 
 	CompletableFuture<Acknowledge> executeTask(JobVertex taskVertex);
 }

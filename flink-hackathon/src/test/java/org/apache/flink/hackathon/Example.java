@@ -18,119 +18,55 @@
 
 package org.apache.flink.hackathon;
 
-import org.apache.flink.hackathon.redis.ApplicationAPIFutureUtils;
-import org.apache.flink.runtime.concurrent.FutureUtils;
-import org.apache.flink.util.ExceptionUtils;
-import org.apache.flink.util.TestLogger;
-
-import org.junit.Test;
-
-import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Tests for the application API.
+ * Example.
  */
-public class ApplicationAPIITCase extends TestLogger {
-
-	@Test
-	public void testApplicationAPI() throws Exception {
-		final ApplicationEnvironment env = ApplicationEnvironment.getRemoteEnvironment(
-			"localhost",
-			8081,
-			Arrays.asList(
-				new File("/Users/till/work/git/flink/flink-hackathon/target/flink-hackathon_2.11-1.12-SNAPSHOT.jar"),
-				new File("/Users/till/work/git/flink/flink-hackathon/target/flink-hackathon_2.11-1.12-SNAPSHOT-tests.jar")));
-
-//		final ApplicationEnvironment env = ApplicationEnvironment.getEnvironment();
-
-		try {
-			final ReinforcementLearner reinforcementLearner = env.remote(
-				ReinforcementLearner.class,
-				ReinforcementLearnerApplication.class);
-
-			final Future<Policy> policyFuture = reinforcementLearner.trainPolicy();
-
-			final Policy policy = policyFuture.get();
-
-			System.out.println(policy);
-		} finally {
-			env.close();
-		}
-	}
+public class Example {
 
 	/**
 	 * ReinforcementLearnerApplication.
 	 */
-	public static class ReinforcementLearnerApplication extends Application<ReinforcementLearner> implements ReinforcementLearner {
+	public static class ReinforcementLearnerApplication {
 
-		public ReinforcementLearnerApplication(ApplicationContext applicationContext) {
-			super(ReinforcementLearner.class, applicationContext);
-		}
+		public Policy trainPolicy() {
+			Policy policy = createPolicy();
 
-		public Future<Policy> trainPolicy() {
-			Future<Policy> policy = remoteTask().createPolicy();
-
-			final Collection<Simulator> simulators = IntStream.range(0, 5)
-				.mapToObj(ignored -> remoteActor(Simulator.class, DefaultSimulator.class)).collect(Collectors.toList());
+			final Collection<DefaultSimulator> simulators = IntStream.range(0, 5)
+				.mapToObj(ignored -> new DefaultSimulator()).collect(Collectors.toList());
 
 			for (int i = 0; i < 10; i++) {
-				final Future<Policy> currentPolicy = policy;
+				final Policy currentPolicy = policy;
 
-				final Collection<Future<Simulation>> simulationResults = simulators.stream()
+				final Collection<Simulation> simulationResults = simulators.stream()
 					.map(simulator -> simulator.simulate(currentPolicy, 50 + ThreadLocalRandom.current().nextInt(50)))
 					.collect(Collectors.toList());
 
-				final Future<Collection<Simulation>> simulations = ApplicationAPIFutureUtils.combineAll(simulationResults);
+				policy = updatePolicy(policy, simulationResults);
 
-				policy = remoteTask().updatePolicy(policy, simulations);
-
-				System.out.printf("New policy: %s\n", getPolicy(policy));
+				System.out.printf("New policy: %s\n", policy);
 			}
 
 			return policy;
 		}
 
-		private Policy getPolicy(Future<Policy> policy) {
-			try {
-				return policy.get();
-			} catch (InterruptedException | ExecutionException e) {
-				ExceptionUtils.rethrow(e);
-				return null;
-			}
-		}
-
-		@Override
-		public Future<Policy> createPolicy() {
+		public Policy createPolicy() {
 			final Policy policy = new Policy(new double[]{0.5, 0.5});
 
 			System.out.println(String.format("Create initial policy: %s", policy));
 
-			return CompletableFuture.completedFuture(policy);
+			return policy;
 		}
 
-		@Override
-		public Future<Policy> updatePolicy(Future<Policy> policy, Future<Collection<Simulation>> simulations) {
-			final Policy currentPolicy;
-			final Collection<Simulation> currentSimulations;
+		public Policy updatePolicy(Policy policy, Collection<Simulation> simulations) {
 
-			try {
-				currentPolicy = policy.get();
-				currentSimulations = simulations.get();
-			} catch (InterruptedException | ExecutionException e) {
-				return FutureUtils.completedExceptionally(e);
-			}
-
-			Collection<Observation> observations = currentSimulations.stream()
+			Collection<Observation> observations = simulations.stream()
 				.flatMap(simulation -> simulation.getObservations().stream())
 				.collect(Collectors.toList());
 
@@ -143,32 +79,30 @@ public class ApplicationAPIITCase extends TestLogger {
 
 			double[] newActions = new double[2];
 			for (int i = 0; i < 2; i++) {
-				newActions[i] = actionReward[i] / totalReward / 2 + currentPolicy.getActions()[i] / 2;
+				newActions[i] = actionReward[i] / totalReward / 2 + policy.getActions()[i] / 2;
 			}
 
 			final Policy newPolicy = new Policy(newActions);
 
-			return CompletableFuture.completedFuture(newPolicy);
+			return newPolicy;
 		}
 	}
 
 	/**
 	 * Default simulator.
 	 */
-	public static class DefaultSimulator extends Application<Simulator> implements Simulator {
+	public static class DefaultSimulator {
 
 		private final long id;
 
-		public DefaultSimulator(ApplicationContext applicationContext) {
-			super(Simulator.class, applicationContext);
+		public DefaultSimulator() {
 			id = ThreadLocalRandom.current().nextLong();
 		}
 
-		@Override
-		public Future<Simulation> simulate(Future<Policy> policy, int numberSteps) {
+		public Simulation simulate(Policy policy, int numberSteps) {
 			System.out.printf("%s: Start simulating %s steps\n", getName(), numberSteps);
 
-			final Policy currentPolicy = getPolicy(policy);
+			final Policy currentPolicy = policy;
 
 			Collection<Observation> observations = new ArrayList<>(numberSteps);
 
@@ -178,16 +112,7 @@ public class ApplicationAPIITCase extends TestLogger {
 
 			System.out.printf("%s: Finished simulating %s steps\n", getName(), numberSteps);
 
-			return CompletableFuture.completedFuture(new Simulation(observations));
-		}
-
-		private Policy getPolicy(Future<Policy> policyFuture) {
-			try {
-				return policyFuture.get();
-			} catch (InterruptedException | ExecutionException e) {
-				ExceptionUtils.rethrow(e);
-				return null;
-			}
+			return new Simulation(observations);
 		}
 
 		private Observation simulateStep(Policy policy) {
@@ -203,11 +128,6 @@ public class ApplicationAPIITCase extends TestLogger {
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 			}
-		}
-
-		@Override
-		public void printStats() {
-			System.out.println(getName());
 		}
 
 		private String getName() {
@@ -286,25 +206,5 @@ public class ApplicationAPIITCase extends TestLogger {
 		public double getReward() {
 			return reward;
 		}
-	}
-
-	/**
-	 * ReinforcementLearner.
-	 */
-	public interface ReinforcementLearner {
-		Future<Policy> trainPolicy();
-
-		Future<Policy> createPolicy();
-
-		Future<Policy> updatePolicy(Future<Policy> policy, Future<Collection<Simulation>> simulation);
-	}
-
-	/**
-	 * Simulator.
-	 */
-	public interface Simulator {
-		Future<Simulation> simulate(Future<Policy> policy, int numberSteps);
-
-		void printStats();
 	}
 }

@@ -18,30 +18,31 @@
 
 package org.apache.flink.hackathon;
 
+import org.apache.flink.client.deployment.StandaloneClusterId;
+import org.apache.flink.client.program.rest.RestClusterClient;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.WebOptions;
-import org.apache.flink.hackathon.handlers.MiniClusterInvocationHandler;
-import org.apache.flink.runtime.minicluster.MiniCluster;
-import org.apache.flink.runtime.minicluster.MiniClusterConfiguration;
+import org.apache.flink.configuration.RestOptions;
+import org.apache.flink.hackathon.handlers.RestClusterClientInvocationHandler;
 
+import java.io.File;
 import java.lang.reflect.Proxy;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Default {@link ApplicationEnvironment}.
+ * RemoteApplicationEnvironment.
  */
-public class DefaultApplicationEnvironment implements ApplicationEnvironment {
+public class RemoteApplicationEnvironment implements ApplicationEnvironment {
+	private final RestClusterClient<StandaloneClusterId> restClusterClient;
+	private final Collection<File> jarFiles;
 
-	private final MiniCluster miniCluster;
-
-	public DefaultApplicationEnvironment() throws Exception {
+	public RemoteApplicationEnvironment(String restAddress, int restPort, Collection<File> jarFiles) throws Exception {
 		final Configuration configuration = new Configuration();
-		configuration.setLong(WebOptions.REFRESH_INTERVAL, 100);
-		this.miniCluster = new MiniCluster(new MiniClusterConfiguration.Builder()
-			.setConfiguration(configuration)
-			.setNumSlotsPerTaskManager(10)
-			.build());
-		miniCluster.start();
+		configuration.set(RestOptions.ADDRESS, restAddress);
+		configuration.set(RestOptions.PORT, restPort);
+
+		this.restClusterClient = new RestClusterClient<>(configuration, StandaloneClusterId.getInstance());
+		this.jarFiles = jarFiles;
 	}
 
 	@Override
@@ -49,11 +50,13 @@ public class DefaultApplicationEnvironment implements ApplicationEnvironment {
 		return (T) Proxy.newProxyInstance(
 			getClass().getClassLoader(),
 			new Class[]{type},
-			new MiniClusterInvocationHandler(miniCluster, implementor));
+			new RestClusterClientInvocationHandler(implementor, restClusterClient, jarFiles));
 	}
 
 	@Override
 	public CompletableFuture<Void> closeAsync() {
-		return miniCluster.closeAsync();
+		restClusterClient.close();
+
+		return CompletableFuture.completedFuture(null);
 	}
 }

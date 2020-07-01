@@ -50,7 +50,7 @@ public class RestartPipelinedRegionFailoverStrategy implements FailoverStrategy 
 	private static final Logger LOG = LoggerFactory.getLogger(RestartPipelinedRegionFailoverStrategy.class);
 
 	/** The topology containing info about all the vertices and result partitions. */
-	private final SchedulingTopology topology;
+	private SchedulingTopology topology;
 
 	/** The checker helps to query result partition availability. */
 	private final RegionFailoverResultPartitionAvailabilityChecker resultPartitionAvailabilityChecker;
@@ -132,6 +132,11 @@ public class RestartPipelinedRegionFailoverStrategy implements FailoverStrategy 
 
 		LOG.info("{} tasks should be restarted to recover the failed task {}. ", tasksToRestart.size(), executionVertexId);
 		return tasksToRestart;
+	}
+
+	@Override
+	public void updateTopology(SchedulingTopology schedulingTopology) {
+		this.topology = schedulingTopology;
 	}
 
 	/**

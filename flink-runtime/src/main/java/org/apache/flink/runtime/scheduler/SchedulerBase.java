@@ -68,6 +68,7 @@ import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
+import org.apache.flink.runtime.jobgraph.jsonplan.JsonPlanGenerator;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
 import org.apache.flink.runtime.jobmanager.scheduler.CoLocationGroup;
 import org.apache.flink.runtime.jobmaster.SerializedInputSplit;
@@ -447,7 +448,11 @@ public abstract class SchedulerBase implements SchedulerNG {
 
 	@Override
 	public void attachVertices(List<JobVertex> vertices) throws Exception {
+		for (JobVertex vertex : vertices) {
+			jobGraph.addVertex(vertex);
+		}
 		executionGraph.attachJobGraph(vertices);
+		executionGraph.setJsonPlan(JsonPlanGenerator.generatePlan(jobGraph));
 	}
 
 	@Override

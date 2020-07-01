@@ -18,11 +18,13 @@
 
 package org.apache.flink.hackathon;
 
-import org.apache.flink.hackathon.invocation.RemoteActorInvocationHandler;
-import org.apache.flink.hackathon.invocation.RemoteTaskInvocationHandler;
+import org.apache.flink.hackathon.handlers.RemoteActorInvocationHandler;
+import org.apache.flink.hackathon.handlers.RemoteTaskInvocationHandler;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.util.Preconditions;
 
 import java.lang.reflect.Proxy;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Application.
@@ -51,7 +53,10 @@ public class Application<T> {
 	}
 
 	<V, W extends Application<V>> V remoteActor(Class<V> type, Class<W> implementor) {
-		final ActorAddress actorAddress = applicationContext.startActor(implementor);
+		final ActorAddress actorAddress = ActorAddress.create();
+		final CompletableFuture<Acknowledge> startActorFuture = applicationContext.startActor(implementor, actorAddress);
+
+		startActorFuture.join();
 
 		return (V) Proxy.newProxyInstance(
 			applicationContext.getUserCodeClassLoader(),

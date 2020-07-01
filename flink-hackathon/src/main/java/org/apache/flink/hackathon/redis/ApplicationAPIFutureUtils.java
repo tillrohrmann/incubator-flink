@@ -16,19 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.flink.hackathon;
+package org.apache.flink.hackathon.redis;
 
-import java.lang.reflect.Method;
+import org.apache.flink.util.AbstractID;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.concurrent.Future;
 
 /**
- * InvocationUtils.
+ * ApplicationAPIFutureUtils.
  */
-public class Utils {
-	public static String methodToString(Method method) {
-		return method.toString();
-	}
+public class ApplicationAPIFutureUtils {
 
-	public static <T extends Application<?>> String actorToString(Class<T> actorClass) {
-		return actorClass.getName();
+	public static <T> Future<Collection<T>> combineAll(Collection<Future<T>> futures) {
+		final Collection<AbstractID> futureIds = new ArrayList<>();
+
+		for (Future<T> future : futures) {
+			if (future instanceof RedisFuture) {
+				futureIds.add(((RedisFuture<T>) future).getFutureId());
+			} else {
+				throw new IllegalArgumentException("Cannot combine non redis futures.");
+			}
+		}
+
+		return new RedisCollectionFuture<>(futureIds);
 	}
 }

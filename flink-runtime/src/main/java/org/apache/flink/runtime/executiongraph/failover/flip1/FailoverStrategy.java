@@ -36,6 +36,8 @@ public interface FailoverStrategy {
 	 */
 	Set<ExecutionVertexID> getTasksNeedingRestart(ExecutionVertexID executionVertexId, Throwable cause);
 
+	default void updateTopology(SchedulingTopology schedulingTopology) {}
+
 	// ------------------------------------------------------------------------
 	//  factory
 	// ------------------------------------------------------------------------

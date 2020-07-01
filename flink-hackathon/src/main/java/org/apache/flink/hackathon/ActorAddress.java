@@ -18,12 +18,32 @@
 
 package org.apache.flink.hackathon;
 
-import java.util.UUID;
+import org.apache.flink.util.AbstractID;
 
-public class ActorAddress {
-	private final UUID actorAddress;
+import java.io.Serializable;
 
-	public ActorAddress(UUID actorAddress) {
+/**
+ * ActorAddress.
+ */
+public class ActorAddress implements Serializable {
+	private static final long serialVersionUID = -6020274916813582365L;
+
+	private final AbstractID actorAddress;
+
+	public ActorAddress(AbstractID actorAddress) {
 		this.actorAddress = actorAddress;
+	}
+
+	public AbstractID getActorAddress() {
+		return actorAddress;
+	}
+
+	public static ActorAddress create() {
+		return new ActorAddress(new AbstractID());
+	}
+
+	@Override
+	public String toString() {
+		return actorAddress.toString();
 	}
 }

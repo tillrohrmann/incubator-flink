@@ -16,19 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.flink.hackathon;
+package org.apache.flink.hackathon.messages;
 
-import java.lang.reflect.Method;
+import java.io.Serializable;
 
 /**
- * InvocationUtils.
+ * Stop actor message.
  */
-public class Utils {
-	public static String methodToString(Method method) {
-		return method.toString();
-	}
-
-	public static <T extends Application<?>> String actorToString(Class<T> actorClass) {
-		return actorClass.getName();
-	}
+public class StopActor implements Serializable {
+	private static final long serialVersionUID = 4396318863227153062L;
 }

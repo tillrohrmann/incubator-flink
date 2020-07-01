@@ -26,9 +26,15 @@ import org.redisson.config.Config;
  * Redis utils.
  */
 public class RedisUtils {
-	public static RedissonClient createClient() {
+	private static final RedissonClient redissonClient;
+
+	static {
 		Config config = new Config();
 		config.useSingleServer().setAddress("redis://127.0.0.1:6379");
-		return Redisson.create(config);
+		redissonClient = Redisson.create(config);
+	}
+
+	public static RedissonClient createClient() {
+		return redissonClient;
 	}
 }

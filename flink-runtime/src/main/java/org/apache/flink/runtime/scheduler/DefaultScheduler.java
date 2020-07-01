@@ -177,6 +177,7 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
 	@Override
 	protected void updateTopology(SchedulingTopology schedulingTopology) {
 		schedulingStrategy.updateTopology(schedulingTopology);
+		executionFailureHandler.updateTopology(schedulingTopology);
 	}
 
 	@Override

@@ -16,10 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.flink.hackathon.invocation;
+package org.apache.flink.hackathon.handlers;
 
 import org.apache.flink.hackathon.Application;
 import org.apache.flink.hackathon.ApplicationContext;
+import org.apache.flink.hackathon.invokables.InvocationUtils;
 import org.apache.flink.hackathon.redis.RedisFuture;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -53,7 +54,7 @@ public class RemoteTaskInvocationHandler implements InvocationHandler {
 			futureId = new AbstractID();
 		}
 
-		final JobVertex taskVertex = Utils.createTaskVertex(method, args, implementor, futureId);
+		final JobVertex taskVertex = InvocationUtils.createTaskVertex(method, args, implementor, futureId);
 
 		if (method.getName().startsWith("toString")) {
 			System.out.println("damn it");

@@ -21,10 +21,17 @@ package org.apache.flink.hackathon;
 import org.apache.flink.util.AutoCloseableAsync;
 import org.apache.flink.util.ExceptionUtils;
 
+import java.io.File;
+import java.util.Collection;
+
 /**
  * ApplicationEnvironment.
  */
 public interface ApplicationEnvironment extends AutoCloseableAsync {
+	static ApplicationEnvironment getRemoteEnvironment(String restAddress, int restPort, Collection<File> jarFiles) throws Exception {
+		return new RemoteApplicationEnvironment(restAddress, restPort, jarFiles);
+	}
+
 	<T, V extends Application<T>> T remote(Class<T> type, Class<V> implementor);
 
 	static ApplicationEnvironment getEnvironment() {

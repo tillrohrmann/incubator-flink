@@ -38,7 +38,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  */
 public class ExecutionFailureHandler {
 
-	private final SchedulingTopology schedulingTopology;
+	private SchedulingTopology schedulingTopology;
 
 	/** Strategy to judge which tasks should be restarted. */
 	private final FailoverStrategy failoverStrategy;
@@ -128,5 +128,10 @@ public class ExecutionFailureHandler {
 
 	public long getNumberOfRestarts() {
 		return numberOfRestarts;
+	}
+
+	public void updateTopology(SchedulingTopology schedulingTopology) {
+		this.schedulingTopology = schedulingTopology;
+		failoverStrategy.updateTopology(schedulingTopology);
 	}
 }

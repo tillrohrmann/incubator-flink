@@ -16,8 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.flink.hackathon;
+package org.apache.flink.hackathon.invokables;
 
+import org.apache.flink.hackathon.Application;
+import org.apache.flink.hackathon.ApplicationContext;
+import org.apache.flink.hackathon.DefaultApplicationContext;
+import org.apache.flink.hackathon.FutureReference;
+import org.apache.flink.hackathon.FutureValue;
 import org.apache.flink.hackathon.redis.RedisFuture;
 import org.apache.flink.hackathon.redis.RedisUtils;
 import org.apache.flink.runtime.execution.Environment;
@@ -25,36 +30,29 @@ import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 import org.apache.flink.util.AbstractID;
 
 import org.redisson.api.RBucket;
-import org.redisson.api.RMap;
 import org.redisson.api.RedissonClient;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.util.concurrent.Future;
 
 /**
- * TaskInvokable.
+ * AbstractAppliationInvokable.
  */
-public class TaskInvokable extends AbstractInvokable {
+public abstract class AbstractApplicationInvokable extends AbstractInvokable {
 
-	private final ApplicationContext applicationContext;
+	protected  final ApplicationContext applicationContext;
 
 	/**
 	 * Create an Invokable task and set its environment.
 	 *
 	 * @param environment The environment assigned to this invokable.
 	 */
-	public TaskInvokable(Environment environment) {
+	public AbstractApplicationInvokable(Environment environment) {
 		super(environment);
 		applicationContext = new DefaultApplicationContext(getUserCodeClassLoader(), getEnvironment().getTaskExecutorActions());
 	}
 
-	@Override
-	public void invoke() throws Exception  {
-		final ApplicationConfig applicationConfig = new ApplicationConfig(getTaskConfiguration());
-		final RemoteCall remoteCall = applicationConfig.getRemoteCall(getUserCodeClassLoader());
-		final String targetClassName = remoteCall.getTargetClass();
-
+	protected Class<? extends Application> loadApplicationClass(String targetClassName) throws ClassNotFoundException {
 		final Class<?> clazz = getUserCodeClassLoader().loadClass(targetClassName);
 
 		final Class<? extends Application> targetClass;
@@ -64,15 +62,23 @@ public class TaskInvokable extends AbstractInvokable {
 		} else {
 			throw new RuntimeException("Target class does not implement Application.");
 		}
+		return targetClass;
+	}
 
-		final Application<?> application = instantiateApplication(targetClass);
+	protected Application<?> instantiateApplication(Class<? extends Application> targetClass) throws Exception {
+		final Constructor<? extends Application> constructor = targetClass.getConstructor(ApplicationContext.class);
 
-		final Method method = targetClass.getMethod(remoteCall.getMethodName(), remoteCall.getArgumentTypes());
+		return constructor.newInstance(applicationContext);
+	}
 
-		final Object result = method.invoke(application, remoteCall.getArguments());
+	protected Application<?> loadAndInstantiateApplicationClass(String className) throws Exception {
+		final Class<? extends Application> applicationClass = loadApplicationClass(className);
+		return instantiateApplication(applicationClass);
+	}
 
+	protected void outputResult(Object result, AbstractID outputId) throws InterruptedException, java.util.concurrent.ExecutionException {
 		final RedissonClient redissonClient = RedisUtils.createClient();
-		final RBucket<Object> bucket = redissonClient.getBucket(applicationConfig.getOutputId().toString());
+		final RBucket<Object> bucket = redissonClient.getBucket(outputId.toString());
 
 		if (result instanceof RedisFuture) {
 			bucket.set(FutureReference.of(((RedisFuture<?>) result).getFutureId()));
@@ -86,11 +92,5 @@ public class TaskInvokable extends AbstractInvokable {
 
 			bucket.set(FutureValue.of(value));
 		}
-	}
-
-	private Application<?> instantiateApplication(Class<? extends Application> targetClass) throws Exception {
-		final Constructor<? extends Application> constructor = targetClass.getConstructor(ApplicationContext.class);
-
-		return constructor.newInstance(applicationContext);
 	}
 }

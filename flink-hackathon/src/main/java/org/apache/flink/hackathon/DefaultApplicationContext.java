@@ -18,10 +18,13 @@
 
 package org.apache.flink.hackathon;
 
+import org.apache.flink.hackathon.invokables.InvocationUtils;
+import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorActions;
 
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -42,8 +45,15 @@ public class DefaultApplicationContext implements ApplicationContext {
 	}
 
 	@Override
-	public <T extends Application<?>> ActorAddress startActor(Class<T> actorClass) {
-		return null;
+	public <T extends Application<?>> CompletableFuture<Acknowledge> startActor(Class<T> actorClass, ActorAddress actorAddress) {
+		final JobVertex actorVertex;
+		try {
+			actorVertex = InvocationUtils.createActorVertex(actorClass, actorAddress);
+		} catch (IOException e) {
+			return FutureUtils.completedExceptionally(e);
+		}
+
+		return taskExecutorActions.executeTask(actorVertex);
 	}
 
 	@Override
