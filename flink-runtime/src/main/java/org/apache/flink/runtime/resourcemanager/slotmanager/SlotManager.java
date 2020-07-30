@@ -28,6 +28,7 @@ import org.apache.flink.runtime.resourcemanager.SlotRequest;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerException;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
+import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 
 import java.util.Map;
@@ -83,6 +84,12 @@ public interface SlotManager extends AutoCloseable {
 	 * Suspends the component. This clears the internal state of the slot manager.
 	 */
 	void suspend();
+
+	/**
+	 * TODO: Add javadoc.
+	 * @param resourceRequirements
+	 */
+	void processResourceRequirements(ResourceRequirements resourceRequirements);
 
 	/**
 	 * Requests a slot with the respective resource profile.
