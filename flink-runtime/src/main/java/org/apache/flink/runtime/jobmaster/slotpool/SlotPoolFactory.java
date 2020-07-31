@@ -19,6 +19,12 @@
 package org.apache.flink.runtime.jobmaster.slotpool;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.api.common.time.Time;
+import org.apache.flink.configuration.ClusterOptions;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.JobManagerOptions;
+import org.apache.flink.runtime.akka.AkkaUtils;
+import org.apache.flink.util.clock.SystemClock;
 
 import javax.annotation.Nonnull;
 
@@ -29,4 +35,24 @@ public interface SlotPoolFactory {
 
 	@Nonnull
 	SlotPool createSlotPool(@Nonnull JobID jobId);
+
+	static SlotPoolFactory fromConfiguration(Configuration configuration) {
+		final Time rpcTimeout = AkkaUtils.getTimeoutAsTime(configuration);
+		final Time slotIdleTimeout = Time.milliseconds(configuration.getLong(JobManagerOptions.SLOT_IDLE_TIMEOUT));
+		final Time batchSlotTimeout = Time.milliseconds(configuration.getLong(JobManagerOptions.SLOT_REQUEST_TIMEOUT));
+
+		if (configuration.get(ClusterOptions.ENABLE_DECLARATIVE_RESOURCE_MANAGEMENT)) {
+			return new DeclarativeSlotPoolFactory(
+				SystemClock.getInstance(),
+				rpcTimeout,
+				slotIdleTimeout,
+				batchSlotTimeout);
+		} else {
+			return new DefaultSlotPoolFactory(
+				SystemClock.getInstance(),
+				rpcTimeout,
+				slotIdleTimeout,
+				batchSlotTimeout);
+		}
+	}
 }

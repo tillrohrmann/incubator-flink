@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,25 +22,22 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.util.clock.Clock;
 
-import javax.annotation.Nonnull;
-
 /**
- * Default slot pool factory.
+ * {@link SlotPoolFactory} for {@link DeclarativeSlotPoolImpl}.
  */
-public class DefaultSlotPoolFactory extends AbstractSlotPoolFactory {
+public class DeclarativeSlotPoolFactory extends AbstractSlotPoolFactory {
 
-	public DefaultSlotPoolFactory(
-			@Nonnull Clock clock,
-			@Nonnull Time rpcTimeout,
-			@Nonnull Time slotIdleTimeout,
-			@Nonnull Time batchSlotTimeout) {
+	public DeclarativeSlotPoolFactory(
+			Clock clock,
+			Time rpcTimeout,
+			Time slotIdleTimeout,
+			Time batchSlotTimeout) {
 		super(clock, rpcTimeout, slotIdleTimeout, batchSlotTimeout);
 	}
 
 	@Override
-	@Nonnull
-	public SlotPool createSlotPool(@Nonnull JobID jobId) {
-		return new SlotPoolImpl(
+	public SlotPool createSlotPool(JobID jobId) {
+		return new DeclarativeSlotPoolImpl(
 			jobId,
 			clock,
 			rpcTimeout,

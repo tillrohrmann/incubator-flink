@@ -176,7 +176,7 @@ public class JobMasterBuilder {
 			jmResourceId,
 			jobGraph,
 			highAvailabilityServices,
-			slotPoolFactory != null ? slotPoolFactory : DefaultSlotPoolFactory.fromConfiguration(configuration),
+			slotPoolFactory != null ? slotPoolFactory : SlotPoolFactory.fromConfiguration(configuration),
 			schedulerFactory != null ? schedulerFactory : DefaultSchedulerFactory.fromConfiguration(configuration),
 			jobManagerSharedServices,
 			heartbeatServices,
