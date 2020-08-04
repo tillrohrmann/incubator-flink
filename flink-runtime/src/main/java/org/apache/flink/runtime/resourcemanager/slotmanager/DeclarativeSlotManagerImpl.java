@@ -595,28 +595,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	// ---------------------------------------------------------------------------------------------
 
 	/**
-	 * Finds a matching slot request for a given resource profile. If there is no such request,
-	 * the method returns null.
-	 *
-	 * <p>Note: If you want to change the behaviour of the slot manager wrt slot allocation and
-	 * request fulfillment, then you should override this method.
-	 *
-	 * @param slotResourceProfile defining the resources of an available slot
-	 * @return A matching slot request which can be deployed in a slot with the given resource
-	 * profile. Null if there is no such slot request pending.
-	 */
-	private PendingSlotRequest findMatchingRequest(ResourceProfile slotResourceProfile) {
-
-		for (PendingSlotRequest pendingSlotRequest : pendingSlotRequests.values()) {
-			if (!pendingSlotRequest.isAssigned() && slotResourceProfile.isMatching(pendingSlotRequest.getResourceProfile())) {
-				return pendingSlotRequest;
-			}
-		}
-
-		return null;
-	}
-
-	/**
 	 * Finds a matching slot for a given resource profile. A matching slot has at least as many
 	 * resources available as the given resource profile. If there is no such slot available, then
 	 * the method returns null.
@@ -1071,13 +1049,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	private void handleFreeSlot(TaskManagerSlot freeSlot) {
 		Preconditions.checkState(freeSlot.getState() == TaskManagerSlot.State.FREE);
 
-		PendingSlotRequest pendingSlotRequest = findMatchingRequest(freeSlot.getResourceProfile());
+		freeSlots.put(freeSlot.getSlotId(), freeSlot);
 
-		if (null != pendingSlotRequest) {
-			allocateSlot(freeSlot, pendingSlotRequest);
-		} else {
-			freeSlots.put(freeSlot.getSlotId(), freeSlot);
-		}
+		checkWhetherAnyResourceRequirementsCanBeFulfilled();
 	}
 
 	/**
