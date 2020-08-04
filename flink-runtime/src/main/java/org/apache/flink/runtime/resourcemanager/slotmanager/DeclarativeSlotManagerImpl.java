@@ -596,8 +596,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	/**
 	 * Finds a matching slot for a given resource profile. A matching slot has at least as many
-	 * resources available as the given resource profile. If there is no such slot available, then
-	 * the method returns null.
+	 * resources available as the given resource profile.
 	 *
 	 * <p>Note: If you want to change the behaviour of the slot manager wrt slot allocation and
 	 * request fulfillment, then you should override this method.
