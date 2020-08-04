@@ -35,6 +35,7 @@ import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerException;
 import org.apache.flink.runtime.resourcemanager.exceptions.UnfulfillableSlotRequestException;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
+import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.SlotStatus;
@@ -53,6 +54,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -101,6 +103,8 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	/** Map of pending/unfulfilled slot allocation requests. */
 	private final HashMap<AllocationID, PendingSlotRequest> pendingSlotRequests;
+
+	private final Map<JobID, ResourceRequirements> resourceRequirementsByJob = new HashMap<>();
 
 	private final HashMap<TaskManagerSlotId, PendingTaskManagerSlot> pendingSlots;
 
@@ -369,7 +373,50 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	@Override
 	public void processResourceRequirements(ResourceRequirements resourceRequirements) {
-		throw new UnsupportedOperationException();
+		checkInit();
+
+		if (internalProcessResourceRequirements(resourceRequirements)) {
+			checkWhetherAnyResourceRequirementsCanBeFulfilled();
+		}
+	}
+
+	private boolean internalProcessResourceRequirements(ResourceRequirements resourceRequirements) {
+		ResourceRequirements previousResourceRequirements = this.resourceRequirementsByJob.put(resourceRequirements.getJobId(), resourceRequirements);
+		if (previousResourceRequirements != null) {
+			Optional<ResourceRequirements> newlyRequiredResources = computeNewlyRequiredResources(previousResourceRequirements, resourceRequirements);
+			if (newlyRequiredResources.isPresent()) {
+				createSlotRequestsFor(newlyRequiredResources.get());
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private Optional<ResourceRequirements> computeNewlyRequiredResources(ResourceRequirements previousResourceRequirements, ResourceRequirements currentResourceRequirements) {
+		final Collection<ResourceRequirement> newlyRequiredResources = new ArrayList<>();
+
+		// TODO
+
+		return newlyRequiredResources.isEmpty()
+			? Optional.empty()
+			: Optional.of(new ResourceRequirements(currentResourceRequirements.getJobId(), currentResourceRequirements.getTargetAddress(), newlyRequiredResources));
+	}
+
+	private void createSlotRequestsFor(ResourceRequirements requirements) {
+		// TODO
+	}
+
+	private void checkResourceRequirements() {
+		checkWhetherAnyResourceRequirementsAreNoLongerFulfilled();
+		checkWhetherAnyResourceRequirementsCanBeFulfilled();
+	}
+
+	private void checkWhetherAnyResourceRequirementsAreNoLongerFulfilled() {
+		// TODO
+	}
+
+	private void checkWhetherAnyResourceRequirementsCanBeFulfilled() {
+		// TODO
 	}
 
 	@Override
@@ -430,6 +477,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					taskExecutorConnection);
 			}
 
+			checkWhetherAnyResourceRequirementsCanBeFulfilled();
 			return true;
 		}
 
@@ -445,6 +493,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		if (null != taskManagerRegistration) {
 			internalUnregisterTaskManager(taskManagerRegistration, cause);
+			checkWhetherAnyResourceRequirementsAreNoLongerFulfilled();
 
 			return true;
 		} else {
@@ -475,6 +524,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				updateSlot(slotStatus.getSlotID(), slotStatus.getAllocationID(), slotStatus.getJobID());
 			}
 
+			checkResourceRequirements();
 			return true;
 		} else {
 			LOG.debug("Received slot report for unknown task manager with instance id {}. Ignoring this report.", instanceId);
@@ -508,6 +558,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					}
 
 					updateSlotState(slot, taskManagerRegistration, null, null);
+					checkResourceRequirements();
 				} else {
 					LOG.debug("Received request to free slot {} with expected allocation id {}, " +
 						"but actual allocation id {} differs. Ignoring the request.", slotId, allocationId, slot.getAllocationId());
