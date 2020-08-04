@@ -372,63 +372,14 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		throw new UnsupportedOperationException();
 	}
 
-	/**
-	 * Requests a slot with the respective resource profile.
-	 *
-	 * @param slotRequest specifying the requested slot specs
-	 * @return true if the slot request was registered; false if the request is a duplicate
-	 * @throws ResourceManagerException if the slot request failed (e.g. not enough resources left)
-	 */
 	@Override
-	public boolean registerSlotRequest(SlotRequest slotRequest) throws ResourceManagerException {
-		checkInit();
-
-		if (checkDuplicateRequest(slotRequest.getAllocationId())) {
-			LOG.debug("Ignoring a duplicate slot request with allocation id {}.", slotRequest.getAllocationId());
-
-			return false;
-		} else {
-			PendingSlotRequest pendingSlotRequest = new PendingSlotRequest(slotRequest);
-
-			pendingSlotRequests.put(slotRequest.getAllocationId(), pendingSlotRequest);
-
-			try {
-				internalRequestSlot(pendingSlotRequest);
-			} catch (ResourceManagerException e) {
-				// requesting the slot failed --> remove pending slot request
-				pendingSlotRequests.remove(slotRequest.getAllocationId());
-
-				throw new ResourceManagerException("Could not fulfill slot request " + slotRequest.getAllocationId() + '.', e);
-			}
-
-			return true;
-		}
+	public boolean registerSlotRequest(SlotRequest slotRequest) {
+		throw new UnsupportedOperationException();
 	}
 
-	/**
-	 * Cancels and removes a pending slot request with the given allocation id. If there is no such
-	 * pending request, then nothing is done.
-	 *
-	 * @param allocationId identifying the pending slot request
-	 * @return True if a pending slot request was found; otherwise false
-	 */
 	@Override
 	public boolean unregisterSlotRequest(AllocationID allocationId) {
-		checkInit();
-
-		PendingSlotRequest pendingSlotRequest = pendingSlotRequests.remove(allocationId);
-
-		if (null != pendingSlotRequest) {
-			LOG.debug("Cancel slot request {}.", allocationId);
-
-			cancelPendingSlotRequest(pendingSlotRequest);
-
-			return true;
-		} else {
-			LOG.debug("No pending slot request with allocation id {} found. Ignoring unregistration request.", allocationId);
-
-			return false;
-		}
+		throw new UnsupportedOperationException();
 	}
 
 	/**
