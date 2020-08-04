@@ -1155,23 +1155,15 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	 * @param cause of the failure
 	 */
 	private void handleFailedSlotRequest(SlotID slotId, AllocationID allocationId, Throwable cause) {
-		PendingSlotRequest pendingSlotRequest = pendingSlotRequests.get(allocationId);
+		PendingSlotRequest pendingSlotRequest = pendingSlotRequests.remove(allocationId);
 
 		LOG.debug("Slot request with allocation id {} failed for slot {}.", allocationId, slotId, cause);
 
 		if (null != pendingSlotRequest) {
 			pendingSlotRequest.setRequestFuture(null);
 
-			try {
-				internalRequestSlot(pendingSlotRequest);
-			} catch (ResourceManagerException e) {
-				pendingSlotRequests.remove(allocationId);
-
-				resourceActions.notifyAllocationFailure(
-					pendingSlotRequest.getJobId(),
-					allocationId,
-					e);
-			}
+			waitingSlotRequests.put(pendingSlotRequest.getAllocationId(), pendingSlotRequest);
+			checkWhetherAnyResourceRequirementsCanBeFulfilled();
 		} else {
 			LOG.debug("There was not pending slot request with allocation id {}. Probably the request has been fulfilled or cancelled.", allocationId);
 		}
