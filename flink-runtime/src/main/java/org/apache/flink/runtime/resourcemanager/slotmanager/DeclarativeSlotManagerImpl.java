@@ -98,6 +98,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	/** All currently registered task managers. */
 	private final HashMap<InstanceID, TaskManagerRegistration> taskManagerRegistrations;
 
+	/** Map of waiting slot allocation requests; a linked hashmap to preserve insertion order for FIFO processing. */
+	private final LinkedHashMap<AllocationID, PendingSlotRequest> waitingSlotRequests = new LinkedHashMap<>();
+
 	/** Map of pending/unfulfilled slot allocation requests. */
 	private final HashMap<AllocationID, PendingSlotRequest> pendingSlotRequests;
 
@@ -399,7 +402,18 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	private void createSlotRequestsFor(ResourceRequirements requirements) {
-		// TODO
+		// TODO: take currently allocated slots into account, in case the job currently has more slots than previously required (== less requests required)
+		for (ResourceRequirement resourceRequirement : requirements.getResourceRequirements()) {
+			for (int x = 0; x < resourceRequirement.getNumberOfRequiredSlots(); x++) {
+				PendingSlotRequest pendingSlotRequest = new PendingSlotRequest(new SlotRequest(
+					requirements.getJobId(),
+					new AllocationID(),
+					resourceRequirement.getResourceProfile(),
+					requirements.getTargetAddress()));
+
+				waitingSlotRequests.put(pendingSlotRequest.getAllocationId(), pendingSlotRequest);
+			}
+		}
 	}
 
 	private void checkResourceRequirements() {
