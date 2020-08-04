@@ -20,6 +20,7 @@ package org.apache.flink.runtime.resourcemanager;
 
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.ClusterOptions;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ResourceManagerOptions;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.ClusterInformation;
@@ -67,6 +68,7 @@ public class ResourceManagerHATest extends TestLogger {
 
 		TestingHeartbeatServices heartbeatServices = new TestingHeartbeatServices();
 
+		final Configuration configuration = new Configuration();
 		ResourceManagerRuntimeServicesConfiguration resourceManagerRuntimeServicesConfiguration = new ResourceManagerRuntimeServicesConfiguration(
 			Time.seconds(5L),
 			new SlotManagerConfiguration(
@@ -79,7 +81,7 @@ public class ResourceManagerHATest extends TestLogger {
 				1,
 				ResourceManagerOptions.MAX_SLOT_NUM.defaultValue(),
 				ResourceManagerOptions.REDUNDANT_TASK_MANAGER_NUM.defaultValue()),
-			ClusterOptions.ENABLE_DECLARATIVE_RESOURCE_MANAGEMENT.defaultValue());
+			ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
 		ResourceManagerRuntimeServices resourceManagerRuntimeServices = ResourceManagerRuntimeServices.fromConfiguration(
 			resourceManagerRuntimeServicesConfiguration,
 			highAvailabilityServices,

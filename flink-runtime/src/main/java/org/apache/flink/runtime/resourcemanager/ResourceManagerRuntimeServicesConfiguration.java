@@ -76,7 +76,7 @@ public class ResourceManagerRuntimeServicesConfiguration {
 		final SlotManagerConfiguration slotManagerConfiguration =
 			SlotManagerConfiguration.fromConfiguration(configuration, defaultWorkerResourceSpec);
 
-		final boolean enableDeclarativeResourceManagement = configuration.get(ClusterOptions.ENABLE_DECLARATIVE_RESOURCE_MANAGEMENT);
+		final boolean enableDeclarativeResourceManagement = ClusterOptions.isDeclarativeResourceManagementEnabled(configuration);
 
 		return new ResourceManagerRuntimeServicesConfiguration(jobTimeout, slotManagerConfiguration, enableDeclarativeResourceManagement);
 	}
