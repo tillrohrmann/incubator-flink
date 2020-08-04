@@ -27,6 +27,7 @@ STAGE_KAFKA_GELLY="kafka/gelly"
 STAGE_TESTS="tests"
 STAGE_MISC="misc"
 STAGE_CLEANUP="cleanup"
+STAGE_DECLARATIVE="declarative"
 
 MODULES_CORE="\
 flink-annotations,\
@@ -126,6 +127,8 @@ flink-connectors/flink-sql-connector-kafka,"
 MODULES_TESTS="\
 flink-tests"
 
+MODULES_DECLARATIVE=${MODULES_CORE}${MODULES_TESTS}
+
 # we can only build the Scala Shell when building for Scala 2.11
 if [[ $PROFILE == *"scala-2.11"* ]]; then
     MODULES_CORE="$MODULES_CORE,flink-scala-shell"
@@ -162,6 +165,9 @@ function get_compile_modules_for_stage() {
             # compile everything for PyFlink.
             echo ""
         ;;
+        (${STAGE_DECLARATIVE})
+            echo "-pl $MODULES_DECLARATIVE -am"
+        ;;
     esac
 }
 
@@ -180,6 +186,7 @@ function get_test_modules_for_stage() {
     local negated_connectors=\!${MODULES_CONNECTORS//,/,\!}
     local negated_tests=\!${MODULES_TESTS//,/,\!}
     local modules_misc="$negated_core,$negated_libraries,$negated_blink_planner,$negated_connectors,$negated_kafka_gelly,$negated_tests"
+    local modules_declarative=$MODULES_DECLARATIVE
 
     case ${stage} in
         (${STAGE_CORE})
@@ -203,5 +210,8 @@ function get_test_modules_for_stage() {
         (${STAGE_MISC})
             echo "-pl $modules_misc"
         ;;
+        (${STAGE_DECLARATIVE})
+            echo "-pl $modules_declarative"
+        ::
     esac
 }

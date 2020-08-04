@@ -101,6 +101,6 @@ public class ClusterOptions {
 		.withDescription("Defines whether the cluster uses declarative resource management.");
 
 	public static boolean isDeclarativeResourceManagementEnabled(Configuration configuration) {
-		return configuration.get(ENABLE_DECLARATIVE_RESOURCE_MANAGEMENT);
+		return configuration.get(ENABLE_DECLARATIVE_RESOURCE_MANAGEMENT) || System.getProperties().containsKey("flink.tests.enable-declarative");
 	}
 }
