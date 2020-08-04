@@ -98,9 +98,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	/** All currently registered task managers. */
 	private final HashMap<InstanceID, TaskManagerRegistration> taskManagerRegistrations;
 
-	/** Map of fulfilled and active allocations for request deduplication purposes. */
-	private final HashMap<AllocationID, SlotID> fulfilledSlotRequests;
-
 	/** Map of pending/unfulfilled slot allocation requests. */
 	private final HashMap<AllocationID, PendingSlotRequest> pendingSlotRequests;
 
@@ -176,7 +173,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		slots = new HashMap<>(16);
 		freeSlots = new LinkedHashMap<>(16);
 		taskManagerRegistrations = new HashMap<>(4);
-		fulfilledSlotRequests = new HashMap<>(16);
 		pendingSlotRequests = new HashMap<>(16);
 		pendingSlots = new HashMap<>(16);
 
@@ -839,8 +835,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					taskManagerRegistration.occupySlot();
 					break;
 			}
-
-			fulfilledSlotRequests.put(allocationId, slot.getSlotId());
 		} else {
 			// no allocation reported
 			switch (slot.getState()) {
@@ -851,9 +845,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					// don't do anything because we still have a pending slot request
 					break;
 				case ALLOCATED:
-					AllocationID oldAllocation = slot.getAllocationId();
 					slot.freeSlot();
-					fulfilledSlotRequests.remove(oldAllocation);
 					taskManagerRegistration.freeSlot();
 
 					handleFreeSlot(slot);
@@ -1122,8 +1114,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			AllocationID oldAllocationId = slot.getAllocationId();
 
 			if (oldAllocationId != null) {
-				fulfilledSlotRequests.remove(oldAllocationId);
-
 				resourceActions.notifyAllocationFailure(
 					slot.getJobId(),
 					oldAllocationId,
@@ -1342,10 +1332,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		Preconditions.checkNotNull(taskManagerRegistration);
 
 		removeSlots(taskManagerRegistration.getSlots(), cause);
-	}
-
-	private boolean checkDuplicateRequest(AllocationID allocationId) {
-		return pendingSlotRequests.containsKey(allocationId) || fulfilledSlotRequests.containsKey(allocationId);
 	}
 
 	private void checkInit() {
