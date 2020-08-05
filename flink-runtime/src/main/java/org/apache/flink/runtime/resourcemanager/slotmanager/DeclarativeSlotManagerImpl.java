@@ -436,16 +436,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		}
 	}
 
-	@Override
-	public boolean registerSlotRequest(SlotRequest slotRequest) {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public boolean unregisterSlotRequest(AllocationID allocationId) {
-		throw new UnsupportedOperationException();
-	}
-
 	/**
 	 * Registers a new task manager at the slot manager. This will make the task managers slots
 	 * known and, thus, available for allocation.

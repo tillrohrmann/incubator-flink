@@ -98,7 +98,9 @@ public interface SlotManager extends AutoCloseable {
 	 * @return true if the slot request was registered; false if the request is a duplicate
 	 * @throws ResourceManagerException if the slot request failed (e.g. not enough resources left)
 	 */
-	boolean registerSlotRequest(SlotRequest slotRequest) throws ResourceManagerException;
+	default boolean registerSlotRequest(SlotRequest slotRequest) throws ResourceManagerException {
+		throw new UnsupportedOperationException();
+	}
 
 	/**
 	 * Cancels and removes a pending slot request with the given allocation id. If there is no such
@@ -107,7 +109,9 @@ public interface SlotManager extends AutoCloseable {
 	 * @param allocationId identifying the pending slot request
 	 * @return True if a pending slot request was found; otherwise false
 	 */
-	boolean unregisterSlotRequest(AllocationID allocationId);
+	default boolean unregisterSlotRequest(AllocationID allocationId) {
+		throw new UnsupportedOperationException();
+	}
 
 	/**
 	 * Registers a new task manager at the slot manager. This will make the task managers slots
