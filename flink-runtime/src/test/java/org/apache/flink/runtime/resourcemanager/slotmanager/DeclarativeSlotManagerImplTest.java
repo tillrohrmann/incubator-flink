@@ -37,6 +37,8 @@ import org.apache.flink.runtime.resourcemanager.SlotRequest;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerException;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
+import org.apache.flink.runtime.slotsbro.ResourceRequirement;
+import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.SlotStatus;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
@@ -1058,8 +1060,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(),
 			new TestingResourceActionsBuilder().build())) {
 
-			final SlotRequest slotRequest = new SlotRequest(new JobID(), new AllocationID(), ResourceProfile.UNKNOWN, "foobar");
-			slotManager.registerSlotRequest(slotRequest);
+			ResourceRequirements requirements = new ResourceRequirements(
+				new JobID(),
+				"foobar",
+				Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, 1)));
+			slotManager.processResourceRequirements(requirements);
 
 			final BlockingQueue<Tuple6<SlotID, JobID, AllocationID, ResourceProfile, String, ResourceManagerId>> requestSlotQueue = new ArrayBlockingQueue<>(1);
 			final BlockingQueue<CompletableFuture<Acknowledge>> responseQueue = new ArrayBlockingQueue<>(1);
