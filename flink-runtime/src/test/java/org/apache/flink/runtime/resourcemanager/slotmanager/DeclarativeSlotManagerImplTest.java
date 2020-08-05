@@ -87,6 +87,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -157,42 +158,34 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final SlotID slotId1 = new SlotID(resourceId, 0);
 		final SlotID slotId2 = new SlotID(resourceId, 1);
 		final AllocationID allocationId1 = new AllocationID();
-		final AllocationID allocationId2 = new AllocationID();
 		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
 		final SlotStatus slotStatus1 = new SlotStatus(slotId1, resourceProfile, jobId, allocationId1);
 		final SlotStatus slotStatus2 = new SlotStatus(slotId2, resourceProfile);
 		final SlotReport slotReport = new SlotReport(Arrays.asList(slotStatus1, slotStatus2));
 
-		final SlotRequest slotRequest = new SlotRequest(
+		final ResourceRequirements resourceRequirements = new ResourceRequirements(
 			new JobID(),
-			allocationId2,
-			resourceProfile,
-			"foobar");
+			"foobar",
+			Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
 
-			assertTrue("The number registered slots does not equal the expected number.", 2 == slotManager.getNumberRegisteredSlots());
+			assertEquals("The number registered slots does not equal the expected number.", 2, slotManager.getNumberRegisteredSlots());
 
 			TaskManagerSlot slot1 = slotManager.getSlot(slotId1);
 			TaskManagerSlot slot2 = slotManager.getSlot(slotId2);
 
-			assertTrue(slot1.getState() == TaskManagerSlot.State.ALLOCATED);
-			assertTrue(slot2.getState() == TaskManagerSlot.State.FREE);
+			assertSame(TaskManagerSlot.State.ALLOCATED, slot1.getState());
+			assertSame(TaskManagerSlot.State.FREE, slot2.getState());
 
-			assertTrue(slotManager.registerSlotRequest(slotRequest));
+			slotManager.processResourceRequirements(resourceRequirements);
 
-			assertFalse(slot2.getState() == TaskManagerSlot.State.FREE);
-			assertTrue(slot2.getState() == TaskManagerSlot.State.PENDING);
-
-			//PendingSlotRequest pendingSlotRequest = slotManager.getSlotRequest(allocationId2);
-
-			//assertTrue("The pending slot request should have been assigned to slot 2", pendingSlotRequest.isAssigned());
+			assertSame(TaskManagerSlot.State.PENDING, slot2.getState());
 
 			slotManager.unregisterTaskManager(taskManagerConnection.getInstanceID(), TEST_EXCEPTION);
 
-			assertTrue(0 == slotManager.getNumberRegisteredSlots());
-			//assertFalse(pendingSlotRequest.isAssigned());
+			assertEquals(0, slotManager.getNumberRegisteredSlots());
 		}
 	}
 

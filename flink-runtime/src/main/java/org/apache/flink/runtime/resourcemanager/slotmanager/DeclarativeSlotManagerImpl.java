@@ -1001,11 +1001,13 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		TaskManagerSlot slot = slots.remove(slotId);
 
 		if (null != slot) {
-			TaskManagerSlot remove = freeSlots.remove(slotId);
+			if (slot.getState() == TaskManagerSlot.State.FREE) {
+				freeSlots.remove(slotId);
+			}
 
 			if (slot.getState() == TaskManagerSlot.State.PENDING) {
-				remove.getAllocationFuture().completeExceptionally(new SlotAllocationException(cause));
-				Optional<PendingSlotRequest> matchingPendingResource = findAndRemoveMatchingPendingResource(remove.getJobId(), remove.getResourceProfile());
+				slot.getAllocationFuture().completeExceptionally(new SlotAllocationException(cause));
+				Optional<PendingSlotRequest> matchingPendingResource = findAndRemoveMatchingPendingResource(slot.getJobId(), slot.getResourceProfile());
 				if (matchingPendingResource.isPresent()) {
 					addMissingResource(matchingPendingResource.get());
 				} else {
