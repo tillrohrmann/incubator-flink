@@ -41,7 +41,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  */
 public class TaskManagerSlot implements TaskManagerSlotInformation {
 
-	private static final PendingSlotRequest DUMMY_REQUEST = new PendingSlotRequest(new SlotRequest(new JobID(), new AllocationID(), ResourceProfile.UNKNOWN, ""));
+	private static final PendingSlotRequest DUMMY_REQUEST = new PendingSlotRequest(new SlotRequest(new JobID(), DeclarativeSlotManagerImpl.DUMMY_ALLOCATION_ID, ResourceProfile.UNKNOWN, ""));
 
 	/** The unique identification of this slot. */
 	private final SlotID slotId;
