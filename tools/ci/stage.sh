@@ -127,7 +127,7 @@ flink-connectors/flink-sql-connector-kafka,"
 MODULES_TESTS="\
 flink-tests"
 
-MODULES_DECLARATIVE=${MODULES_CORE}${MODULES_TESTS}
+MODULES_DECLARATIVE=${MODULES_CORE},${MODULES_TESTS}
 
 # we can only build the Scala Shell when building for Scala 2.11
 if [[ $PROFILE == *"scala-2.11"* ]]; then
