@@ -416,7 +416,15 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	private void checkWhetherAnyResourceRequirementsCanBeFulfilled() {
-		// TODO
+		if (!missingResourcesByJob.isEmpty()) {
+			for (Iterator<PendingSlotRequest> missingResources = getMissingResourcesIterator(); missingResources.hasNext(); ) {
+				PendingSlotRequest waitingResource = missingResources.next();
+				if (internalRequestSlot(waitingResource)) {
+					missingResources.remove();
+					addPendingResource(waitingResource);
+				}
+			}
+		}
 	}
 
 	@Override
