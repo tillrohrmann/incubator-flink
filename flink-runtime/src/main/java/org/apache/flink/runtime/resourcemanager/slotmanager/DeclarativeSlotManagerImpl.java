@@ -375,6 +375,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				addMissingResourceEntriesFor(newlyRequiredResources.get());
 				return true;
 			}
+		} else {
+			addMissingResourceEntriesFor(resourceRequirements);
+			return true;
 		}
 		return false;
 	}
@@ -708,7 +711,11 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			final TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(slot.getInstanceId());
 
 			if (taskManagerRegistration != null) {
-				updateStateForAllocatedSlot(slot, taskManagerRegistration, jobId);
+				if (jobId == null) {
+					updateStateForFreeSlot(slot, taskManagerRegistration);
+				} else {
+					updateStateForAllocatedSlot(slot, taskManagerRegistration, jobId);
+				}
 
 				return true;
 			} else {
@@ -944,6 +951,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 						}
 
 						if (!(throwable instanceof CancellationException)) {
+							internalFreeSlot(taskManagerSlot);
 							handleFailedSlotRequest(slotId, throwable);
 						} else {
 							LOG.debug("Slot allocation request for slot {} has been cancelled.", slotId, throwable);
@@ -994,9 +1002,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		if (null != slot) {
 			TaskManagerSlot remove = freeSlots.remove(slotId);
-			remove.getAllocationFuture().completeExceptionally(new SlotAllocationException(cause));
 
 			if (slot.getState() == TaskManagerSlot.State.PENDING) {
+				remove.getAllocationFuture().completeExceptionally(new SlotAllocationException(cause));
 				Optional<PendingSlotRequest> matchingPendingResource = findAndRemoveMatchingPendingResource(remove.getJobId(), remove.getResourceProfile());
 				if (matchingPendingResource.isPresent()) {
 					addMissingResource(matchingPendingResource.get());
@@ -1186,7 +1194,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		Iterator<PendingSlotRequest> missingSlotRequestIterator = getMissingResourcesIterator(jobId);
 		while (missingSlotRequestIterator.hasNext()) {
 			PendingSlotRequest candidate = missingSlotRequestIterator.next();
-			if (candidate.getResourceProfile().equals(profile)) {
+			if (profile.isMatching(candidate.getResourceProfile())) {
 				missingSlotRequestIterator.remove();
 				return Optional.of(candidate);
 			}
@@ -1198,7 +1206,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		Iterator<PendingSlotRequest> pendingSlotRequestIterator = getPendingResourcesIterator(jobId);
 		while (pendingSlotRequestIterator.hasNext()) {
 			PendingSlotRequest candidate = pendingSlotRequestIterator.next();
-			if (candidate.getResourceProfile().equals(profile)) {
+			if (profile.isMatching(candidate.getResourceProfile())) {
 				pendingSlotRequestIterator.remove();
 				return Optional.of(candidate);
 			}
@@ -1267,6 +1275,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		@Override
 		public void remove() {
 			requestIterator.remove();
+			if (currentRequests.isEmpty()) {
+				jobIterator.remove();
+			}
 		}
 	}
 
