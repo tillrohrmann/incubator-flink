@@ -722,6 +722,23 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		}
 	}
 
+	private void internalFreeSlot(TaskManagerSlot slot) {
+		final TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(slot.getInstanceId());
+		switch (slot.getState()) {
+			case FREE:
+				break;
+			case PENDING:
+				slot.clearPendingSlotRequest();
+				break;
+			case ALLOCATED:
+				slot.freeSlot();
+		}
+		if (slot.getState() == TaskManagerSlot.State.ALLOCATED) {
+			taskManagerRegistration.freeSlot();
+		}
+		handleFreeSlot(slot);
+	}
+
 	private void updateStateForAllocatedSlot(TaskManagerSlot slot, TaskManagerRegistration taskManagerRegistration, JobID jobId) {
 		switch (slot.getState()) {
 			case PENDING:
@@ -736,9 +753,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 					addAllocatedResource(jobId, slot.getResourceProfile());
 				} else {
-					slot.freeSlot();
-					taskManagerRegistration.freeSlot();
-					handleFreeSlot(slot);
+					internalFreeSlot(slot);
 				}
 				break;
 			case ALLOCATED:
@@ -765,11 +780,8 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				// don't do anything because we expect the slot to be allocated soon
 				break;
 			case ALLOCATED:
-				slot.freeSlot();
-				taskManagerRegistration.freeSlot();
 				findAndRemoveMatchingAllocatedResource(slot.getJobId(), slot.getResourceProfile());
-
-				handleFreeSlot(slot);
+				internalFreeSlot(slot);
 				break;
 		}
 	}
