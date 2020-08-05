@@ -964,10 +964,11 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			remove.getAllocationFuture().completeExceptionally(new SlotAllocationException(cause));
 
 			if (slot.getState() == TaskManagerSlot.State.PENDING) {
-				Optional<PendingSlotRequest> matchingSlotRequestOptional = findAndRemoveMatchingPendingResource(remove.getJobId(), remove.getResourceProfile());
-				if (matchingSlotRequestOptional.isPresent()) {
-					PendingSlotRequest matchingSlotRequest = matchingSlotRequestOptional.get();
-					addMissingResource(matchingSlotRequest);
+				Optional<PendingSlotRequest> matchingPendingResource = findAndRemoveMatchingPendingResource(remove.getJobId(), remove.getResourceProfile());
+				if (matchingPendingResource.isPresent()) {
+					addMissingResource(matchingPendingResource.get());
+				} else {
+					throw new RuntimeException("Had a pending slot without a matching resource requirement.");
 				}
 			}
 		} else {
