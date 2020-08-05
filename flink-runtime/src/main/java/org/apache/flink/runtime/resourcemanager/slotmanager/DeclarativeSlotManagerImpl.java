@@ -100,6 +100,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	// linked hashmap to preserve insertion order for FIFO processing
 	private final Map<JobID, Collection<PendingSlotRequest>> missingResourcesByJob = new LinkedHashMap<>();
 	private final Map<JobID, Collection<PendingSlotRequest>> pendingResourcesByJob = new HashMap<>();
+	private final Map<JobID, AllocatedResources> allocatedResourcesByJob = new HashMap<>();
 
 	private final Map<JobID, ResourceRequirements> resourceRequirementsByJob = new HashMap<>();
 
@@ -742,8 +743,12 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					slot.completeAllocation(DUMMY_ALLOCATION_ID, jobId);
 
 					taskManagerRegistration.occupySlot();
+
+					addAllocatedResource(jobId, slot.getResourceProfile());
 				} else {
-					// TODO: handle case where no matching request exists
+					slot.freeSlot();
+					taskManagerRegistration.freeSlot();
+					handleFreeSlot(slot);
 				}
 				break;
 			case ALLOCATED:
@@ -753,6 +758,10 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				freeSlots.remove(slot.getSlotId());
 				slot.updateAllocation(DUMMY_ALLOCATION_ID, jobId);
 				taskManagerRegistration.occupySlot();
+
+				findAndRemoveMatchingMissingResource(slot.getJobId(), slot.getResourceProfile());
+				// regardless of whether we found a resource, the slot has been allocated for the job
+				addAllocatedResource(jobId, slot.getResourceProfile());
 				break;
 		}
 	}
@@ -763,11 +772,12 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				handleFreeSlot(slot);
 				break;
 			case PENDING:
-				// don't do anything because we still have a pending slot request
+				// don't do anything because we expect the slot to be allocated soon
 				break;
 			case ALLOCATED:
 				slot.freeSlot();
 				taskManagerRegistration.freeSlot();
+				findAndRemoveMatchingAllocatedResource(slot.getJobId(), slot.getResourceProfile());
 
 				handleFreeSlot(slot);
 				break;
@@ -1164,6 +1174,24 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			.add(slotRequest);
 	}
 
+	private void addAllocatedResource(JobID jobId, ResourceProfile resourceProfile) {
+		allocatedResourcesByJob
+			.computeIfAbsent(jobId, ignored -> new AllocatedResources())
+			.increment(resourceProfile);
+	}
+
+	private Optional<PendingSlotRequest> findAndRemoveMatchingMissingResource(JobID jobId, ResourceProfile profile) {
+		Iterator<PendingSlotRequest> missingSlotRequestIterator = getMissingResourcesIterator(jobId);
+		while (missingSlotRequestIterator.hasNext()) {
+			PendingSlotRequest candidate = missingSlotRequestIterator.next();
+			if (candidate.getResourceProfile().equals(profile)) {
+				missingSlotRequestIterator.remove();
+				return Optional.of(candidate);
+			}
+		}
+		return Optional.empty();
+	}
+
 	private Optional<PendingSlotRequest> findAndRemoveMatchingPendingResource(JobID jobId, ResourceProfile profile) {
 		Iterator<PendingSlotRequest> pendingSlotRequestIterator = getPendingResourcesIterator(jobId);
 		while (pendingSlotRequestIterator.hasNext()) {
@@ -1176,8 +1204,17 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		return Optional.empty();
 	}
 
+	private void findAndRemoveMatchingAllocatedResource(JobID jobId, ResourceProfile profile) {
+		allocatedResourcesByJob.getOrDefault(jobId, new AllocatedResources())
+			.decrement(profile);
+	}
+
 	private Iterator<PendingSlotRequest> getMissingResourcesIterator() {
 		return new SlotRequestIterator(missingResourcesByJob, null);
+	}
+
+	private Iterator<PendingSlotRequest> getMissingResourcesIterator(JobID jobId) {
+		return new SlotRequestIterator(missingResourcesByJob, jobId);
 	}
 
 	private Iterator<PendingSlotRequest> getPendingResourcesIterator() {
@@ -1228,6 +1265,29 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		@Override
 		public void remove() {
 			requestIterator.remove();
+		}
+	}
+
+	private static class AllocatedResources {
+		private final Map<ResourceProfile, Integer> numResourcesByProfile = new HashMap<>();
+
+		int get(ResourceProfile profile) {
+			return numResourcesByProfile.getOrDefault(profile, 0);
+		}
+
+		void increment(ResourceProfile profile) {
+			numResourcesByProfile.compute(profile, (resourceProfile, integer) -> integer == null
+				? 1
+				: integer + 1);
+		}
+
+		void decrement(ResourceProfile profile) {
+			numResourcesByProfile.computeIfPresent(profile, (resourceProfile, integer) -> {
+				int i = integer - 1;
+				return i == 0
+					? null
+					: i;
+			});
 		}
 	}
 
