@@ -361,7 +361,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		checkInit();
 
 		if (internalProcessResourceRequirements(resourceRequirements)) {
-			checkWhetherAnyResourceRequirementsCanBeFulfilled();
+			checkResourceRequirements();
 		}
 	}
 
@@ -387,7 +387,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			: Optional.of(new ResourceRequirements(currentResourceRequirements.getJobId(), currentResourceRequirements.getTargetAddress(), newlyRequiredResources));
 	}
 
-		// TODO: take currently allocated slots into account, in case the job currently has more slots than previously required (== less requests required)
 	private void addMissingResourceEntriesFor(ResourceRequirements requirements) {
 		for (ResourceRequirement resourceRequirement : requirements.getResourceRequirements()) {
 			for (int x = 0; x < resourceRequirement.getNumberOfRequiredSlots(); x++) {
@@ -403,11 +402,16 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	private void checkResourceRequirements() {
-		checkWhetherAnyResourceRequirementsAreNoLongerFulfilled();
+		checkWhetherAnyResourceRequirementsAreOverBudget();
+		checkWhetherAnyResourceRequirementsAreUnderBudget();
 		checkWhetherAnyResourceRequirementsCanBeFulfilled();
 	}
 
-	private void checkWhetherAnyResourceRequirementsAreNoLongerFulfilled() {
+	private void checkWhetherAnyResourceRequirementsAreOverBudget() {
+		// TODO
+	}
+
+	private void checkWhetherAnyResourceRequirementsAreUnderBudget() {
 		// TODO
 	}
 
@@ -472,7 +476,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					taskExecutorConnection);
 			}
 
-			checkWhetherAnyResourceRequirementsCanBeFulfilled();
+			checkResourceRequirements();
 			return true;
 		}
 
@@ -488,7 +492,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		if (null != taskManagerRegistration) {
 			internalUnregisterTaskManager(taskManagerRegistration, cause);
-			checkWhetherAnyResourceRequirementsAreNoLongerFulfilled();
+			checkWhetherAnyResourceRequirementsAreUnderBudget();
 
 			return true;
 		} else {
@@ -916,6 +920,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 						} else {
 							LOG.debug("Slot allocation request for slot {} has been cancelled.", slotId, throwable);
 						}
+						checkWhetherAnyResourceRequirementsCanBeFulfilled();
 					}
 				} catch (Exception e) {
 					LOG.error("Error while completing the slot allocation.", e);
