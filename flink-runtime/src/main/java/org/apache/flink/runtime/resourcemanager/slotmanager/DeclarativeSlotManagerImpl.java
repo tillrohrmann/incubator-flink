@@ -370,7 +370,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		if (previousResourceRequirements != null) {
 			Optional<ResourceRequirements> newlyRequiredResources = computeNewlyRequiredResources(previousResourceRequirements, resourceRequirements);
 			if (newlyRequiredResources.isPresent()) {
-				createSlotRequestsFor(newlyRequiredResources.get());
+				addMissingResourceEntriesFor(newlyRequiredResources.get());
 				return true;
 			}
 		}
@@ -387,8 +387,8 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			: Optional.of(new ResourceRequirements(currentResourceRequirements.getJobId(), currentResourceRequirements.getTargetAddress(), newlyRequiredResources));
 	}
 
-	private void createSlotRequestsFor(ResourceRequirements requirements) {
 		// TODO: take currently allocated slots into account, in case the job currently has more slots than previously required (== less requests required)
+	private void addMissingResourceEntriesFor(ResourceRequirements requirements) {
 		for (ResourceRequirement resourceRequirement : requirements.getResourceRequirements()) {
 			for (int x = 0; x < resourceRequirement.getNumberOfRequiredSlots(); x++) {
 				PendingSlotRequest pendingSlotRequest = new PendingSlotRequest(new SlotRequest(
