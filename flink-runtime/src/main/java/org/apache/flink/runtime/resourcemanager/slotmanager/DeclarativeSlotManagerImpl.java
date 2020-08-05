@@ -550,7 +550,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 						slot.getInstanceId() + " which has not been registered.");
 				}
 
-				updateSlotState(slot, taskManagerRegistration, null);
+				updateStateForFreeSlot(slot, taskManagerRegistration);
 				checkResourceRequirements();
 			} else {
 				LOG.debug("Slot {} has not been allocated.", slotId);
@@ -697,7 +697,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			final TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(slot.getInstanceId());
 
 			if (taskManagerRegistration != null) {
-				updateSlotState(slot, taskManagerRegistration, jobId);
+				updateStateForAllocatedSlot(slot, taskManagerRegistration, jobId);
 
 				return true;
 			} else {
@@ -711,50 +711,46 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		}
 	}
 
-	private void updateSlotState(
-			TaskManagerSlot slot,
-			TaskManagerRegistration taskManagerRegistration,
-			@Nullable JobID jobId) {
-		if (jobId != null) {
-			switch (slot.getState()) {
-				case PENDING:
-					slot.getAllocationFuture().cancel(false);
+	private void updateStateForAllocatedSlot(TaskManagerSlot slot, TaskManagerRegistration taskManagerRegistration, JobID jobId) {
+		switch (slot.getState()) {
+			case PENDING:
+				slot.getAllocationFuture().cancel(false);
 
-					Optional<PendingSlotRequest> matchingSlotRequestsOptional = findAndRemoveMatchingPendingResource(slot.getJobId(), slot.getResourceProfile());
-					if (matchingSlotRequestsOptional.isPresent()) {
+				Optional<PendingSlotRequest> matchingSlotRequestsOptional = findAndRemoveMatchingPendingResource(slot.getJobId(), slot.getResourceProfile());
+				if (matchingSlotRequestsOptional.isPresent()) {
 
-						slot.completeAllocation(DUMMY_ALLOCATION_ID, jobId);
+					slot.completeAllocation(DUMMY_ALLOCATION_ID, jobId);
 
-						taskManagerRegistration.occupySlot();
-					} else {
-						// TODO: handle case where no matching request exists
-					}
-					break;
-				case ALLOCATED:
-					break;
-				case FREE:
-					// the slot is currently free --> it is stored in freeSlots
-					freeSlots.remove(slot.getSlotId());
-					slot.updateAllocation(DUMMY_ALLOCATION_ID, jobId);
 					taskManagerRegistration.occupySlot();
-					break;
-			}
-		} else {
-			// no allocation reported
-			switch (slot.getState()) {
-				case FREE:
-					handleFreeSlot(slot);
-					break;
-				case PENDING:
-					// don't do anything because we still have a pending slot request
-					break;
-				case ALLOCATED:
-					slot.freeSlot();
-					taskManagerRegistration.freeSlot();
+				} else {
+					// TODO: handle case where no matching request exists
+				}
+				break;
+			case ALLOCATED:
+				break;
+			case FREE:
+				// the slot is currently free --> it is stored in freeSlots
+				freeSlots.remove(slot.getSlotId());
+				slot.updateAllocation(DUMMY_ALLOCATION_ID, jobId);
+				taskManagerRegistration.occupySlot();
+				break;
+		}
+	}
 
-					handleFreeSlot(slot);
-					break;
-			}
+	private void updateStateForFreeSlot(TaskManagerSlot slot, TaskManagerRegistration taskManagerRegistration) {
+		switch (slot.getState()) {
+			case FREE:
+				handleFreeSlot(slot);
+				break;
+			case PENDING:
+				// don't do anything because we still have a pending slot request
+				break;
+			case ALLOCATED:
+				slot.freeSlot();
+				taskManagerRegistration.freeSlot();
+
+				handleFreeSlot(slot);
+				break;
 		}
 	}
 
@@ -1001,7 +997,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					throw new IllegalStateException("Trying to remove slot request from slot for which there is no TaskManager " + taskManagerSlot.getInstanceId() + " is registered.");
 				}
 
-				updateSlotState(taskManagerSlot, taskManagerRegistration, null);
+				updateStateForFreeSlot(taskManagerSlot, taskManagerRegistration);
 			} else {
 				LOG.debug("Ignore slot request removal for slot {}.", slotId);
 			}
