@@ -66,6 +66,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of {@link SlotManager}.
@@ -380,7 +381,14 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	private Optional<ResourceRequirements> computeNewlyRequiredResources(ResourceRequirements previousResourceRequirements, ResourceRequirements currentResourceRequirements) {
 		final Collection<ResourceRequirement> newlyRequiredResources = new ArrayList<>();
 
-		// TODO
+		final Map<ResourceProfile, ResourceRequirement> previousByProfile = previousResourceRequirements.getResourceRequirements().stream().collect(Collectors.toMap(ResourceRequirement::getResourceProfile, x -> x));
+		for (ResourceRequirement current : currentResourceRequirements.getResourceRequirements()) {
+			ResourceRequirement previous = previousByProfile.get(current.getResourceProfile());
+			int numSlotsDifference = current.getNumberOfRequiredSlots() - previous.getNumberOfRequiredSlots();
+			if (numSlotsDifference > 0) {
+				newlyRequiredResources.add(new ResourceRequirement(current.getResourceProfile(), numSlotsDifference));
+			}
+		}
 
 		return newlyRequiredResources.isEmpty()
 			? Optional.empty()
