@@ -593,11 +593,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				}
 				if (!isFulfillableByRegisteredOrPendingSlots(pendingSlotRequest.getResourceProfile())) {
 					slotRequestIterator.remove();
-					resourceActions.notifyAllocationFailure(
-						pendingSlotRequest.getJobId(),
-						pendingSlotRequest.getAllocationId(),
-						new UnfulfillableSlotRequestException(pendingSlotRequest.getAllocationId(), pendingSlotRequest.getResourceProfile())
-					);
 				}
 			}
 		}
@@ -1097,15 +1092,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					slot.getAssignedSlotRequest(),
 					cause);
 			}
-
-			AllocationID oldAllocationId = slot.getAllocationId();
-
-			if (oldAllocationId != null) {
-				resourceActions.notifyAllocationFailure(
-					slot.getJobId(),
-					oldAllocationId,
-					cause);
-			}
 		} else {
 			LOG.debug("There was no slot registered with slot id {}.", slotId);
 		}
@@ -1294,10 +1280,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 						cancelPendingSlotRequest(slotRequest);
 					}
 
-					resourceActions.notifyAllocationFailure(
-						slotRequest.getJobId(),
-						slotRequest.getAllocationId(),
-						new TimeoutException("The allocation could not be fulfilled in time."));
 				}
 			}
 		}
