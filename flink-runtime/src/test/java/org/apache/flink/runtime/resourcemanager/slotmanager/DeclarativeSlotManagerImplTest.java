@@ -1417,15 +1417,21 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final TestingResourceActions resourceActions = new TestingResourceActionsBuilder().build();
 
 		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(), resourceActions, numberSlots)) {
-			final JobID jobId = new JobID();
-			final ResourceProfile requestedSlotProfile = ResourceProfile.fromResources(1.0, 1);
 
-			assertThat(slotManager.registerSlotRequest(createSlotRequest(jobId, requestedSlotProfile)), is(true));
+			ResourceRequirements requirements = new ResourceRequirements(
+				new JobID(),
+				"foobar",
+				Collections.singleton(new ResourceRequirement(ResourceProfile.fromResources(1.0, 1), 1)));
+			slotManager.processResourceRequirements(requirements);
 
 			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
 
+			final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
+			final TestingTaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
+				.setRequestSlotFunction(ignored -> allocationAcknowledgeFuture)
+				.createTestingTaskExecutorGateway();
+			final TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection(taskExecutorGateway);
 			final int numberOfferedSlots = 1;
-			final TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection();
 			final ResourceProfile offeredSlotProfile = ResourceProfile.fromResources(2.0, 2);
 			final SlotReport slotReport = createSlotReport(
 				taskExecutorConnection.getResourceID(),
@@ -1435,9 +1441,18 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			slotManager.registerTaskManager(taskExecutorConnection, slotReport);
 
+			// acknowledge the future after the registration
+			// If we were not overriding the RequestSlotFunction, then the future is immediately completed, resulting
+			// in the acknowledge being directly processed after the allocation (since we are using a direct executor).
+			// This execution path cannot happen in production, since the acknowledge processing is scheduled to run at
+			// a later point once the main thread has finished it's current action.
+			// This would break an assumption in `DeclarativeSlotManagerImpl.checkWhetherAnyResourceRequirementsCanBeFulfilled`;
+			// that we can schedule multiple allocations without the acknowledge modifying data structures in-between.
+			allocationAcknowledgeFuture.complete(Acknowledge.get());
+
 			assertThat(slotManager.getNumberRegisteredSlots(), is(numberOfferedSlots));
 			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
-			//assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(0));
+			assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(0));
 		}
 	}
 
