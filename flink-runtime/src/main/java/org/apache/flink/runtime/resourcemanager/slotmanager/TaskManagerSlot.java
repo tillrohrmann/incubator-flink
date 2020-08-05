@@ -23,12 +23,15 @@ import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.clusterframework.types.SlotID;
 import org.apache.flink.runtime.instance.InstanceID;
+import org.apache.flink.runtime.messages.Acknowledge;
+import org.apache.flink.runtime.resourcemanager.SlotRequest;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
 import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nullable;
 
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -37,6 +40,8 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * resource profile associated.
  */
 public class TaskManagerSlot implements TaskManagerSlotInformation {
+
+	private static final PendingSlotRequest DUMMY_REQUEST = new PendingSlotRequest(new SlotRequest(new JobID(), new AllocationID(), ResourceProfile.UNKNOWN, ""));
 
 	/** The unique identification of this slot. */
 	private final SlotID slotId;
@@ -58,6 +63,8 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 	private PendingSlotRequest assignedSlotRequest;
 
 	private State state;
+
+	private CompletableFuture<Acknowledge> allocationFuture;
 
 	public TaskManagerSlot(
 			SlotID slotId,
@@ -128,6 +135,18 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 
 		state = State.PENDING;
 		assignedSlotRequest = Preconditions.checkNotNull(pendingSlotRequest);
+	}
+
+	public void setAllocationFuture(CompletableFuture<Acknowledge> allocationFuture) {
+		Preconditions.checkState(state == State.FREE, "Slot must be free to be assigned a slot request.");
+
+		state = State.PENDING;
+		assignedSlotRequest = DUMMY_REQUEST;
+		this.allocationFuture = Preconditions.checkNotNull(allocationFuture);
+	}
+
+	public CompletableFuture<Acknowledge> getAllocationFuture() {
+		return allocationFuture;
 	}
 
 	public void completeAllocation(AllocationID allocationId, JobID jobId) {
