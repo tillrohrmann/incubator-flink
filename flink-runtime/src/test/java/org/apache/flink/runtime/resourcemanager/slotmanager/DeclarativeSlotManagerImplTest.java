@@ -630,7 +630,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				}
 			});
 
-			assertThat(failedAllocationFuture.get(), is(equalTo(Tuple2.of(jobId, allocationId))));
+			assertThat(failedAllocationFuture.get(5, TimeUnit.SECONDS), is(equalTo(Tuple2.of(jobId, allocationId))));
 
 			if (atomicException.get() != null) {
 				throw atomicException.get();
