@@ -1314,35 +1314,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		}
 	}
 
-	/**
-	 * Tests the completion of pending task manager slots by registering a TaskExecutor.
-	 */
-	@Test
-	public void testPendingTaskManagerSlotCompletion() throws Exception {
-		final int numberSlots = 3;
-		final TestingResourceActions resourceActions = new TestingResourceActionsBuilder().build();
-		final ResourceProfile resourceProfile =
-			SlotManagerImpl.generateDefaultSlotResourceProfile(WORKER_RESOURCE_SPEC, numberSlots);
-
-		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(), resourceActions, numberSlots)) {
-			final JobID jobId = new JobID();
-			assertThat(slotManager.registerSlotRequest(createSlotRequest(jobId, resourceProfile)), is(true));
-
-			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
-			//assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(1));
-			assertThat(slotManager.getNumberRegisteredSlots(), is(0));
-
-			final TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection();
-			final SlotReport slotReport =
-				createSlotReport(taskExecutorConnection.getResourceID(), numberSlots - 1, resourceProfile, DeclarativeSlotManagerImplTest::createEmptySlotStatus);
-
-			slotManager.registerTaskManager(taskExecutorConnection, slotReport);
-
-			assertThat(slotManager.getNumberRegisteredSlots(), is(numberSlots - 1));
-			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(1));
-		}
-	}
-
 	private TaskExecutorConnection createTaskExecutorConnection() {
 		final TestingTaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 		return createTaskExecutorConnection(taskExecutorGateway);
