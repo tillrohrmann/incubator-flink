@@ -1289,7 +1289,18 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	private static class AllocatedResources {
-		private final Map<ResourceProfile, Integer> numResourcesByProfile = new HashMap<>();
+
+		private static final AllocatedResources EMPTY = new AllocatedResources(Collections.emptyMap());
+
+		private final Map<ResourceProfile, Integer> numResourcesByProfile;
+
+		public AllocatedResources() {
+			this(new HashMap<>());
+		}
+
+		private AllocatedResources(Map<ResourceProfile, Integer> backingMap) {
+			this.numResourcesByProfile = backingMap;
+		}
 
 		int get(ResourceProfile profile) {
 			return numResourcesByProfile.getOrDefault(profile, 0);
