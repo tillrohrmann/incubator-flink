@@ -41,6 +41,7 @@ import org.apache.flink.runtime.resourcemanager.SlotRequest;
 import org.apache.flink.runtime.resourcemanager.exceptions.UnfulfillableSlotRequestException;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+import org.apache.flink.runtime.util.DualKeyLinkedMap;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
@@ -88,7 +89,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * <p>TODO : Make pending requests location preference aware
  * TODO : Make pass location preferences to ResourceManager when sending a slot request
  */
-public class DeclarativeSlotPoolImpl implements SlotPool {
+public class DeclarativeSlotPool implements SlotPool {
 
 	protected final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -138,7 +139,7 @@ public class DeclarativeSlotPoolImpl implements SlotPool {
 
 	// ------------------------------------------------------------------------
 
-	public DeclarativeSlotPoolImpl(
+	public DeclarativeSlotPool(
 			JobID jobId,
 			Clock clock,
 			Time rpcTimeout,

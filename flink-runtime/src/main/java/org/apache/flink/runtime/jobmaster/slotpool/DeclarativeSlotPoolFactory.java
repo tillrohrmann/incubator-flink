@@ -23,7 +23,7 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.util.clock.Clock;
 
 /**
- * {@link SlotPoolFactory} for {@link DeclarativeSlotPoolImpl}.
+ * {@link SlotPoolFactory} for {@link DeclarativeSlotPool}.
  */
 public class DeclarativeSlotPoolFactory extends AbstractSlotPoolFactory {
 
@@ -37,7 +37,7 @@ public class DeclarativeSlotPoolFactory extends AbstractSlotPoolFactory {
 
 	@Override
 	public SlotPool createSlotPool(JobID jobId) {
-		return new DeclarativeSlotPoolImpl(
+		return new DeclarativeSlotPool(
 			jobId,
 			clock,
 			rpcTimeout,
