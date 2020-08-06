@@ -849,7 +849,8 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 					}
 				},
 				mainThreadExecutor)
-			.thenRun(() -> slotManager.registerTaskManager(taskManagerConnection, initialSlotReport));
+				.thenRun(() -> slotManager.registerTaskManager(taskManagerConnection, initialSlotReport))
+				.get();
 
 			final SlotID slotId = requestedSlotFuture.get();
 
