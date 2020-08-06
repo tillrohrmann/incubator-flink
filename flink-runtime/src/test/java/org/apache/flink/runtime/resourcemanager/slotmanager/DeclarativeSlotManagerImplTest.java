@@ -402,10 +402,9 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection();
 		final ResourceID resourceID = taskExecutorConnection.getResourceID();
 		final SlotID slotId = new SlotID(resourceID, 0);
-		final AllocationID allocationId = new AllocationID();
 		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
 
-		final SlotStatus slotStatus = new SlotStatus(slotId, resourceProfile, jobId, allocationId);
+		final SlotStatus slotStatus = new SlotStatus(slotId, resourceProfile, jobId, new AllocationID());
 		final SlotReport slotReport = new SlotReport(slotStatus);
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
@@ -416,18 +415,13 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
-			assertEquals("The slot has not been allocated to the expected allocation id.", allocationId, slot.getAllocationId());
+			assertSame(TaskManagerSlot.State.ALLOCATED, slot.getState());
 
-			// this should be ignored since the allocation id does not match
 			slotManager.freeSlot(slotId, new AllocationID());
 
-			assertTrue(slot.getState() == TaskManagerSlot.State.ALLOCATED);
-			assertEquals("The slot has not been allocated to the expected allocation id.", allocationId, slot.getAllocationId());
+			assertSame(TaskManagerSlot.State.FREE, slot.getState());
 
-			slotManager.freeSlot(slotId, allocationId);
-
-			assertTrue(slot.getState() == TaskManagerSlot.State.FREE);
-			assertNull(slot.getAllocationId());
+			assertEquals(1, slotManager.getNumberFreeSlots());
 		}
 	}
 
