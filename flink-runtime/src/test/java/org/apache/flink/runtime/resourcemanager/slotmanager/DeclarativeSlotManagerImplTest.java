@@ -590,7 +590,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
 
 		final JobID jobId = new JobID();
-		final AllocationID allocationId = new AllocationID();
 
 		final TaskExecutorConnection taskManagerConnection = createTaskExecutorConnection();
 		final ResourceID resourceId = taskManagerConnection.getResourceID();
@@ -602,34 +601,34 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final SlotStatus slotStatus1 = new SlotStatus(slotId1, resourceProfile);
 		final SlotStatus slotStatus2 = new SlotStatus(slotId2, resourceProfile);
 
-		final SlotStatus newSlotStatus2 = new SlotStatus(slotId2, resourceProfile, jobId, allocationId);
+		final SlotStatus newSlotStatus2 = new SlotStatus(slotId2, resourceProfile, jobId, new AllocationID());
 
 		final SlotReport slotReport1 = new SlotReport(Arrays.asList(slotStatus1, slotStatus2));
 		final SlotReport slotReport2 = new SlotReport(Arrays.asList(newSlotStatus2, slotStatus1));
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 			// check that we don't have any slots registered
-			assertTrue(0 == slotManager.getNumberRegisteredSlots());
+			assertEquals(0, slotManager.getNumberRegisteredSlots());
 
 			slotManager.registerTaskManager(taskManagerConnection, slotReport1);
 
 			TaskManagerSlot slot1 = slotManager.getSlot(slotId1);
 			TaskManagerSlot slot2 = slotManager.getSlot(slotId2);
 
-			assertTrue(2 == slotManager.getNumberRegisteredSlots());
+			assertEquals(2, slotManager.getNumberRegisteredSlots());
 
-			assertTrue(slot1.getState() == TaskManagerSlot.State.FREE);
-			assertTrue(slot2.getState() == TaskManagerSlot.State.FREE);
+			assertSame(TaskManagerSlot.State.FREE, slot1.getState());
+			assertSame(TaskManagerSlot.State.FREE, slot2.getState());
 
 			assertTrue(slotManager.reportSlotStatus(taskManagerConnection.getInstanceID(), slotReport2));
 
-			assertTrue(2 == slotManager.getNumberRegisteredSlots());
+			assertEquals(2, slotManager.getNumberRegisteredSlots());
 
 			assertNotNull(slotManager.getSlot(slotId1));
 			assertNotNull(slotManager.getSlot(slotId2));
 
-			// slotId2 should have been allocated for allocationId
-			assertEquals(allocationId, slotManager.getSlot(slotId2).getAllocationId());
+			// slotId2 should have been allocated for jobiD
+			assertEquals(jobId, slotManager.getSlot(slotId2).getJobId());
 		}
 	}
 
