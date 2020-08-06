@@ -347,13 +347,8 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final JobID jobId = new JobID();
 		final SlotID slotId = new SlotID(resourceID, 0);
 		final String targetAddress = "localhost";
-		final AllocationID allocationId = new AllocationID();
+		final AllocationID allocationId = DeclarativeSlotManagerImpl.DUMMY_ALLOCATION_ID;
 		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
-		final SlotRequest slotRequest = new SlotRequest(
-			jobId,
-			allocationId,
-			resourceProfile,
-			targetAddress);
 
 		final AtomicInteger numberAllocateResourceCalls = new AtomicInteger(0);
 		ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
@@ -362,10 +357,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		final CompletableFuture<Tuple6<SlotID, JobID, AllocationID, ResourceProfile, String, ResourceManagerId>> requestFuture = new CompletableFuture<>();
 		// accept an incoming slot request
+		final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
 		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
 			.setRequestSlotFunction(tuple6 -> {
 				requestFuture.complete(Tuple6.of(tuple6.f0, tuple6.f1, tuple6.f2, tuple6.f3, tuple6.f4, tuple6.f5));
-				return CompletableFuture.completedFuture(Acknowledge.get());
+				return allocationAcknowledgeFuture;
 			})
 			.createTestingTaskExecutorGateway();
 
@@ -376,7 +372,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 
-			assertTrue("The slot request should be accepted", slotManager.registerSlotRequest(slotRequest));
+			final ResourceRequirements resourceRequirements = new ResourceRequirements(
+				jobId,
+				targetAddress,
+				Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
+			slotManager.processResourceRequirements(resourceRequirements);
 
 			assertThat(numberAllocateResourceCalls.get(), is(1));
 
@@ -384,11 +384,13 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				taskExecutorConnection,
 				slotReport);
 
+			allocationAcknowledgeFuture.complete(Acknowledge.get());
+
 			assertThat(requestFuture.get(), is(equalTo(Tuple6.of(slotId, jobId, allocationId, resourceProfile, targetAddress, resourceManagerId))));
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
-			assertEquals("The slot has not been allocated to the expected allocation id.", allocationId, slot.getAllocationId());
+			assertEquals("The slot has not been allocated to the expected job id.", jobId, slot.getJobId());
 		}
 	}
 
