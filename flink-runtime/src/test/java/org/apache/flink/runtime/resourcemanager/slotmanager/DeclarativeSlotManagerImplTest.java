@@ -23,7 +23,6 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple6;
-import org.apache.flink.core.testutils.FlinkMatchers;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
@@ -1483,28 +1482,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			assertThat(slotManager.getNumberRegisteredSlots(), is(1));
 			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
 			//assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(1));
-		}
-	}
-
-	/**
-	 * Tests that the unregister cause is being forwarded when failing allocations.
-	 */
-	@Test
-	public void unregisterTaskManager_withAllocatedSlot_failsAllocationsWithCause() throws Exception {
-		CompletableFuture<Exception> allocationFailureCause = new CompletableFuture<>();
-		TestingResourceActions resourceActions = new TestingResourceActionsBuilder()
-			.setNotifyAllocationFailureConsumer(jobIDAllocationIDExceptionTuple3 -> allocationFailureCause.complete(jobIDAllocationIDExceptionTuple3.f2))
-			.build();
-
-		FlinkException failureCause = new FlinkException("unregisterTaskManager test exception.");
-
-		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(), resourceActions)) {
-			TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection();
-			SlotReport slotReport = createSingleAllocatedSlotReport(taskExecutorConnection.getResourceID(), new JobID());
-			slotManager.registerTaskManager(taskExecutorConnection, slotReport);
-			slotManager.unregisterTaskManager(taskExecutorConnection.getInstanceID(), failureCause);
-
-			assertThat(allocationFailureCause.get(), FlinkMatchers.containsCause(failureCause));
 		}
 	}
 
