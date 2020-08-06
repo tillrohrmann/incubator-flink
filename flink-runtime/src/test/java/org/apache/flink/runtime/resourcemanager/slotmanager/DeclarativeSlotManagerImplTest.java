@@ -428,34 +428,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that if we have received a slot report with some allocated slots, then we don't accept
-	 * slot requests with allocated allocation ids.
-	 */
-	@Test
-	public void testDuplicatePendingSlotRequestAfterSlotReport() throws Exception {
-		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
-		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
-
-		final TaskExecutorConnection taskManagerConnection = createTaskExecutorConnection();
-		final ResourceID resourceID = taskManagerConnection.getResourceID();
-
-		final JobID jobId = new JobID();
-		final AllocationID allocationId = new AllocationID();
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 1);
-		final SlotID slotId = new SlotID(resourceID, 0);
-		final SlotStatus slotStatus = new SlotStatus(slotId, resourceProfile, jobId, allocationId);
-		final SlotReport slotReport = new SlotReport(slotStatus);
-
-		final SlotRequest slotRequest = new SlotRequest(jobId, allocationId, resourceProfile, "foobar");
-
-		try (SlotManager slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
-			slotManager.registerTaskManager(taskManagerConnection, slotReport);
-
-			assertFalse(slotManager.registerSlotRequest(slotRequest));
-		}
-	}
-
-	/**
 	 * Tests that duplicate resource requirement declaration do not result in additional slots being allocated after a
 	 * pending slot request has been fulfilled but not yet freed.
 	 */
