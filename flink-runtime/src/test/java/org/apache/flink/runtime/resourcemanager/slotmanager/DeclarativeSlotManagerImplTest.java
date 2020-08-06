@@ -1001,18 +1001,17 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				taskExecutorConnection.getInstanceID(),
 				slotReport);
 
-			// this slot request should not be fulfilled
-			final AllocationID allocationId = new AllocationID();
-			final SlotRequest slotRequest = new SlotRequest(
-				new JobID(),
-				allocationId,
-				ResourceProfile.UNKNOWN,
-				"foobar");
+			final JobID jobId = new JobID();
+			// this resource requirement should not be fulfilled
+			ResourceRequirements requirements = new ResourceRequirements(
+				jobId,
+				"foobar",
+				Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, 1)));
 
-			// This triggered an IllegalStateException before
-			slotManager.registerSlotRequest(slotRequest);
+			slotManager.processResourceRequirements(requirements);
 
-			//assertThat(slotManager.getSlotRequest(allocationId).isAssigned(), is(false));
+			assertThat(slotManager.getSlot(slotId).getJobId(), is(slotStatus.getJobID()));
+			assertThat(slotManager.getNumMissingResources(jobId), is(1));
 		}
 	}
 

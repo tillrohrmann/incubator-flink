@@ -1341,6 +1341,11 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	// ---------------------------------------------------------------------------------------------
 
 	@VisibleForTesting
+	int getNumMissingResources(JobID jobId) {
+		return missingResourcesByJob.getOrDefault(jobId, Collections.emptyList()).size();
+	}
+
+	@VisibleForTesting
 	TaskManagerSlot getSlot(SlotID slotId) {
 		return slots.get(slotId);
 	}
