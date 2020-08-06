@@ -488,41 +488,47 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that duplicate slot requests (requests with an already registered allocation id) are
-	 * also detected after a pending slot request has been fulfilled but not yet freed.
+	 * Tests that duplicate resource requirement declaration do not result in additional slots being allocated after a
+	 * pending slot request has been fulfilled but not yet freed.
 	 */
 	@Test
-	public void testDuplicatePendingSlotRequestAfterSuccessfulAllocation() throws Exception {
+	public void testDuplicateResourceRequirementDeclaraionAfterSuccessfulAllocation() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final AtomicInteger allocateResourceCalls = new AtomicInteger(0);
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
 			.setAllocateResourceConsumer(ignored -> allocateResourceCalls.incrementAndGet())
 			.build();
-		final AllocationID allocationId = new AllocationID();
-		final ResourceProfile resourceProfile1 = ResourceProfile.fromResources(1.0, 2);
-		final ResourceProfile resourceProfile2 = ResourceProfile.fromResources(2.0, 1);
-		final SlotRequest slotRequest1 = new SlotRequest(new JobID(), allocationId, resourceProfile1, "foobar");
-		final SlotRequest slotRequest2 = new SlotRequest(new JobID(), allocationId, resourceProfile2, "barfoo");
+		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 2);
+		ResourceRequirements requirements = new ResourceRequirements(
+			new JobID(),
+			"foobar",
+			Collections.singleton(new ResourceRequirement(ResourceProfile.fromResources(1.0, 2), 1)));
 
-		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
+		final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
+		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
+			.setRequestSlotFunction(ignored -> allocationAcknowledgeFuture)
+			.createTestingTaskExecutorGateway();
 
 		final ResourceID resourceID = ResourceID.generate();
 
 		final TaskExecutorConnection taskManagerConnection = new TaskExecutorConnection(resourceID, taskExecutorGateway);
 
 		final SlotID slotId = new SlotID(resourceID, 0);
-		final SlotStatus slotStatus = new SlotStatus(slotId, resourceProfile1);
+		final SlotStatus slotStatus = new SlotStatus(slotId, resourceProfile);
 		final SlotReport slotReport = new SlotReport(slotStatus);
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
-			assertTrue(slotManager.registerSlotRequest(slotRequest1));
+
+			slotManager.processResourceRequirements(requirements);
+
+			allocationAcknowledgeFuture.complete(Acknowledge.get());
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
-			assertEquals("The slot has not been allocated to the expected allocation id.", allocationId, slot.getAllocationId());
+			assertThat(slot.getState(), is(TaskManagerSlot.State.ALLOCATED));
 
-			assertFalse(slotManager.registerSlotRequest(slotRequest2));
+			slotManager.processResourceRequirements(requirements);
 		}
 
 		// check that we have only called the resource allocation only for the first slot request,
