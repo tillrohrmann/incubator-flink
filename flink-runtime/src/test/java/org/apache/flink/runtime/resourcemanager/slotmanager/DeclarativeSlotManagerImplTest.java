@@ -426,7 +426,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	 * pending slot request has been fulfilled but not yet freed.
 	 */
 	@Test
-	public void testDuplicateResourceRequirementDeclaraionAfterSuccessfulAllocation() throws Exception {
+	public void testDuplicateResourceRequirementDeclarationAfterSuccessfulAllocation() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final AtomicInteger allocateResourceCalls = new AtomicInteger(0);
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
