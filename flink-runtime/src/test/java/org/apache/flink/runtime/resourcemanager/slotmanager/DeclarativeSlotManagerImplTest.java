@@ -466,21 +466,21 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that an already registered allocation id can be reused after the initial slot request
-	 * has been freed.
+	 * Tests that a slot allocated for one job can be allocated for another job after being freed.
 	 */
 	@Test
-	public void testAcceptingDuplicateSlotRequestAfterAllocationRelease() throws Exception {
+	public void testSlotCanBeAllocatedForDifferentJobAfterFree() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
-		final AtomicInteger allocateResourceCalls = new AtomicInteger(0);
-		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
-			.setAllocateResourceConsumer(ignored -> allocateResourceCalls.incrementAndGet())
-			.build();
 		final AllocationID allocationId = new AllocationID();
-		final ResourceProfile resourceProfile1 = ResourceProfile.fromResources(1.0, 2);
-		final ResourceProfile resourceProfile2 = ResourceProfile.fromResources(2.0, 1);
-		final SlotRequest slotRequest1 = new SlotRequest(new JobID(), allocationId, resourceProfile1, "foobar");
-		final SlotRequest slotRequest2 = new SlotRequest(new JobID(), allocationId, resourceProfile2, "barfoo");
+		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 2);
+		final ResourceRequirements resourceRequirements1 = new ResourceRequirements(
+			new JobID(),
+			"foobar",
+			Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
+		final ResourceRequirements resourceRequirements2 = new ResourceRequirements(
+			new JobID(),
+			"foobar",
+			Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
 
 		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 
@@ -491,28 +491,27 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final SlotStatus slotStatus = new SlotStatus(slotId, ResourceProfile.fromResources(2.0, 2));
 		final SlotReport slotReport = new SlotReport(slotStatus);
 
-		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
+		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, new TestingResourceActionsBuilder().build())) {
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
-			assertTrue(slotManager.registerSlotRequest(slotRequest1));
+
+			slotManager.processResourceRequirements(resourceRequirements1);
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
-			assertEquals("The slot has not been allocated to the expected allocation id.", allocationId, slot.getAllocationId());
+			assertEquals("The slot has not been allocated to the expected job id.", resourceRequirements1.getJobId(), slot.getJobId());
 
+			// clear resource requirements, so that the slot isn't immediately re-assigned
+			slotManager.processResourceRequirements(new ResourceRequirements(resourceRequirements1.getJobId(), resourceRequirements1.getTargetAddress(), Collections.emptyList()));
 			slotManager.freeSlot(slotId, allocationId);
 
 			// check that the slot has been freed
-			assertTrue(slot.getState() == TaskManagerSlot.State.FREE);
+			assertSame(TaskManagerSlot.State.FREE, slot.getState());
 			assertNull(slot.getAllocationId());
 
-			assertTrue(slotManager.registerSlotRequest(slotRequest2));
+			slotManager.processResourceRequirements(resourceRequirements2);
 
-			assertEquals("The slot has not been allocated to the expected allocation id.", allocationId, slot.getAllocationId());
+			assertEquals("The slot has not been allocated to the expected job id.", resourceRequirements2.getJobId(), slot.getJobId());
 		}
-
-		// check that we have only called the resource allocation only for the first slot request,
-		// since the second request is a duplicate
-		assertThat(allocateResourceCalls.get(), is(0));
 	}
 
 	/**
