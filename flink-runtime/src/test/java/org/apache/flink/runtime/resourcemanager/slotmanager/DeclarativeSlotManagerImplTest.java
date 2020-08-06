@@ -260,11 +260,10 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 			final CompletableFuture<Tuple6<SlotID, JobID, AllocationID, ResourceProfile, String, ResourceManagerId>> requestFuture = new CompletableFuture<>();
 			// accept an incoming slot request
-			final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
 			final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
 				.setRequestSlotFunction(tuple6 -> {
 					requestFuture.complete(Tuple6.of(tuple6.f0, tuple6.f1, tuple6.f2, tuple6.f3, tuple6.f4, tuple6.f5));
-					return allocationAcknowledgeFuture;
+					return CompletableFuture.completedFuture(Acknowledge.get());
 				})
 				.createTestingTaskExecutorGateway();
 
@@ -282,7 +281,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				targetAddress,
 				Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
 			slotManager.processResourceRequirements(requirements);
-			allocationAcknowledgeFuture.complete(Acknowledge.get());
 
 			assertThat(requestFuture.get(), is(equalTo(Tuple6.of(slotId, jobId, allocationId, resourceProfile, targetAddress, resourceManagerId))));
 
@@ -304,10 +302,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final ResourceID resourceID = ResourceID.generate();
 		final SlotID slotId = new SlotID(resourceID, 0);
 
-		final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
-		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
-			.setRequestSlotFunction(ignored -> allocationAcknowledgeFuture)
-			.createTestingTaskExecutorGateway();
+		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 
 		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 1);
 		final SlotStatus slotStatus = new SlotStatus(slotId, resourceProfile);
@@ -329,7 +324,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			assertSame(TaskManagerSlot.State.PENDING, slot.getState());
 
 			slotManager.processResourceRequirements(new ResourceRequirements(resourceRequirements.getJobId(), "foobar", Collections.emptyList()));
-			allocationAcknowledgeFuture.complete(Acknowledge.get());
 
 			slot = slotManager.getSlot(slotId);
 
@@ -357,11 +351,10 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		final CompletableFuture<Tuple6<SlotID, JobID, AllocationID, ResourceProfile, String, ResourceManagerId>> requestFuture = new CompletableFuture<>();
 		// accept an incoming slot request
-		final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
 		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
 			.setRequestSlotFunction(tuple6 -> {
 				requestFuture.complete(Tuple6.of(tuple6.f0, tuple6.f1, tuple6.f2, tuple6.f3, tuple6.f4, tuple6.f5));
-				return allocationAcknowledgeFuture;
+				return CompletableFuture.completedFuture(Acknowledge.get());
 			})
 			.createTestingTaskExecutorGateway();
 
@@ -383,8 +376,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			slotManager.registerTaskManager(
 				taskExecutorConnection,
 				slotReport);
-
-			allocationAcknowledgeFuture.complete(Acknowledge.get());
 
 			assertThat(requestFuture.get(), is(equalTo(Tuple6.of(slotId, jobId, allocationId, resourceProfile, targetAddress, resourceManagerId))));
 
@@ -447,10 +438,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			"foobar",
 			Collections.singleton(new ResourceRequirement(ResourceProfile.fromResources(1.0, 2), 1)));
 
-		final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
-		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
-			.setRequestSlotFunction(ignored -> allocationAcknowledgeFuture)
-			.createTestingTaskExecutorGateway();
+		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 
 		final ResourceID resourceID = ResourceID.generate();
 
@@ -464,8 +452,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
 
 			slotManager.processResourceRequirements(requirements);
-
-			allocationAcknowledgeFuture.complete(Acknowledge.get());
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
@@ -1343,11 +1329,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
 
-			final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
-			final TestingTaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
-				.setRequestSlotFunction(ignored -> allocationAcknowledgeFuture)
-				.createTestingTaskExecutorGateway();
-			final TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection(taskExecutorGateway);
+			final TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection();
 			final int numberOfferedSlots = 1;
 			final ResourceProfile offeredSlotProfile = ResourceProfile.fromResources(2.0, 2);
 			final SlotReport slotReport = createSlotReport(
@@ -1357,15 +1339,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				DeclarativeSlotManagerImplTest::createEmptySlotStatus);
 
 			slotManager.registerTaskManager(taskExecutorConnection, slotReport);
-
-			// acknowledge the future after the registration
-			// If we were not overriding the RequestSlotFunction, then the future is immediately completed, resulting
-			// in the acknowledge being directly processed after the allocation (since we are using a direct executor).
-			// This execution path cannot happen in production, since the acknowledge processing is scheduled to run at
-			// a later point once the main thread has finished it's current action.
-			// This would break an assumption in `DeclarativeSlotManagerImpl.checkWhetherAnyResourceRequirementsCanBeFulfilled`;
-			// that we can schedule multiple allocations without the acknowledge modifying data structures in-between.
-			allocationAcknowledgeFuture.complete(Acknowledge.get());
 
 			assertThat(slotManager.getNumberRegisteredSlots(), is(numberOfferedSlots));
 			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
@@ -1417,7 +1390,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			.buildAndStartWithDirectExec(ResourceManagerId.generate(), new TestingResourceActionsBuilder().build())) {
 
 			final List<CompletableFuture<JobID>> requestSlotFutures = new ArrayList<>();
-			final List<CompletableFuture<Acknowledge>> allocationFutures = new ArrayList<>();
 
 			final int numberTaskExecutors = 5;
 
@@ -1425,8 +1397,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			for (int i = 0; i < numberTaskExecutors; i++) {
 				final CompletableFuture<JobID> requestSlotFuture = new CompletableFuture<>();
 				requestSlotFutures.add(requestSlotFuture);
-				CompletableFuture<Acknowledge> allocationFuture = registerTaskExecutorWithTwoSlots(slotManager, requestSlotFuture);
-				allocationFutures.add(allocationFuture);
+				registerTaskExecutorWithTwoSlots(slotManager, requestSlotFuture);
 			}
 
 			final JobID jobId = new JobID();
@@ -1436,8 +1407,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				"foobar",
 				Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, numberTaskExecutors)));
 			slotManager.processResourceRequirements(resourceRequirements);
-
-			allocationFutures.forEach(future -> future.complete(Acknowledge.get()));
 
 			// check that every TaskExecutor has received a slot request
 			final Set<JobID> jobIds = new HashSet<>(FutureUtils.combineAll(requestSlotFutures).get(10L, TimeUnit.SECONDS));
@@ -1524,19 +1493,16 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		}
 	}
 
-	private CompletableFuture<Acknowledge> registerTaskExecutorWithTwoSlots(DeclarativeSlotManagerImpl slotManager, CompletableFuture<JobID> firstRequestSlotFuture) {
-		final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
+	private void registerTaskExecutorWithTwoSlots(DeclarativeSlotManagerImpl slotManager, CompletableFuture<JobID> firstRequestSlotFuture) {
 		final TestingTaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
 			.setRequestSlotFunction(slotIDJobIDAllocationIDStringResourceManagerIdTuple6 -> {
 				firstRequestSlotFuture.complete(slotIDJobIDAllocationIDStringResourceManagerIdTuple6.f1);
-				return allocationAcknowledgeFuture;
+				return CompletableFuture.completedFuture(Acknowledge.get());
 			})
 			.createTestingTaskExecutorGateway();
 		final TaskExecutorConnection firstTaskExecutorConnection = createTaskExecutorConnection(taskExecutorGateway);
 		final SlotReport firstSlotReport = createSlotReport(firstTaskExecutorConnection.getResourceID(), 2);
 		slotManager.registerTaskManager(firstTaskExecutorConnection, firstSlotReport);
-
-		return allocationAcknowledgeFuture;
 	}
 
 	@Test

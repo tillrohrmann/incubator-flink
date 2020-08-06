@@ -21,6 +21,7 @@ package org.apache.flink.runtime.resourcemanager.slotmanager;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.clusterframework.types.SlotID;
@@ -434,12 +435,18 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	private void checkWhetherAnyResourceRequirementsCanBeFulfilled() {
 		if (!missingResourcesByJob.isEmpty()) {
+			final Collection<Tuple2<TaskManagerSlot, PendingSlotRequest>> slotsToAllocate = new ArrayList<>();
 			for (Iterator<PendingSlotRequest> missingResources = getMissingResourcesIterator(); missingResources.hasNext(); ) {
 				PendingSlotRequest waitingResource = missingResources.next();
-				if (internalRequestSlot(waitingResource)) {
+				Optional<TaskManagerSlot> reservedSlot = internalRequestSlot(waitingResource);
+				if (reservedSlot.isPresent()) {
+					slotsToAllocate.add(Tuple2.of(reservedSlot.get(), waitingResource));
 					missingResources.remove();
 					addPendingResource(waitingResource);
 				}
+			}
+			for (Tuple2<TaskManagerSlot, PendingSlotRequest> allocation : slotsToAllocate) {
+				allocateSlot(allocation.f0, allocation.f1);
 			}
 		}
 	}
@@ -805,16 +812,15 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	 * @param pendingSlotRequest to allocate a slot for
 	 * @return whether a slot could be allocated
 	 */
-	private boolean internalRequestSlot(PendingSlotRequest pendingSlotRequest) {
+	private Optional<TaskManagerSlot> internalRequestSlot(PendingSlotRequest pendingSlotRequest) {
 		final ResourceProfile resourceProfile = pendingSlotRequest.getResourceProfile();
 
 		Optional<TaskManagerSlot> matchingSlot = findMatchingSlot(resourceProfile);
 		if (matchingSlot.isPresent()) {
-			allocateSlot(matchingSlot.get(), pendingSlotRequest);
-			return true;
+			return matchingSlot;
 		} else {
 			tryAllocatingResource(pendingSlotRequest);
-			return false;
+			return Optional.empty();
 		}
 	}
 
