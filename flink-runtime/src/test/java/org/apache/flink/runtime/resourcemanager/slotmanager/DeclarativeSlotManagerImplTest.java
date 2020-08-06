@@ -432,33 +432,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that a second pending slot request is detected as a duplicate if the allocation ids are
-	 * the same.
-	 */
-	@Test
-	public void testDuplicatePendingSlotRequest() throws Exception {
-		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
-		final AtomicInteger numberAllocateResourceFunctionCalls = new AtomicInteger(0);
-		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
-			.setAllocateResourceConsumer(ignored -> numberAllocateResourceFunctionCalls.incrementAndGet())
-			.build();
-		final AllocationID allocationId = new AllocationID();
-		final ResourceProfile resourceProfile1 = ResourceProfile.fromResources(1.0, 2);
-		final ResourceProfile resourceProfile2 = ResourceProfile.fromResources(2.0, 1);
-		final SlotRequest slotRequest1 = new SlotRequest(new JobID(), allocationId, resourceProfile1, "foobar");
-		final SlotRequest slotRequest2 = new SlotRequest(new JobID(), allocationId, resourceProfile2, "barfoo");
-
-		try (SlotManager slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
-			assertTrue(slotManager.registerSlotRequest(slotRequest1));
-			assertFalse(slotManager.registerSlotRequest(slotRequest2));
-		}
-
-		// check that we have only called the resource allocation only for the first slot request,
-		// since the second request is a duplicate
-		assertThat(numberAllocateResourceFunctionCalls.get(), is(1));
-	}
-
-	/**
 	 * Tests that if we have received a slot report with some allocated slots, then we don't accept
 	 * slot requests with allocated allocation ids.
 	 */
