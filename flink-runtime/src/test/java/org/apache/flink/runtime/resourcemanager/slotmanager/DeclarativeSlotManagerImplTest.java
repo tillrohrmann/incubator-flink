@@ -195,12 +195,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	@Test
 	public void testSlotRequestWithoutFreeSlots() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
-		final SlotRequest slotRequest = new SlotRequest(
+
+		final ResourceRequirements resourceRequirements = new ResourceRequirements(
 			new JobID(),
-			new AllocationID(),
-			resourceProfile,
-			"localhost");
+			"foobar",
+			Collections.singleton(new ResourceRequirement(ResourceProfile.fromResources(42.0, 1337), 1)));
 
 		CompletableFuture<WorkerResourceSpec> allocateResourceFuture = new CompletableFuture<>();
 		ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
@@ -209,7 +208,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		try (SlotManager slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 
-			slotManager.registerSlotRequest(slotRequest);
+			slotManager.processResourceRequirements(resourceRequirements);
 
 			allocateResourceFuture.get();
 		}
