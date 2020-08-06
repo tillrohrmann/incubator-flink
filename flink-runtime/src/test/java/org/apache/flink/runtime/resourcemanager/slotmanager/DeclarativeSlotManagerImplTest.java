@@ -51,6 +51,7 @@ import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.function.FunctionUtils;
 import org.apache.flink.util.function.ThrowingRunnable;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.annotation.Nonnull;
@@ -291,26 +292,25 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Checks that un-registering a pending slot request will cancel it, removing it from all
-	 * assigned task manager slots and then remove it from the slot manager.
+	 * Checks that reducing resource requirements while a slot allocation is in-progress results in the slot being freed
+	 * one the allocation completes.
 	 */
 	@Test
-	public void testUnregisterPendingSlotRequest() throws Exception {
+	@Ignore
+	public void testResourceRequirementReductionDuringAllocation() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
 		final ResourceID resourceID = ResourceID.generate();
 		final SlotID slotId = new SlotID(resourceID, 0);
-		final AllocationID allocationId = new AllocationID();
 
+		final CompletableFuture<Acknowledge> allocationAcknowledgeFuture = new CompletableFuture<>();
 		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
-			.setRequestSlotFunction(slotIDJobIDAllocationIDStringResourceManagerIdTuple6 -> new CompletableFuture<>())
+			.setRequestSlotFunction(ignored -> allocationAcknowledgeFuture)
 			.createTestingTaskExecutorGateway();
 
 		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 1);
 		final SlotStatus slotStatus = new SlotStatus(slotId, resourceProfile);
 		final SlotReport slotReport = new SlotReport(slotStatus);
-
-		final SlotRequest slotRequest = new SlotRequest(new JobID(), allocationId, resourceProfile, "foobar");
 
 		final TaskExecutorConnection taskManagerConnection = new TaskExecutorConnection(resourceID, taskExecutorGateway);
 
@@ -319,18 +319,20 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
-			slotManager.registerSlotRequest(slotRequest);
+			final ResourceRequirements resourceRequirements = new ResourceRequirements(
+				new JobID(),
+				"foobar",
+				Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
+			slotManager.processResourceRequirements(resourceRequirements);
 
-			//assertNotNull(slotManager.getSlotRequest(allocationId));
+			assertSame(TaskManagerSlot.State.PENDING, slot.getState());
 
-			assertTrue(slot.getState() == TaskManagerSlot.State.PENDING);
-
-			slotManager.unregisterSlotRequest(allocationId);
-
-			//assertNull(slotManager.getSlotRequest(allocationId));
+			slotManager.processResourceRequirements(new ResourceRequirements(resourceRequirements.getJobId(), "foobar", Collections.emptyList()));
+			allocationAcknowledgeFuture.complete(Acknowledge.get());
 
 			slot = slotManager.getSlot(slotId);
-			assertTrue(slot.getState() == TaskManagerSlot.State.FREE);
+
+			assertSame(TaskManagerSlot.State.FREE, slot.getState());
 		}
 	}
 
