@@ -45,5 +45,9 @@ public class ResourceRequirement implements Serializable {
 	public int getNumberOfRequiredSlots() {
 		return numberOfRequiredSlots;
 	}
+
+	public static ResourceRequirement create(ResourceProfile resourceProfile, int numberOfRequiredSlots) {
+		return new ResourceRequirement(resourceProfile, numberOfRequiredSlots);
+	}
 }
 
