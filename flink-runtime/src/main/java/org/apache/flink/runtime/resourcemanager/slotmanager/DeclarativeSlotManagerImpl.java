@@ -994,8 +994,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		Preconditions.checkState(freeSlot.getState() == TaskManagerSlot.State.FREE);
 
 		freeSlots.put(freeSlot.getSlotId(), freeSlot);
-
-		checkWhetherAnyResourceRequirementsCanBeFulfilled();
 	}
 
 	/**
