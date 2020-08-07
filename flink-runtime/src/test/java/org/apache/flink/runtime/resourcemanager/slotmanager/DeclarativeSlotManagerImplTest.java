@@ -163,10 +163,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final SlotStatus slotStatus2 = new SlotStatus(slotId2, resourceProfile);
 		final SlotReport slotReport = new SlotReport(Arrays.asList(slotStatus1, slotStatus2));
 
-		final ResourceRequirements resourceRequirements = new ResourceRequirements(
-			new JobID(),
-			"foobar",
-			Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
+		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot();
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
@@ -196,10 +193,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	public void testSlotRequestWithoutFreeSlots() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 
-		final ResourceRequirements resourceRequirements = new ResourceRequirements(
-			new JobID(),
-			"foobar",
-			Collections.singleton(new ResourceRequirement(ResourceProfile.fromResources(42.0, 1337), 1)));
+		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot();
 
 		CompletableFuture<WorkerResourceSpec> allocateResourceFuture = new CompletableFuture<>();
 		ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
@@ -315,10 +309,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
-			final ResourceRequirements resourceRequirements = new ResourceRequirements(
-				new JobID(),
-				"foobar",
-				Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
+			final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot();
 			slotManager.processResourceRequirements(resourceRequirements);
 
 			assertSame(TaskManagerSlot.State.PENDING, slot.getState());
@@ -432,11 +423,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
 			.setAllocateResourceConsumer(ignored -> allocateResourceCalls.incrementAndGet())
 			.build();
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 2);
-		ResourceRequirements requirements = new ResourceRequirements(
-			new JobID(),
-			"foobar",
-			Collections.singleton(new ResourceRequirement(ResourceProfile.fromResources(1.0, 2), 1)));
+		ResourceRequirements requirements = createResourceRequirementsForSingleSlot();
 
 		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 
@@ -445,7 +432,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final TaskExecutorConnection taskManagerConnection = new TaskExecutorConnection(resourceID, taskExecutorGateway);
 
 		final SlotID slotId = new SlotID(resourceID, 0);
-		final SlotStatus slotStatus = new SlotStatus(slotId, resourceProfile);
+		final SlotStatus slotStatus = new SlotStatus(slotId, ResourceProfile.ANY);
 		final SlotReport slotReport = new SlotReport(slotStatus);
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
@@ -472,15 +459,8 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	public void testSlotCanBeAllocatedForDifferentJobAfterFree() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final AllocationID allocationId = new AllocationID();
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 2);
-		final ResourceRequirements resourceRequirements1 = new ResourceRequirements(
-			new JobID(),
-			"foobar",
-			Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
-		final ResourceRequirements resourceRequirements2 = new ResourceRequirements(
-			new JobID(),
-			"foobar",
-			Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
+		final ResourceRequirements resourceRequirements1 = createResourceRequirementsForSingleSlot();
+		final ResourceRequirements resourceRequirements2 = createResourceRequirementsForSingleSlot();
 
 		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 
@@ -964,10 +944,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			final JobID jobId = new JobID();
 			// this resource requirement should not be fulfilled
-			ResourceRequirements requirements = new ResourceRequirements(
-				jobId,
-				"foobar",
-				Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, 1)));
+			ResourceRequirements requirements = createResourceRequirementsForSingleSlot(jobId);
 
 			slotManager.processResourceRequirements(requirements);
 
@@ -985,10 +962,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(),
 			new TestingResourceActionsBuilder().build())) {
 
-			ResourceRequirements requirements = new ResourceRequirements(
-				new JobID(),
-				"foobar",
-				Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, 1)));
+			ResourceRequirements requirements = createResourceRequirementsForSingleSlot();
 			slotManager.processResourceRequirements(requirements);
 
 			final BlockingQueue<Tuple6<SlotID, JobID, AllocationID, ResourceProfile, String, ResourceManagerId>> requestSlotQueue = new ArrayBlockingQueue<>(1);
@@ -1321,10 +1295,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(), resourceActions, numberSlots)) {
 
-			ResourceRequirements requirements = new ResourceRequirements(
-				new JobID(),
-				"foobar",
-				Collections.singleton(new ResourceRequirement(ResourceProfile.fromResources(1.0, 1), 1)));
+			ResourceRequirements requirements = createResourceRequirementsForSingleSlot();
 			slotManager.processResourceRequirements(requirements);
 
 			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
@@ -1356,10 +1327,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(), resourceActions, numberSlots)) {
 			final JobID jobId = new JobID();
-			final ResourceRequirements resourceRequirements = new ResourceRequirements(
-				jobId,
-				"foobar",
-				Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, 1)));
+			final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot(jobId);
 			slotManager.processResourceRequirements(resourceRequirements);
 
 			final TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection();
@@ -1405,10 +1373,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			final JobID jobId = new JobID();
 
-			final ResourceRequirements resourceRequirements = new ResourceRequirements(
-				jobId,
-				"foobar",
-				Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, numberTaskExecutors)));
+			final ResourceRequirements resourceRequirements = createResourceRequirements(jobId, numberTaskExecutors);
 			slotManager.processResourceRequirements(resourceRequirements);
 
 			// check that every TaskExecutor has received a slot request
@@ -1529,5 +1494,20 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		assertThat(
 			SlotManagerImpl.generateDefaultSlotResourceProfile(workerResourceSpec, numSlots),
 			is(resourceProfile));
+	}
+
+	private static ResourceRequirements createResourceRequirementsForSingleSlot() {
+		return createResourceRequirementsForSingleSlot(new JobID());
+	}
+
+	private static ResourceRequirements createResourceRequirementsForSingleSlot(JobID jobId) {
+		return createResourceRequirements(jobId, 1);
+	}
+
+	private static ResourceRequirements createResourceRequirements(JobID jobId, int numRequiredSlots) {
+		return new ResourceRequirements(
+			jobId,
+			"foobar",
+			Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, numRequiredSlots)));
 	}
 }
