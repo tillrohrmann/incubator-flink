@@ -957,16 +957,13 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 						if (throwable instanceof SlotOccupiedException) {
 							SlotOccupiedException exception = (SlotOccupiedException) throwable;
 							updateSlot(slotId, exception.getJobId());
+						} else if (throwable instanceof  CancellationException) {
+							LOG.debug("Slot allocation request for slot {} has been cancelled.", slotId, throwable);
 						} else {
-							removeSlotRequestFromSlot(slotId);
-						}
-
-						if (!(throwable instanceof CancellationException)) {
 							internalFreeSlot(taskManagerSlot);
 							handleFailedSlotRequest(slotId, throwable);
-						} else {
-							LOG.debug("Slot allocation request for slot {} has been cancelled.", slotId, throwable);
 						}
+
 						checkWhetherAnyResourceRequirementsCanBeFulfilled();
 					}
 				} catch (Exception e) {
@@ -1033,33 +1030,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	// ---------------------------------------------------------------------------------------------
 	// Internal request handling methods
 	// ---------------------------------------------------------------------------------------------
-
-	/**
-	 * Removes a pending slot request identified by the given allocation id from a slot identified
-	 * by the given slot id.
-	 *
-	 * @param slotId identifying the slot
-	 */
-	private void removeSlotRequestFromSlot(SlotID slotId) {
-		TaskManagerSlot taskManagerSlot = slots.get(slotId);
-
-		if (null != taskManagerSlot) {
-			if (taskManagerSlot.getState() == TaskManagerSlot.State.PENDING) {
-
-				TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(taskManagerSlot.getInstanceId());
-
-				if (taskManagerRegistration == null) {
-					throw new IllegalStateException("Trying to remove slot request from slot for which there is no TaskManager " + taskManagerSlot.getInstanceId() + " is registered.");
-				}
-
-				updateStateForFreeSlot(taskManagerSlot, taskManagerRegistration);
-			} else {
-				LOG.debug("Ignore slot request removal for slot {}.", slotId);
-			}
-		} else {
-			LOG.debug("There was no slot with {} registered. Probably this slot has been already freed.", slotId);
-		}
-	}
 
 	/**
 	 * Handles a failed slot request. The slot manager tries to find a new slot fulfilling
@@ -1384,6 +1354,13 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	@VisibleForTesting
 	int getNumPendingResources(JobID jobId) {
 		return pendingResourcesByJob.getOrDefault(jobId, Collections.emptyList()).size();
+	}
+
+	@VisibleForTesting
+	int getNumAllocatedResources(JobID jobId) {
+		return allocatedResourcesByJob
+			.getOrDefault(jobId, AllocatedResources.EMPTY)
+			.numResourcesByProfile.values().stream().reduce(0, Integer::sum);
 	}
 
 	@VisibleForTesting

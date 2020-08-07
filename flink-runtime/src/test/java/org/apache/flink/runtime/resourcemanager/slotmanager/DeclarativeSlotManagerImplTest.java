@@ -1001,7 +1001,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that pending request is removed if task executor reports a slot with its allocation id.
+	 * Tests that pending request is removed if task executor reports a slot with the same job id.
 	 */
 	@Test
 	public void testSlotRequestRemovedIfTMReportAllocation() throws Exception {
@@ -1009,8 +1009,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				new TestingResourceActionsBuilder().build())) {
 
 			final JobID jobID = new JobID();
-			final SlotRequest slotRequest1 = new SlotRequest(jobID, new AllocationID(), ResourceProfile.UNKNOWN, "foobar");
-			slotManager.registerSlotRequest(slotRequest1);
+			slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot(jobID));
 
 			final BlockingQueue<Tuple6<SlotID, JobID, AllocationID, ResourceProfile, String, ResourceManagerId>> requestSlotQueue = new ArrayBlockingQueue<>(1);
 			final BlockingQueue<CompletableFuture<Acknowledge>> responseQueue = new ArrayBlockingQueue<>(1);
@@ -1040,28 +1039,24 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			final CompletableFuture<Acknowledge> secondManualSlotRequestResponse = new CompletableFuture<>();
 			responseQueue.offer(secondManualSlotRequestResponse);
 
-			final SlotRequest slotRequest2 = new SlotRequest(jobID, new AllocationID(), ResourceProfile.UNKNOWN, "foobar");
-			slotManager.registerSlotRequest(slotRequest2);
-
 			// fail first request
 			firstManualSlotRequestResponse.completeExceptionally(new TimeoutException("Test exception to fail first allocation"));
 
 			final Tuple6<SlotID, JobID, AllocationID, ResourceProfile, String, ResourceManagerId> secondRequest = requestSlotQueue.take();
 
 			// fail second request
-			secondManualSlotRequestResponse.completeExceptionally(new SlotOccupiedException("Test exception", slotRequest1.getAllocationId(), jobID));
+			secondManualSlotRequestResponse.completeExceptionally(new SlotOccupiedException("Test exception", new AllocationID(), jobID));
 
-			assertThat(firstRequest.f2, equalTo(slotRequest1.getAllocationId()));
-			assertThat(secondRequest.f2, equalTo(slotRequest2.getAllocationId()));
+			assertThat(firstRequest.f1, equalTo(jobID));
+			assertThat(secondRequest.f1, equalTo(jobID));
 			assertThat(secondRequest.f0, equalTo(firstRequest.f0));
-
-			secondManualSlotRequestResponse.complete(Acknowledge.get());
 
 			final TaskManagerSlot slot = slotManager.getSlot(secondRequest.f0);
 			assertThat(slot.getState(), equalTo(TaskManagerSlot.State.ALLOCATED));
-			assertThat(slot.getAllocationId(), equalTo(firstRequest.f2));
+			assertThat(slot.getJobId(), equalTo(firstRequest.f1));
 
 			assertThat(slotManager.getNumberRegisteredSlots(), is(1));
+			assertThat(slotManager.getNumAllocatedResources(jobID), is(1));
 		}
 	}
 
