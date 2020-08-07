@@ -1222,16 +1222,18 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			numberSlots)) {
 
 			final JobID jobId = new JobID();
-			assertThat(slotManager.registerSlotRequest(createSlotRequest(jobId)), is(true));
+
+			// we currently do not take pending slots into account for matching resource requirements, so we
+			// requests new resources for every missing resource every time we check the requirements
+
+			slotManager.processResourceRequirements(createResourceRequirements(jobId, 1));
 			assertThat(resourceRequests.get(), is(1));
 
-			// the second slot request should not try to allocate a new resource because the
-			// previous resource was started with 2 slots.
-			assertThat(slotManager.registerSlotRequest(createSlotRequest(jobId)), is(true));
-			assertThat(resourceRequests.get(), is(1));
+			slotManager.processResourceRequirements(createResourceRequirements(jobId, 2));
+			assertThat(resourceRequests.get(), is(3));
 
-			assertThat(slotManager.registerSlotRequest(createSlotRequest(jobId)), is(true));
-			assertThat(resourceRequests.get(), is(2));
+			slotManager.processResourceRequirements(createResourceRequirements(jobId, 3));
+			assertThat(resourceRequests.get(), is(6));
 		}
 	}
 
@@ -1297,7 +1299,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			assertThat(slotManager.getNumberRegisteredSlots(), is(numberOfferedSlots));
 			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
-			assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(0));
 		}
 	}
 
