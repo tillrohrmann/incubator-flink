@@ -69,7 +69,6 @@ import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -777,14 +776,10 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			.setReleaseResourceConsumer((instanceID, e) -> releasedResourceFuture.complete(instanceID))
 			.build();
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
-		final ScheduledExecutor scheduledExecutor = TestingUtils.defaultScheduledExecutor();
 
 		final ResourceID resourceId = ResourceID.generate();
 
 		final JobID jobId = new JobID();
-		final AllocationID allocationId = new AllocationID();
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 1);
-		final SlotRequest slotRequest = new SlotRequest(jobId, allocationId, resourceProfile, "foobar");
 
 		final CompletableFuture<SlotID> requestedSlotFuture = new CompletableFuture<>();
 		final TaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder()
@@ -798,8 +793,8 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		final SlotID slotId1 = new SlotID(resourceId, 0);
 		final SlotID slotId2 = new SlotID(resourceId, 1);
-		final SlotStatus slotStatus1 = new SlotStatus(slotId1, resourceProfile);
-		final SlotStatus slotStatus2 = new SlotStatus(slotId2, resourceProfile);
+		final SlotStatus slotStatus1 = new SlotStatus(slotId1, ResourceProfile.ANY);
+		final SlotStatus slotStatus2 = new SlotStatus(slotId2, ResourceProfile.ANY);
 		final SlotReport initialSlotReport = new SlotReport(Arrays.asList(slotStatus1, slotStatus2));
 
 		final Executor mainThreadExecutor = TestingUtils.defaultExecutor();
@@ -811,15 +806,8 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			slotManager.start(resourceManagerId, mainThreadExecutor, resourceManagerActions);
 
-			CompletableFuture.supplyAsync(
-				() -> {
-					try {
-						return slotManager.registerSlotRequest(slotRequest);
-					} catch (ResourceManagerException e) {
-						throw new CompletionException(e);
-					}
-				},
-				mainThreadExecutor)
+			CompletableFuture.runAsync(
+				() -> slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot(jobId)), mainThreadExecutor)
 				.thenRun(() -> slotManager.registerTaskManager(taskManagerConnection, initialSlotReport))
 				.get();
 
@@ -838,11 +826,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			TaskManagerSlot slot = slotFuture.get();
 
-			assertTrue(slot.getState() == TaskManagerSlot.State.ALLOCATED);
-			assertEquals(allocationId, slot.getAllocationId());
+			assertSame(TaskManagerSlot.State.ALLOCATED, slot.getState());
+			assertEquals(jobId, slot.getJobId());
 
 			CompletableFuture<Boolean> idleFuture2 = CompletableFuture.runAsync(
-				() -> slotManager.freeSlot(slotId, allocationId),
+				() -> slotManager.freeSlot(slotId, DeclarativeSlotManagerImpl.DUMMY_ALLOCATION_ID),
 				mainThreadExecutor)
 			.thenApply((Object value) -> slotManager.isTaskManagerIdle(taskManagerConnection.getInstanceID()));
 

@@ -738,7 +738,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	private void internalFreeSlot(TaskManagerSlot slot) {
 		final TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(slot.getInstanceId());
-		switch (slot.getState()) {
+
+		TaskManagerSlot.State currentState = slot.getState();
+		switch (currentState) {
 			case FREE:
 				break;
 			case PENDING:
@@ -747,7 +749,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			case ALLOCATED:
 				slot.freeSlot();
 		}
-		if (slot.getState() == TaskManagerSlot.State.ALLOCATED) {
+		if (currentState == TaskManagerSlot.State.ALLOCATED) {
 			taskManagerRegistration.freeSlot();
 		}
 		handleFreeSlot(slot);
@@ -1199,8 +1201,11 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	private void findAndRemoveMatchingAllocatedResource(JobID jobId, ResourceProfile profile) {
-		allocatedResourcesByJob.getOrDefault(jobId, new AllocatedResources())
-			.decrement(profile);
+		AllocatedResources allocatedResources = allocatedResourcesByJob.getOrDefault(jobId, new AllocatedResources());
+		allocatedResources.decrement(profile);
+		if (allocatedResources.numResourcesByProfile.isEmpty()) {
+			allocatedResourcesByJob.remove(jobId);
+		}
 	}
 
 	private Iterator<PendingSlotRequest> getMissingResourcesIterator() {
