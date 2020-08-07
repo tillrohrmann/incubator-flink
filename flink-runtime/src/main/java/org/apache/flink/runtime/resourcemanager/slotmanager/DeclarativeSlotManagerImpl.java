@@ -84,13 +84,16 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	private final Time taskManagerRequestTimeout;
 
 	/** Timeout after which an allocation is discarded. */
-	private final Time slotRequestTimeout;
+	private final Time slotAllocationTimeout;
 
 	/** Timeout after which an unused TaskManager is released. */
 	private final Time taskManagerTimeout;
 
 	/** Map for all registered slots. */
 	private final HashMap<SlotID, TaskManagerSlot> slots;
+
+	/** Index of all currently pending slots. */
+	private final HashMap<SlotID, TaskManagerSlot> pendingSlotAllocations;
 
 	/** Index of all currently free slots. */
 	private final LinkedHashMap<SlotID, TaskManagerSlot> freeSlots;
@@ -162,7 +165,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		Preconditions.checkNotNull(slotManagerConfiguration);
 		this.slotMatchingStrategy = slotManagerConfiguration.getSlotMatchingStrategy();
 		this.taskManagerRequestTimeout = slotManagerConfiguration.getTaskManagerRequestTimeout();
-		this.slotRequestTimeout = slotManagerConfiguration.getSlotRequestTimeout();
+		this.slotAllocationTimeout = slotManagerConfiguration.getSlotRequestTimeout();
 		this.taskManagerTimeout = slotManagerConfiguration.getTaskManagerTimeout();
 		this.waitResultConsumedBeforeRelease = slotManagerConfiguration.isWaitResultConsumedBeforeRelease();
 		this.defaultWorkerResourceSpec = slotManagerConfiguration.getDefaultWorkerResourceSpec();
@@ -173,6 +176,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		this.redundantTaskManagerNum = slotManagerConfiguration.getRedundantTaskManagerNum();
 
 		slots = new HashMap<>(16);
+		pendingSlotAllocations = new HashMap<>(16);
 		freeSlots = new LinkedHashMap<>(16);
 		taskManagerRegistrations = new HashMap<>(4);
 		pendingSlots = new HashMap<>(16);
@@ -294,9 +298,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		slotRequestTimeoutCheck = scheduledExecutor.scheduleWithFixedDelay(
 			() -> mainThreadExecutor.execute(
-				() -> checkSlotRequestTimeouts()),
+				() -> checkSlotAllocationTimeouts()),
 			0L,
-			slotRequestTimeout.toMilliseconds(),
+			slotAllocationTimeout.toMilliseconds(),
 			TimeUnit.MILLISECONDS);
 
 		registerSlotManagerMetrics();
@@ -628,6 +632,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				taskManagerSlot.getSlotId(), taskManagerSlot.getState());
 
 			freeSlots.remove(taskManagerSlot.getSlotId());
+			pendingSlotAllocations.put(taskManagerSlot.getSlotId(), taskManagerSlot);
 		});
 
 		return optionalMatchingSlot;
@@ -951,6 +956,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		completableFuture.whenCompleteAsync(
 			(Acknowledge acknowledge, Throwable throwable) -> {
 				try {
+					pendingSlotAllocations.remove(slotId);
 					if (acknowledge != null) {
 						updateSlot(slotId, pendingSlotRequest.getJobId());
 					} else {
@@ -1136,16 +1142,19 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		resourceActions.releaseResource(timedOutTaskManagerId, cause);
 	}
 
-	private void checkSlotRequestTimeouts() {
-		if (!pendingResourcesByJob.isEmpty()) {
+	private void checkSlotAllocationTimeouts() {
+		if (!pendingSlotAllocations.isEmpty()) {
 			long currentTime = System.currentTimeMillis();
 
-			for (Iterator<PendingSlotRequest> iter = getPendingResourcesIterator(); iter.hasNext(); ) {
-				PendingSlotRequest slotRequest = iter.next();
+			for (Iterator<TaskManagerSlot> iterator = pendingSlotAllocations.values().iterator(); iterator.hasNext(); ) {
+				TaskManagerSlot pendingSlotAllocation = iterator.next();
 
-				if (currentTime - slotRequest.getCreationTimestamp() >= slotRequestTimeout.toMilliseconds()) {
-					iter.remove();
-					addMissingResource(slotRequest);
+				if (currentTime - pendingSlotAllocation.getAllocationStartTimestamp() >= slotAllocationTimeout.toMilliseconds()) {
+					iterator.remove();
+					Optional<PendingSlotRequest> matchingRequirement = findAndRemoveMatchingPendingResource(pendingSlotAllocation.getJobId(), pendingSlotAllocation.getResourceProfile());
+					if (matchingRequirement.isPresent()) {
+						addMissingResource(matchingRequirement.get());
+					}
 				}
 			}
 			checkResourceRequirements();

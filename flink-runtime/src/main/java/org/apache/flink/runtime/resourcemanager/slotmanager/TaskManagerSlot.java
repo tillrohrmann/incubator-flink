@@ -66,6 +66,8 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 
 	private CompletableFuture<Acknowledge> allocationFuture;
 
+	private long allocationStartTimeStamp;
+
 	public TaskManagerSlot(
 			SlotID slotId,
 			ResourceProfile resourceProfile,
@@ -115,6 +117,10 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 		return taskManagerConnection.getInstanceID();
 	}
 
+	public long getAllocationStartTimestamp() {
+		return allocationStartTimeStamp;
+	}
+
 	public void freeSlot() {
 		Preconditions.checkState(state == State.ALLOCATED, "Slot must be allocated before freeing it.");
 
@@ -142,6 +148,7 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 
 		state = State.PENDING;
 		assignedSlotRequest = DUMMY_REQUEST;
+		this.allocationStartTimeStamp = System.currentTimeMillis();
 		this.allocationFuture = Preconditions.checkNotNull(allocationFuture);
 	}
 

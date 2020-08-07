@@ -569,10 +569,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	public void testSlotAllocationTimeout() throws Exception {
 		final long allocationTimeout = 50L;
 
-		final CompletableFuture<Tuple2<JobID, AllocationID>> failedAllocationFuture = new CompletableFuture<>();
-		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
-			.setNotifyAllocationFailureConsumer(tuple3 -> failedAllocationFuture.complete(Tuple2.of(tuple3.f0, tuple3.f1)))
-			.build();
 		final JobID jobId = new JobID();
 
 		final CompletableFuture<Void> secondSlotRequestFuture = new CompletableFuture<>();
@@ -585,7 +581,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				return new CompletableFuture<>();
 			})
 			.createTestingTaskExecutorGateway());
-		final SlotReport slotReport = createSlotReport(taskManagerConnection.getResourceID(), 1);
+		final SlotReport slotReport = createSlotReport(taskManagerConnection.getResourceID(), 2);
 
 		final Executor mainThreadExecutor = TestingUtils.defaultExecutor();
 
@@ -593,15 +589,14 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			.setSlotRequestTimeout(Time.milliseconds(allocationTimeout))
 			.build()) {
 
-			slotManager.start(ResourceManagerId.generate(), mainThreadExecutor, resourceManagerActions);
+			slotManager.start(ResourceManagerId.generate(), mainThreadExecutor, new TestingResourceActionsBuilder().build());
 
-			int numMissingResources = CompletableFuture.runAsync(() -> slotManager.registerTaskManager(taskManagerConnection, slotReport), mainThreadExecutor)
+			CompletableFuture.runAsync(() -> slotManager.registerTaskManager(taskManagerConnection, slotReport), mainThreadExecutor)
 				.thenRun(() -> slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot(jobId)))
-				.thenApply(ignored -> slotManager.getNumMissingResources(jobId))
 				.get(5, TimeUnit.SECONDS);
 
-			// the slot we tried to allocate will not be freed on a timeout, so the slot will be considered missing
-			assertThat(numMissingResources, is(1));
+			// a second request is only sent if the first request timed out
+			secondSlotRequestFuture.get();
 		}
 	}
 
