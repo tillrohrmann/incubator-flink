@@ -1356,7 +1356,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(), resourceActions, numberSlots)) {
 			final JobID jobId = new JobID();
-			assertThat(slotManager.registerSlotRequest(createSlotRequest(jobId)), is(true));
+			final ResourceRequirements resourceRequirements = new ResourceRequirements(
+				jobId,
+				"foobar",
+				Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, 1)));
+			slotManager.processResourceRequirements(resourceRequirements);
 
 			final TaskExecutorConnection taskExecutorConnection = createTaskExecutorConnection();
 			final SlotID slotId = new SlotID(taskExecutorConnection.getResourceID(), 0);
@@ -1367,7 +1371,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			assertThat(slotManager.getNumberRegisteredSlots(), is(1));
 			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
-			//assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(1));
 		}
 	}
 
