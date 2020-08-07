@@ -1217,29 +1217,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		}
 	}
 
-	/**
-	 * Tests that a failing allocation/slot request will return the pending task manager slot.
-	 */
-	@Test
-	public void testFailingAllocationReturnsPendingTaskManagerSlot() throws Exception {
-		final int numberSlots = 2;
-		final TestingResourceActions resourceActions = new TestingResourceActionsBuilder().build();
-		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(ResourceManagerId.generate(), resourceActions, numberSlots)) {
-			final JobID jobId = new JobID();
-
-			final SlotRequest slotRequest = createSlotRequest(jobId);
-			assertThat(slotManager.registerSlotRequest(slotRequest), is(true));
-
-			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
-			//assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(1));
-
-			slotManager.unregisterSlotRequest(slotRequest.getAllocationId());
-
-			assertThat(slotManager.getNumberPendingTaskManagerSlots(), is(numberSlots));
-			//assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(0));
-		}
-	}
-
 	private TaskExecutorConnection createTaskExecutorConnection() {
 		final TestingTaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 		return createTaskExecutorConnection(taskExecutorGateway);
