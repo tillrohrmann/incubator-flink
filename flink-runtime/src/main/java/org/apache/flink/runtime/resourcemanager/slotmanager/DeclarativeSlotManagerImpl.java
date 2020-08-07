@@ -1022,8 +1022,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				Optional<PendingSlotRequest> matchingPendingResource = findAndRemoveMatchingPendingResource(slot.getJobId(), slot.getResourceProfile());
 				if (matchingPendingResource.isPresent()) {
 					addMissingResource(matchingPendingResource.get());
-				} else {
-					throw new RuntimeException("Had a pending slot without a matching resource requirement.");
 				}
 			}
 		} else {
