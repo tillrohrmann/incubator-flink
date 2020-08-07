@@ -264,11 +264,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		throw new UnsupportedOperationException();
 	}
 
-	@VisibleForTesting
-	public int getNumberAssignedPendingTaskManagerSlots() {
-		return (int) pendingSlots.values().stream().filter(slot -> slot.getAssignedPendingSlotRequest() != null).count();
-	}
-
 	// ---------------------------------------------------------------------------------------------
 	// Component lifecycle methods
 	// ---------------------------------------------------------------------------------------------

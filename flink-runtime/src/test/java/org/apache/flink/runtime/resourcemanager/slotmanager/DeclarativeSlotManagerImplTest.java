@@ -1230,8 +1230,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			assertThat(slotManager.registerSlotRequest(createSlotRequest(jobId)), is(true));
 			assertThat(resourceRequests.get(), is(1));
 
-			//assertThat(slotManager.getNumberAssignedPendingTaskManagerSlots(), is(2));
-
 			assertThat(slotManager.registerSlotRequest(createSlotRequest(jobId)), is(true));
 			assertThat(resourceRequests.get(), is(2));
 		}
