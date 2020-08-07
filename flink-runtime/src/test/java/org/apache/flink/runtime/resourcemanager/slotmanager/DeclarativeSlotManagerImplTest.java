@@ -611,17 +611,15 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that a slot request is retried if it times out on the task manager side.
+	 * Tests that a slot allocation is retried if it times out on the task manager side.
 	 */
 	@Test
-	public void testTaskManagerSlotRequestTimeoutHandling() throws Exception {
+	public void testTaskManagerSlotAllocationTimeoutHandling() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
 
 		final JobID jobId = new JobID();
-		final AllocationID allocationId = new AllocationID();
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
-		final SlotRequest slotRequest = new SlotRequest(jobId, allocationId, resourceProfile, "foobar");
+		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot(jobId);
 		final CompletableFuture<Acknowledge> slotRequestFuture1 = new CompletableFuture<>();
 		final CompletableFuture<Acknowledge> slotRequestFuture2 = new CompletableFuture<>();
 		final Iterator<CompletableFuture<Acknowledge>> slotRequestFutureIterator = Arrays.asList(slotRequestFuture1, slotRequestFuture2).iterator();
@@ -640,15 +638,15 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		final SlotID slotId1 = new SlotID(resourceId, 0);
 		final SlotID slotId2 = new SlotID(resourceId, 1);
-		final SlotStatus slotStatus1 = new SlotStatus(slotId1, resourceProfile);
-		final SlotStatus slotStatus2 = new SlotStatus(slotId2, resourceProfile);
+		final SlotStatus slotStatus1 = new SlotStatus(slotId1, ResourceProfile.ANY);
+		final SlotStatus slotStatus2 = new SlotStatus(slotId2, ResourceProfile.ANY);
 		final SlotReport slotReport = new SlotReport(Arrays.asList(slotStatus1, slotStatus2));
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
 
-			slotManager.registerSlotRequest(slotRequest);
+			slotManager.processResourceRequirements(resourceRequirements);
 
 			final SlotID firstSlotId = slotIds.take();
 			assertThat(slotIds, is(empty()));
@@ -657,6 +655,8 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			// let the first attempt fail --> this should trigger a second attempt
 			slotRequestFuture1.completeExceptionally(new SlotAllocationException("Test exception."));
+
+			assertThat(slotManager.getNumPendingResources(jobId), is(1));
 
 			// the second attempt succeeds
 			slotRequestFuture2.complete(Acknowledge.get());
@@ -667,7 +667,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			TaskManagerSlot slot = slotManager.getSlot(secondSlotId);
 
 			assertTrue(slot.getState() == TaskManagerSlot.State.ALLOCATED);
-			assertEquals(allocationId, slot.getAllocationId());
+			assertEquals(jobId, slot.getJobId());
 
 			if (!failedSlot.getSlotId().equals(slot.getSlotId())) {
 				assertTrue(failedSlot.getState() == TaskManagerSlot.State.FREE);

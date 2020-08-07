@@ -1382,6 +1382,11 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	@VisibleForTesting
+	int getNumPendingResources(JobID jobId) {
+		return pendingResourcesByJob.getOrDefault(jobId, Collections.emptyList()).size();
+	}
+
+	@VisibleForTesting
 	TaskManagerSlot getSlot(SlotID slotId) {
 		return slots.get(slotId);
 	}
