@@ -760,7 +760,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			case PENDING:
 				slot.getAllocationFuture().cancel(false);
 
-				Optional<PendingSlotRequest> matchingSlotRequestsOptional = findAndRemoveMatchingPendingResource(slot.getJobId(), slot.getResourceProfile());
+				Optional<PendingSlotRequest> matchingSlotRequestsOptional = findAndRemoveMatchingPendingResource(jobId, slot.getResourceProfile());
 				if (matchingSlotRequestsOptional.isPresent()) {
 
 					slot.completeAllocation(DUMMY_ALLOCATION_ID, jobId);
