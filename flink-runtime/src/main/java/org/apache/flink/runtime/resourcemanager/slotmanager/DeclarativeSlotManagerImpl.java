@@ -815,6 +815,12 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			return matchingSlot;
 		} else {
 			tryAllocatingResource(pendingSlotRequest);
+			// TODO: Rework how pending slots are handled; currently we repeatedly ask for pending slots until enough
+			// TODO: were allocated to fulfill the current requirements, but we'll generally request
+			// TODO: more than we actually need because we don't mark the soon(TM) fulfilled requirements as pending.
+			// TODO: Basically, separate the request for new task executors from this method, and introduce another
+			// TODO: component that uses _some_ heuristic to request new task executors. For matching resources, we
+			// TODO: then only react to slot registrations by task executors.
 			return Optional.empty();
 		}
 	}
