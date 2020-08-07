@@ -209,30 +209,22 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that the slot request fails if we cannot allocate more resources.
+	 * Tests that resources continue to be considered missing if we cannot allocate more resources.
 	 */
 	@Test
-	public void testSlotRequestWithResourceAllocationFailure() throws Exception {
+	public void testResourceDeclarationWithResourceAllocationFailure() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
-		final SlotRequest slotRequest = new SlotRequest(
-			new JobID(),
-			new AllocationID(),
-			resourceProfile,
-			"localhost");
+		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot();
 
 		ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
 			.setAllocateResourceFunction(value -> false)
 			.build();
 
-		try (SlotManager slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
+		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 
-			slotManager.registerSlotRequest(slotRequest);
+			slotManager.processResourceRequirements(resourceRequirements);
 
-			fail("The slot request should have failed with a ResourceManagerException.");
-
-		} catch (ResourceManagerException e) {
-			// expected exception
+			assertThat(slotManager.getNumMissingResources(resourceRequirements.getJobId()), is(1));
 		}
 	}
 
