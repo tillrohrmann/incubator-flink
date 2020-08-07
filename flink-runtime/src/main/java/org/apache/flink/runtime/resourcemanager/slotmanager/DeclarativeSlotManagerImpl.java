@@ -509,7 +509,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		LOG.debug("Unregister TaskManager {} from the SlotManager.", instanceId);
 
-		TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.remove(instanceId);
+		TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(instanceId);
 
 		if (null != taskManagerRegistration) {
 			internalUnregisterTaskManager(taskManagerRegistration, cause);
@@ -1018,10 +1018,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		TaskManagerSlot slot = slots.remove(slotId);
 
 		if (null != slot) {
-			if (slot.getState() == TaskManagerSlot.State.FREE) {
-				freeSlots.remove(slotId);
-			}
-
 			if (slot.getState() == TaskManagerSlot.State.PENDING) {
 				slot.getAllocationFuture().completeExceptionally(new SlotAllocationException(cause));
 				Optional<PendingSlotRequest> matchingPendingResource = findAndRemoveMatchingPendingResource(slot.getJobId(), slot.getResourceProfile());
@@ -1029,6 +1025,20 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					addMissingResource(matchingPendingResource.get());
 				}
 			}
+
+			if (slot.getState() == TaskManagerSlot.State.ALLOCATED) {
+				findAndRemoveMatchingAllocatedResource(slot.getJobId(), slot.getResourceProfile());
+				ResourceRequirements resourceRequirements = resourceRequirementsByJob.get(slot.getJobId());
+				if (resourceRequirements != null) {
+					addMissingResourceEntriesFor(new ResourceRequirements(
+						resourceRequirements.getJobId(),
+						resourceRequirements.getTargetAddress(),
+						Collections.singleton(new ResourceRequirement(slot.getResourceProfile(), 1))));
+				}
+			}
+
+			internalFreeSlot(slot);
+			freeSlots.remove(slotId);
 		} else {
 			LOG.debug("There was no slot registered with slot id {}.", slotId);
 		}
@@ -1350,6 +1360,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		Preconditions.checkNotNull(taskManagerRegistration);
 
 		removeSlots(taskManagerRegistration.getSlots(), cause);
+		taskManagerRegistrations.remove(taskManagerRegistration.getInstanceId());
 	}
 
 	private void checkInit() {
