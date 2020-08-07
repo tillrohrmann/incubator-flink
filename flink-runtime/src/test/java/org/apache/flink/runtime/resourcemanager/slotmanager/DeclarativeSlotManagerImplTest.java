@@ -1384,7 +1384,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final int maxSlotNum = 1;
 
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
-		final JobID jobId = new JobID();
 
 		final AtomicInteger resourceRequests = new AtomicInteger(0);
 		ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
@@ -1400,11 +1399,10 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			.setMaxSlotNum(maxSlotNum)
 			.buildAndStartWithDirectExec(resourceManagerId, resourceManagerActions)) {
 
-			assertTrue("The slot request should be accepted", slotManager.registerSlotRequest(createSlotRequest(jobId)));
+			slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot());
 			assertThat(resourceRequests.get(), is(1));
 
-			// The second slot request should not try to allocate a new resource because of the max limitation.
-			assertTrue("The slot request should be accepted", slotManager.registerSlotRequest(createSlotRequest(jobId)));
+			slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot());
 			assertThat(resourceRequests.get(), is(1));
 		}
 	}
