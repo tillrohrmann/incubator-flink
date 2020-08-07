@@ -739,8 +739,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	private void internalFreeSlot(TaskManagerSlot slot) {
 		final TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(slot.getInstanceId());
 
-		TaskManagerSlot.State currentState = slot.getState();
-		switch (currentState) {
+		switch (slot.getState()) {
 			case FREE:
 				break;
 			case PENDING:
@@ -748,9 +747,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				break;
 			case ALLOCATED:
 				slot.freeSlot();
-		}
-		if (currentState == TaskManagerSlot.State.ALLOCATED) {
-			taskManagerRegistration.freeSlot();
+				taskManagerRegistration.freeSlot();
 		}
 		handleFreeSlot(slot);
 	}
