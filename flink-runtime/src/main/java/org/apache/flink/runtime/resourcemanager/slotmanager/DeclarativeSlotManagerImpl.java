@@ -1148,6 +1148,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					addMissingResource(slotRequest);
 				}
 			}
+			checkResourceRequirements();
 		}
 	}
 

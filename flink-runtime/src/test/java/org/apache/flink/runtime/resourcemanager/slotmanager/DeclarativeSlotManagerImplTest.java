@@ -73,7 +73,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -563,48 +562,46 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that slot requests time out after the specified request timeout. If a slot request
-	 * times out, then the request is cancelled, removed from the slot manager and the resource
-	 * manager is notified about the failed allocation.
+	 * Tests that slot allocation time out after the specified request timeout. If a slot allocation
+	 * times out, then a pending resource is declared missing.
 	 */
 	@Test
-	public void testSlotRequestTimeout() throws Exception {
+	public void testSlotAllocationTimeout() throws Exception {
 		final long allocationTimeout = 50L;
 
 		final CompletableFuture<Tuple2<JobID, AllocationID>> failedAllocationFuture = new CompletableFuture<>();
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
 			.setNotifyAllocationFailureConsumer(tuple3 -> failedAllocationFuture.complete(Tuple2.of(tuple3.f0, tuple3.f1)))
 			.build();
-		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final JobID jobId = new JobID();
-		final AllocationID allocationId = new AllocationID();
 
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(1.0, 1);
-		final SlotRequest slotRequest = new SlotRequest(jobId, allocationId, resourceProfile, "foobar");
+		final CompletableFuture<Void> secondSlotRequestFuture = new CompletableFuture<>();
+		final AtomicInteger slotRequestsCount = new AtomicInteger();
+		final TaskExecutorConnection taskManagerConnection = createTaskExecutorConnection(new TestingTaskExecutorGatewayBuilder()
+			.setRequestSlotFunction(ignored -> {
+				if (slotRequestsCount.getAndAdd(1) == 1) {
+					secondSlotRequestFuture.complete(null);
+				}
+				return new CompletableFuture<>();
+			})
+			.createTestingTaskExecutorGateway());
+		final SlotReport slotReport = createSlotReport(taskManagerConnection.getResourceID(), 1);
 
 		final Executor mainThreadExecutor = TestingUtils.defaultExecutor();
 
-		try (SlotManager slotManager = createDeclarativeSlotManagerBuilder()
+		try (DeclarativeSlotManagerImpl slotManager = createDeclarativeSlotManagerBuilder()
 			.setSlotRequestTimeout(Time.milliseconds(allocationTimeout))
 			.build()) {
 
-			slotManager.start(resourceManagerId, mainThreadExecutor, resourceManagerActions);
+			slotManager.start(ResourceManagerId.generate(), mainThreadExecutor, resourceManagerActions);
 
-			final AtomicReference<Exception> atomicException = new AtomicReference<>(null);
+			int numMissingResources = CompletableFuture.runAsync(() -> slotManager.registerTaskManager(taskManagerConnection, slotReport), mainThreadExecutor)
+				.thenRun(() -> slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot(jobId)))
+				.thenApply(ignored -> slotManager.getNumMissingResources(jobId))
+				.get(5, TimeUnit.SECONDS);
 
-			mainThreadExecutor.execute(() -> {
-				try {
-					assertTrue(slotManager.registerSlotRequest(slotRequest));
-				} catch (Exception e) {
-					atomicException.compareAndSet(null, e);
-				}
-			});
-
-			assertThat(failedAllocationFuture.get(5, TimeUnit.SECONDS), is(equalTo(Tuple2.of(jobId, allocationId))));
-
-			if (atomicException.get() != null) {
-				throw atomicException.get();
-			}
+			// the slot we tried to allocate will not be freed on a timeout, so the slot will be considered missing
+			assertThat(numMissingResources, is(1));
 		}
 	}
 
