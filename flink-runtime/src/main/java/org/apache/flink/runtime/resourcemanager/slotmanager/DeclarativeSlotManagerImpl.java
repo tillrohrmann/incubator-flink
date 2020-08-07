@@ -59,6 +59,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -769,6 +770,12 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 					addAllocatedResource(jobId, slot.getResourceProfile());
 				} else {
+					if (!Objects.equals(slot.getJobId(), jobId)) {
+						// for some reason the slot was allocated for another job
+						// find the pending resource from the original job and move it back to missing
+						Optional<PendingSlotRequest> matchingSlotRequestToOriginalJob = findAndRemoveMatchingPendingResource(slot.getJobId(), slot.getResourceProfile());
+						matchingSlotRequestToOriginalJob.ifPresent(this::addMissingResource);
+					}
 					internalFreeSlot(slot);
 				}
 				break;

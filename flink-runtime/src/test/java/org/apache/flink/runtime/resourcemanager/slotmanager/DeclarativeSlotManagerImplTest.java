@@ -34,7 +34,6 @@ import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
 import org.apache.flink.runtime.resourcemanager.SlotRequest;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
-import org.apache.flink.runtime.resourcemanager.exceptions.ResourceManagerException;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 import org.apache.flink.runtime.slotsbro.ResourceRequirements;
@@ -666,18 +665,15 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that pending slot requests are rejected if a slot report with a different allocation
-	 * is received.
+	 * Tests that pending resource are rejected if a slot report with a different job ID is received.
 	 */
 	@Test
-	public void testSlotReportWhileActiveSlotRequest() throws Exception {
+	public void testSlotReportWhileActiveSlotAllocation() throws Exception {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
 
 		final JobID jobId = new JobID();
-		final AllocationID allocationId = new AllocationID();
-		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
-		final SlotRequest slotRequest = new SlotRequest(jobId, allocationId, resourceProfile, "foobar");
+		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot(jobId);
 		final CompletableFuture<Acknowledge> slotRequestFuture1 = new CompletableFuture<>();
 
 		final Iterator<CompletableFuture<Acknowledge>> slotRequestFutureIterator = Arrays.asList(
@@ -698,8 +694,8 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		final SlotID slotId1 = new SlotID(resourceId, 0);
 		final SlotID slotId2 = new SlotID(resourceId, 1);
-		final SlotStatus slotStatus1 = new SlotStatus(slotId1, resourceProfile);
-		final SlotStatus slotStatus2 = new SlotStatus(slotId2, resourceProfile);
+		final SlotStatus slotStatus1 = new SlotStatus(slotId1, ResourceProfile.ANY);
+		final SlotStatus slotStatus2 = new SlotStatus(slotId2, ResourceProfile.ANY);
 		final SlotReport slotReport = new SlotReport(Arrays.asList(slotStatus1, slotStatus2));
 
 		final ScheduledExecutor mainThreadExecutor = TestingUtils.defaultScheduledExecutor();
@@ -712,30 +708,16 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			slotManager.start(resourceManagerId, mainThreadExecutor, resourceManagerActions);
 
-			CompletableFuture<Void> registrationFuture = CompletableFuture.supplyAsync(
-				() -> {
-					slotManager.registerTaskManager(taskManagerConnection, slotReport);
-
-					return null;
-				},
-				mainThreadExecutor)
-			.thenAccept(
-				(Object value) -> {
-					try {
-						slotManager.registerSlotRequest(slotRequest);
-					} catch (ResourceManagerException e) {
-						throw new RuntimeException("Could not register slots.", e);
-					}
-				});
-
-			// check that no exception has been thrown
-			registrationFuture.get();
+			CompletableFuture
+				.runAsync(() -> slotManager.registerTaskManager(taskManagerConnection, slotReport), mainThreadExecutor)
+				.thenRun(() -> slotManager.processResourceRequirements(resourceRequirements))
+				.get(5, TimeUnit.SECONDS);
 
 			final SlotID requestedSlotId = slotIds.take();
 			final SlotID freeSlotId = requestedSlotId.equals(slotId1) ? slotId2 : slotId1;
 
-			final SlotStatus newSlotStatus1 = new SlotStatus(requestedSlotId, resourceProfile, new JobID(), new AllocationID());
-			final SlotStatus newSlotStatus2 = new SlotStatus(freeSlotId, resourceProfile);
+			final SlotStatus newSlotStatus1 = new SlotStatus(requestedSlotId, ResourceProfile.ANY, new JobID(), new AllocationID());
+			final SlotStatus newSlotStatus2 = new SlotStatus(freeSlotId, ResourceProfile.ANY);
 			final SlotReport newSlotReport = new SlotReport(Arrays.asList(newSlotStatus1, newSlotStatus2));
 
 			CompletableFuture<Boolean> reportSlotStatusFuture = CompletableFuture.supplyAsync(
