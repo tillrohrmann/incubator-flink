@@ -1239,7 +1239,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		private SlotRequestIterator(Map<JobID, Collection<PendingSlotRequest>> requests, @Nullable JobID jobId) {
 			this.jobIterator = jobId == null
 				? requests.values().iterator()
-				: new SingleValueIterator<>(requests.getOrDefault(jobId, Collections.emptyList()));
+				: new SingleValueIterator<>(requests, jobId);
 			this.currentRequests = jobIterator.hasNext()
 				? jobIterator.next()
 				: Collections.emptyList();
@@ -1257,9 +1257,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				return requestIterator.next();
 			}
 			if (jobIterator.hasNext()) {
-				if (currentRequests.isEmpty()) {
-					jobIterator.remove();
-				}
 				currentRequests = jobIterator.next();
 				requestIterator = currentRequests.iterator();
 				return requestIterator.next();
@@ -1276,13 +1273,18 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		}
 	}
 
-	private static class SingleValueIterator<X> implements Iterator<X> {
+	private static class SingleValueIterator<K, X> implements Iterator<X> {
 
+		private final Map<K, X> container;
+		private final K key;
 		private final X value;
-		private boolean exhausted = false;
+		private boolean exhausted;
 
-		private SingleValueIterator(X value) {
-			this.value = value;
+		private SingleValueIterator(Map<K, X> values, K key) {
+			this.container = values;
+			this.key = key;
+			this.value = values.get(key);
+			this.exhausted = value == null;
 		}
 
 		@Override
@@ -1302,7 +1304,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		@Override
 		public void remove() {
-			// override this method so we can use this iterator in the same way as an iterator for a mutable collection
+			container.remove(key);
 		}
 	}
 

@@ -20,8 +20,6 @@ package org.apache.flink.runtime.resourcemanager.slotmanager;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
-import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple6;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
@@ -55,15 +53,12 @@ import org.junit.Test;
 
 import javax.annotation.Nonnull;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -73,7 +68,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.empty;
@@ -1028,24 +1022,13 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	@Test
 	public void testNotifyFailedAllocationWhenTaskManagerTerminated() throws Exception {
 
-		final Queue<Tuple2<JobID, AllocationID>> allocationFailures = new ArrayDeque<>(5);
-
-		final TestingResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
-			.setNotifyAllocationFailureConsumer(
-				(Tuple3<JobID, AllocationID, Exception> failureMessage) ->
-					allocationFailures.offer(Tuple2.of(failureMessage.f0, failureMessage.f1)))
-			.build();
-
-		try (final SlotManager slotManager = createSlotManager(
+		try (final DeclarativeSlotManagerImpl slotManager = createSlotManager(
 			ResourceManagerId.generate(),
-			resourceManagerActions)) {
+			new TestingResourceActionsBuilder().build())) {
 
 			// register slot request for job1.
 			JobID jobId1 = new JobID();
-			final SlotRequest slotRequest11 = createSlotRequest(jobId1);
-			final SlotRequest slotRequest12 = createSlotRequest(jobId1);
-			slotManager.registerSlotRequest(slotRequest11);
-			slotManager.registerSlotRequest(slotRequest12);
+			slotManager.processResourceRequirements(createResourceRequirements(jobId1, 2));
 
 			// create task-manager-1 with 2 slots.
 			final ResourceID taskExecutorResourceId1 = ResourceID.generate();
@@ -1058,15 +1041,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			// register slot request for job2.
 			JobID jobId2 = new JobID();
-			final SlotRequest slotRequest21 = createSlotRequest(jobId2);
-			final SlotRequest slotRequest22 = createSlotRequest(jobId2);
-			slotManager.registerSlotRequest(slotRequest21);
-			slotManager.registerSlotRequest(slotRequest22);
+			slotManager.processResourceRequirements(createResourceRequirements(jobId2, 2));
 
 			// register slot request for job3.
 			JobID jobId3 = new JobID();
-			final SlotRequest slotRequest31 = createSlotRequest(jobId3);
-			slotManager.registerSlotRequest(slotRequest31);
+			slotManager.processResourceRequirements(createResourceRequirements(jobId3, 1));
 
 			// create task-manager-2 with 3 slots.
 			final ResourceID taskExecutorResourceId2 = ResourceID.generate();
@@ -1080,37 +1059,14 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			// validate for job1.
 			slotManager.unregisterTaskManager(taskExecutionConnection1.getInstanceID(), TEST_EXCEPTION);
 
-			assertThat(allocationFailures, hasSize(2));
-
-			Tuple2<JobID, AllocationID> allocationFailure;
-			final Set<AllocationID> failedAllocations = new HashSet<>(2);
-
-			while ((allocationFailure = allocationFailures.poll()) != null) {
-				assertThat(allocationFailure.f0, equalTo(jobId1));
-				failedAllocations.add(allocationFailure.f1);
-			}
-
-			assertThat(failedAllocations, containsInAnyOrder(slotRequest11.getAllocationId(), slotRequest12.getAllocationId()));
+			assertThat(slotManager.getNumMissingResources(jobId1), is(2));
 
 			// validate the result for job2 and job3.
 			slotManager.unregisterTaskManager(taskExecutionConnection2.getInstanceID(), TEST_EXCEPTION);
 
-			assertThat(allocationFailures, hasSize(3));
-
-			Map<JobID, List<Tuple2<JobID, AllocationID>>> job2AndJob3FailedAllocationInfo = allocationFailures.stream().collect(Collectors.groupingBy(tuple -> tuple.f0));
-
-			assertThat(job2AndJob3FailedAllocationInfo.entrySet(), hasSize(2));
-
-			final Set<AllocationID> job2FailedAllocations = extractFailedAllocationsForJob(jobId2, job2AndJob3FailedAllocationInfo);
-			final Set<AllocationID> job3FailedAllocations = extractFailedAllocationsForJob(jobId3, job2AndJob3FailedAllocationInfo);
-
-			assertThat(job2FailedAllocations, containsInAnyOrder(slotRequest21.getAllocationId(), slotRequest22.getAllocationId()));
-			assertThat(job3FailedAllocations, containsInAnyOrder(slotRequest31.getAllocationId()));
+			assertThat(slotManager.getNumMissingResources(jobId2), is(2));
+			assertThat(slotManager.getNumMissingResources(jobId3), is(1));
 		}
-	}
-
-	private Set<AllocationID> extractFailedAllocationsForJob(JobID jobId2, Map<JobID, List<Tuple2<JobID, AllocationID>>> job2AndJob3FailedAllocationInfo) {
-		return job2AndJob3FailedAllocationInfo.get(jobId2).stream().map(t -> t.f1).collect(Collectors.toSet());
 	}
 
 	@Nonnull
