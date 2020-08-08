@@ -143,9 +143,10 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 		assignedSlotRequest = Preconditions.checkNotNull(pendingSlotRequest);
 	}
 
-	public void setAllocationFuture(CompletableFuture<Acknowledge> allocationFuture) {
+	public void setAllocationFuture(JobID jobId, CompletableFuture<Acknowledge> allocationFuture) {
 		Preconditions.checkState(state == State.FREE, "Slot must be free to be assigned a slot request.");
 
+		this.jobId = jobId;
 		state = State.PENDING;
 		assignedSlotRequest = DUMMY_REQUEST;
 		this.allocationStartTimeStamp = System.currentTimeMillis();

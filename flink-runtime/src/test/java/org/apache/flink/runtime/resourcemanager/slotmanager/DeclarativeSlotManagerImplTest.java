@@ -214,7 +214,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			slotManager.processResourceRequirements(resourceRequirements);
 
-			assertThat(slotManager.getNumMissingResources(resourceRequirements.getJobId()), is(1));
+			assertThat(slotManager.getNumResources(resourceRequirements.getJobId(), JobResourceState.MISSING), is(1));
 		}
 	}
 
@@ -639,7 +639,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			// let the first attempt fail --> this should trigger a second attempt
 			slotRequestFuture1.completeExceptionally(new SlotAllocationException("Test exception."));
 
-			assertThat(slotManager.getNumPendingResources(jobId), is(1));
+			assertThat(slotManager.getNumResources(jobId, JobResourceState.PENDING), is(1));
 
 			// the second attempt succeeds
 			slotRequestFuture2.complete(Acknowledge.get());
@@ -896,7 +896,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			slotManager.processResourceRequirements(requirements);
 
 			assertThat(slotManager.getSlot(slotId).getJobId(), is(slotStatus.getJobID()));
-			assertThat(slotManager.getNumMissingResources(jobId), is(1));
+			assertThat(slotManager.getNumResources(jobId, JobResourceState.MISSING), is(1));
 		}
 	}
 
@@ -1012,7 +1012,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			assertThat(slot.getJobId(), equalTo(firstRequest.f1));
 
 			assertThat(slotManager.getNumberRegisteredSlots(), is(1));
-			assertThat(slotManager.getNumAllocatedResources(jobID), is(1));
+			assertThat(slotManager.getNumResources(jobID, JobResourceState.ALLOCATED), is(1));
 		}
 	}
 
@@ -1059,13 +1059,13 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			// validate for job1.
 			slotManager.unregisterTaskManager(taskExecutionConnection1.getInstanceID(), TEST_EXCEPTION);
 
-			assertThat(slotManager.getNumMissingResources(jobId1), is(2));
+			assertThat(slotManager.getNumResources(jobId1, JobResourceState.MISSING), is(2));
 
 			// validate the result for job2 and job3.
 			slotManager.unregisterTaskManager(taskExecutionConnection2.getInstanceID(), TEST_EXCEPTION);
 
-			assertThat(slotManager.getNumMissingResources(jobId2), is(2));
-			assertThat(slotManager.getNumMissingResources(jobId3), is(1));
+			assertThat(slotManager.getNumResources(jobId2, JobResourceState.MISSING), is(2));
+			assertThat(slotManager.getNumResources(jobId3, JobResourceState.MISSING), is(1));
 		}
 	}
 
