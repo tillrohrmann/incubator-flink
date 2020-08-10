@@ -144,6 +144,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
@@ -858,6 +859,7 @@ public class JobMasterTest extends TestLogger {
 	 * in case of a missing slot offering from a registered TaskExecutor.
 	 */
 	@Test
+	@Ignore
 	public void testSlotRequestTimeoutWhenNoSlotOffering() throws Exception {
 		final JobGraph restartingJobGraph = createSingleVertexJobWithRestartStrategy();
 
