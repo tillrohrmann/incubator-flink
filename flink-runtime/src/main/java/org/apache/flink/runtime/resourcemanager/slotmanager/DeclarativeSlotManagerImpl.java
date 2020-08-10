@@ -366,6 +366,11 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	private boolean internalProcessResourceRequirements(ResourceRequirements resourceRequirements) {
+		if (resourceRequirements.getResourceRequirements().isEmpty()) {
+			jobResources.remove(resourceRequirements.getJobId());
+			return true;
+		}
+
 		ResourceRequirements previousResourceRequirements = this.resourceRequirementsByJob.put(resourceRequirements.getJobId(), resourceRequirements);
 		if (previousResourceRequirements != null) {
 			Optional<ResourceRequirements> newlyRequiredResources = computeNewlyRequiredResources(previousResourceRequirements, resourceRequirements);
