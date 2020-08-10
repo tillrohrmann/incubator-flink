@@ -20,6 +20,7 @@ package org.apache.flink.runtime.slotsbro;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * TODO: Add javadoc.
@@ -48,6 +49,24 @@ public class ResourceRequirement implements Serializable {
 
 	public static ResourceRequirement create(ResourceProfile resourceProfile, int numberOfRequiredSlots) {
 		return new ResourceRequirement(resourceProfile, numberOfRequiredSlots);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		ResourceRequirement that = (ResourceRequirement) o;
+		return numberOfRequiredSlots == that.numberOfRequiredSlots &&
+			Objects.equals(resourceProfile, that.resourceProfile);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(resourceProfile, numberOfRequiredSlots);
 	}
 }
 

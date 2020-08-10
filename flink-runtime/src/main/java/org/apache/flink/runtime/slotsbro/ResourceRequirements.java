@@ -21,6 +21,7 @@ import org.apache.flink.api.common.JobID;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
 
 /**
  * TODO: Add javadoc.
@@ -51,6 +52,10 @@ public class ResourceRequirements implements Serializable {
 
 	public Collection<ResourceRequirement> getResourceRequirements() {
 		return resourceRequirements;
+	}
+
+	public static ResourceRequirements empty(JobID jobId, String targetAddress) {
+		return new ResourceRequirements(jobId, targetAddress, Collections.emptyList());
 	}
 }
 

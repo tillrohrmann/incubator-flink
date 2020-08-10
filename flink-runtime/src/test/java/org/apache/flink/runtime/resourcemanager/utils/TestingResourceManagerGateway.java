@@ -61,6 +61,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -104,6 +105,8 @@ public class TestingResourceManagerGateway implements ResourceManagerGateway {
 	private volatile Function<ResourceID, CompletableFuture<Collection<LogInfo>>> requestTaskManagerLogListFunction;
 
 	private volatile Function<ResourceID, CompletableFuture<ThreadDumpInfo>> requestThreadDumpFunction;
+
+	private volatile BiFunction<JobMasterId, ResourceRequirements, CompletableFuture<Acknowledge>> declareRequiredResourcesFunction = (ignoredA, ignoredB) -> FutureUtils.completedExceptionally(new UnsupportedOperationException());
 
 	public TestingResourceManagerGateway() {
 		this(
@@ -187,6 +190,10 @@ public class TestingResourceManagerGateway implements ResourceManagerGateway {
 		this.requestThreadDumpFunction = requestThreadDumpFunction;
 	}
 
+	public void setDeclareRequiredResourcesFunction(BiFunction<JobMasterId, ResourceRequirements, CompletableFuture<Acknowledge>> declareRequiredResourcesFunction) {
+		this.declareRequiredResourcesFunction = declareRequiredResourcesFunction;
+	}
+
 	@Override
 	public CompletableFuture<RegistrationResponse> registerJobManager(JobMasterId jobMasterId, ResourceID jobMasterResourceId, String jobMasterAddress, JobID jobId, Time timeout) {
 		final QuadFunction<JobMasterId, ResourceID, String, JobID, CompletableFuture<RegistrationResponse>> currentConsumer = registerJobManagerFunction;
@@ -223,7 +230,7 @@ public class TestingResourceManagerGateway implements ResourceManagerGateway {
 
 	@Override
 	public CompletableFuture<Acknowledge> declareRequiredResources(JobMasterId jobMasterId, ResourceRequirements resourceRequirements, Time timeout) {
-		return FutureUtils.completedExceptionally(new UnsupportedOperationException());
+		return declareRequiredResourcesFunction.apply(jobMasterId, resourceRequirements);
 	}
 
 	@Override
