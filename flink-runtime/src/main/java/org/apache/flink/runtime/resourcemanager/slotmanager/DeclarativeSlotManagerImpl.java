@@ -968,7 +968,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 							LOG.debug("Slot allocation request for slot {} has been cancelled.", slotId, throwable);
 						} else {
 							internalFreeSlot(taskManagerSlot);
-							handleFailedSlotRequest(slotId, throwable);
+							handleFailedSlotRequest(taskManagerSlot, throwable);
 						}
 
 						checkWhetherAnyResourceRequirementsCanBeFulfilled();
@@ -1048,13 +1048,12 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	 * Handles a failed slot request. The slot manager tries to find a new slot fulfilling
 	 * the resource requirements for the failed slot request.
 	 *
-	 * @param slotId identifying the slot which was assigned to the slot request before
+	 * @param taskManagerSlot the slot which was supposed to be allocated
 	 * @param cause of the failure
 	 */
-	private void handleFailedSlotRequest(SlotID slotId, Throwable cause) {
-		final TaskManagerSlot taskManagerSlot = slots.get(slotId);
+	private void handleFailedSlotRequest(TaskManagerSlot taskManagerSlot, Throwable cause) {
 
-		LOG.debug("Slot request failed for slot {}.", slotId, cause);
+		LOG.debug("Slot request failed for slot {}.", taskManagerSlot.getSlotId(), cause);
 
 		// find a pending request with the same profile, and move it back into waiting
 		Optional<ResourceProfile> pendingResource = findAndRemoveMatchingResource(
@@ -1066,7 +1065,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 			checkWhetherAnyResourceRequirementsCanBeFulfilled();
 		} else {
-			LOG.debug("There was no matching slot request for slot {}. Probably the request has been fulfilled or cancelled.", slotId);
+			LOG.debug("There was no matching slot request for slot {}. Probably the request has been fulfilled or cancelled.", taskManagerSlot.getSlotId());
 		}
 	}
 
