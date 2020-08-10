@@ -1982,9 +1982,7 @@ public class JobMasterTest extends TestLogger {
 			JobMasterGateway jobMasterGateway,
 			TaskExecutorGateway taskExecutorGateway,
 			UnresolvedTaskManagerLocation unresolvedTaskManagerLocation) throws ExecutionException, InterruptedException {
-		final AllocationIdsResourceManagerGateway allocationIdsResourceManagerGateway = new AllocationIdsResourceManagerGateway();
-		rpcService.registerGateway(allocationIdsResourceManagerGateway.getAddress(), allocationIdsResourceManagerGateway);
-		notifyResourceManagerLeaderListeners(allocationIdsResourceManagerGateway);
+		notifyResourceManagerLeaderListeners(createAndRegisterTestingResourceManagerGateway());
 
 		rpcService.registerGateway(taskExecutorGateway.getAddress(), taskExecutorGateway);
 
@@ -1993,33 +1991,10 @@ public class JobMasterTest extends TestLogger {
 		Collection<SlotOffer> slotOffers = IntStream
 			.range(0, numberSlots)
 			.mapToObj(
-				index -> {
-					final AllocationID allocationId = allocationIdsResourceManagerGateway.takeAllocationId();
-					return new SlotOffer(allocationId, index, ResourceProfile.ANY);
-				})
+				index -> new SlotOffer(new AllocationID(), index, ResourceProfile.ANY))
 			.collect(Collectors.toList());
 
 		return jobMasterGateway.offerSlots(unresolvedTaskManagerLocation.getResourceID(), slotOffers, testingTimeout).get();
-	}
-
-	private static final class AllocationIdsResourceManagerGateway extends TestingResourceManagerGateway {
-		private final BlockingQueue<AllocationID> allocationIds;
-
-		private AllocationIdsResourceManagerGateway() {
-			this.allocationIds = new ArrayBlockingQueue<>(10);
-			setRequestSlotConsumer(
-				slotRequest -> allocationIds.offer(slotRequest.getAllocationId())
-			);
-		}
-
-		AllocationID takeAllocationId() {
-			try {
-				return allocationIds.take();
-			} catch (InterruptedException e) {
-				ExceptionUtils.rethrow(e);
-				return null;
-			}
-		}
 	}
 
 	private JobGraph producerConsumerJobGraph() {
