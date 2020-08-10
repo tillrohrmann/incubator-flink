@@ -939,7 +939,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		CompletableFuture<Acknowledge> requestFuture = gateway.requestSlot(
 			slotId,
 			jobId,
-			DUMMY_ALLOCATION_ID,
+			new AllocationID(),
 			resourceProfile,
 			targetAddress,
 			resourceManagerId,

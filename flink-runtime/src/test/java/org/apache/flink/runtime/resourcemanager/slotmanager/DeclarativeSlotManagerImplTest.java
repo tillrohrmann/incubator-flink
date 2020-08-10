@@ -258,7 +258,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
 			slotManager.processResourceRequirements(requirements);
 
-			assertThat(requestFuture.get(), is(equalTo(Tuple6.of(slotId, jobId, allocationId, resourceProfile, targetAddress, resourceManagerId))));
+			assertThat(requestFuture.get(), is(equalTo(Tuple6.of(slotId, jobId, requestFuture.get().f2, resourceProfile, targetAddress, resourceManagerId))));
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
@@ -350,7 +350,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				taskExecutorConnection,
 				slotReport);
 
-			assertThat(requestFuture.get(), is(equalTo(Tuple6.of(slotId, jobId, allocationId, resourceProfile, targetAddress, resourceManagerId))));
+			assertThat(requestFuture.get(), is(equalTo(Tuple6.of(slotId, jobId, requestFuture.get().f2, resourceProfile, targetAddress, resourceManagerId))));
 
 			TaskManagerSlot slot = slotManager.getSlot(slotId);
 
@@ -945,14 +945,14 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			final Tuple6<SlotID, JobID, AllocationID, ResourceProfile, String, ResourceManagerId> secondRequest = requestSlotQueue.take();
 
-			assertThat(secondRequest.f2, equalTo(firstRequest.f2));
+			assertThat(secondRequest.f1, equalTo(firstRequest.f1));
 			assertThat(secondRequest.f0, equalTo(firstRequest.f0));
 
 			secondManualSlotRequestResponse.complete(Acknowledge.get());
 
 			final TaskManagerSlot slot = slotManager.getSlot(secondRequest.f0);
 			assertThat(slot.getState(), equalTo(TaskManagerSlot.State.ALLOCATED));
-			assertThat(slot.getAllocationId(), equalTo(secondRequest.f2));
+			assertThat(slot.getJobId(), equalTo(secondRequest.f1));
 		}
 	}
 
