@@ -17,13 +17,17 @@
 
 package org.apache.flink.runtime.resourcemanager.slotmanager;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
+import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 /**
  * Data-structure for tracking missing/pending/allocated resources.
@@ -33,6 +37,10 @@ class JobResources {
 	private final Map<ResourceProfile, Integer> missingResources = new LinkedHashMap<>();
 	private final Map<ResourceProfile, Integer> pendingResources = new LinkedHashMap<>();
 	private final Map<ResourceProfile, Integer> allocatedResources = new HashMap<>();
+
+	public Collection<ResourceRequirement> getMissingResources() {
+		return missingResources.entrySet().stream().map(entry -> ResourceRequirement.create(entry.getKey(), entry.getValue())).collect(Collectors.toList());
+	}
 
 	public void addResource(ResourceProfile resourceProfile, JobResourceState state) {
 		switch (state) {
@@ -54,7 +62,11 @@ class JobResources {
 			: currentCount + 1);
 	}
 
-	public Iterator<ResourceProfile> getResources(JobResourceState state) {
+	public void findAndRemoveMatchingResource(ResourceProfile profile, JobResourceState resourceState) {
+		findAndRemoveResource(getResources(resourceState), profile);
+	}
+
+	private Iterator<ResourceProfile> getResources(JobResourceState state) {
 		switch (state) {
 			case MISSING:
 				return new ResourceIterator(missingResources);
@@ -64,6 +76,33 @@ class JobResources {
 				return new ResourceIterator(allocatedResources);
 		}
 		throw new IllegalStateException("Unknown resource state:" + state);
+	}
+
+	private void findAndRemoveResource(Iterator<ResourceProfile> resources, ResourceProfile profile) {
+		while (resources.hasNext()) {
+			ResourceProfile candidate = resources.next();
+			if (profile.isMatching(candidate)) {
+				resources.remove();
+				return;
+			}
+		}
+	}
+	// ---------------------------------------------------------------------------------------------
+	// Testing
+	// ---------------------------------------------------------------------------------------------
+
+	@VisibleForTesting
+	int getNumResources(JobResourceState state) {
+		return count(getResources(state));
+	}
+
+	private int count(Iterator<?> iterator) {
+		int count = 0;
+		while (iterator.hasNext()) {
+			iterator.next();
+			count++;
+		}
+		return count;
 	}
 
 	private static class ResourceIterator implements Iterator<ResourceProfile> {

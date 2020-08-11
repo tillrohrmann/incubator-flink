@@ -798,9 +798,9 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			assertEquals(jobId, slot.getJobId());
 
 			CompletableFuture<Boolean> idleFuture2 = CompletableFuture.runAsync(
-				() -> slotManager.freeSlot(slotId, DeclarativeSlotManagerImpl.DUMMY_ALLOCATION_ID),
-				mainThreadExecutor)
-			.thenApply((Object value) -> slotManager.isTaskManagerIdle(taskManagerConnection.getInstanceID()));
+				() -> slotManager.processResourceRequirements(createEmptyResourceRequirements(jobId)), mainThreadExecutor)
+				.thenRun(() -> slotManager.freeSlot(slotId, DeclarativeSlotManagerImpl.DUMMY_ALLOCATION_ID))
+				.thenApply((Object value) -> slotManager.isTaskManagerIdle(taskManagerConnection.getInstanceID()));
 
 			assertTrue(idleFuture2.get());
 
@@ -1387,5 +1387,12 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			jobId,
 			"foobar",
 			Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, numRequiredSlots)));
+	}
+
+	private static ResourceRequirements createEmptyResourceRequirements(JobID jobId) {
+		return new ResourceRequirements(
+			jobId,
+			"foobar",
+			Collections.emptyList());
 	}
 }
