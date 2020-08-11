@@ -30,7 +30,7 @@ public interface RequirementsTracker {
 
 	void notifyNewSlots();
 
-	void notifySlotStatusChange(TaskManagerSlot.State previous, TaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile);
+	void notifySlotStatusChange(DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile);
 
 	/**
 	 * Removes all state from the tracker.

@@ -62,7 +62,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	}
 
 	@Override
-	public void notifySlotStatusChange(TaskManagerSlot.State previous, TaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile) {
+	public void notifySlotStatusChange(DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile) {
 		findAndRemoveMatchingResource(jobId, resourceProfile, mapSlotState(previous));
 		addResource(jobId, resourceProfile, mapSlotState(current));
 		checkResourceRequirements();
@@ -177,7 +177,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	// Utilities
 	// ---------------------------------------------------------------------------------------------
 
-	private static JobResourceState mapSlotState(TaskManagerSlot.State state) {
+	private static JobResourceState mapSlotState(DeclarativeTaskManagerSlot.State state) {
 		switch (state) {
 			case FREE:
 				return JobResourceState.MISSING;
