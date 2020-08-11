@@ -18,7 +18,6 @@
 package org.apache.flink.runtime.resourcemanager.slotmanager;
 
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.clusterframework.types.SlotID;
 import org.apache.flink.runtime.instance.InstanceID;
@@ -101,10 +100,6 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 		return allocationStartTimeStamp;
 	}
 
-	public CompletableFuture<Acknowledge> getAllocationFuture() {
-		return allocationFuture;
-	}
-
 	public void startAllocation(JobID jobId, CompletableFuture<Acknowledge> allocationFuture) {
 		Preconditions.checkState(state == State.FREE, "Slot must be free to be assigned a slot request.");
 
@@ -117,30 +112,27 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 	public void cancelAllocation() {
 		Preconditions.checkState(state == State.PENDING, "In order to cancel an allocation, the slot has to be pending.");
 
+		this.jobId = null;
 		this.state = State.FREE;
-	}
-
-	public void updateAllocation(JobID jobId) {
-		Preconditions.checkState(state == State.FREE, "The slot has to be free in order to set an allocation id.");
-
-		state = State.ALLOCATED;
-		this.jobId = Preconditions.checkNotNull(jobId);
-	}
-
-	public void completeAllocation(JobID jobId) {
-		Preconditions.checkState(state == State.PENDING, "In order to complete an allocation, the slot has to be allocated.");
-
+		this.allocationStartTimeStamp = 0;
 		this.allocationFuture.cancel(false);
 		this.allocationFuture = null;
+	}
+
+	public void completeAllocation() {
+		Preconditions.checkState(state == State.PENDING, "In order to complete an allocation, the slot has to be allocated.");
+
 		this.state = State.ALLOCATED;
-		this.jobId = jobId;
+		this.allocationFuture.cancel(false);
+		this.allocationFuture = null;
 	}
 
 	public void freeSlot() {
 		Preconditions.checkState(state == State.ALLOCATED, "Slot must be allocated before freeing it.");
 
-		this.state = State.FREE;
 		this.jobId = null;
+		this.state = State.FREE;
+		this.allocationStartTimeStamp = 0;
 	}
 
 	/**

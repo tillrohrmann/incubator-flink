@@ -37,7 +37,6 @@ import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.SlotStatus;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
-import org.apache.flink.runtime.taskexecutor.exceptions.SlotAllocationException;
 import org.apache.flink.runtime.taskexecutor.exceptions.SlotOccupiedException;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.MathUtils;
@@ -406,7 +405,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					taskExecutorConnection);
 			}
 
-			resourceTracker.notifyNewSlots();
+			resourceTracker.checkResourceRequirements();
 			return true;
 		}
 
@@ -422,6 +421,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		if (null != taskManagerRegistration) {
 			internalUnregisterTaskManager(taskManagerRegistration, cause);
+			resourceTracker.checkResourceRequirements();
 
 			return true;
 		} else {
@@ -451,6 +451,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			for (SlotStatus slotStatus : slotReport) {
 				updateSlot(slotStatus.getSlotID(), slotStatus.getJobID());
 			}
+			resourceTracker.checkResourceRequirements();
 			return true;
 		} else {
 			LOG.debug("Received slot report for unknown task manager with instance id {}. Ignoring this report.", instanceId);
@@ -482,6 +483,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				}
 
 				updateStateForFreeSlot(slot);
+				resourceTracker.checkResourceRequirements();
 			} else {
 				LOG.debug("Slot {} has not been allocated.", slotId);
 			}
@@ -638,36 +640,45 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	private void internalFreeSlot(DeclarativeTaskManagerSlot slot) {
 		final TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(slot.getInstanceId());
 
+		resourceTracker.notifySlotStatusChange(slot.getState(), DeclarativeTaskManagerSlot.State.FREE, slot.getJobId(), slot.getResourceProfile());
 		switch (slot.getState()) {
 			case FREE:
 				break;
 			case PENDING:
 				slot.cancelAllocation();
+				handleFreeSlot(slot);
 				break;
 			case ALLOCATED:
 				slot.freeSlot();
 				taskManagerRegistration.freeSlot();
+				handleFreeSlot(slot);
 		}
-		handleFreeSlot(slot);
 	}
 
 	private void updateStateForAllocatedSlot(DeclarativeTaskManagerSlot slot, TaskManagerRegistration taskManagerRegistration, JobID jobId) {
 		switch (slot.getState()) {
 			case PENDING:
-				slot.getAllocationFuture().cancel(false);
-				slot.completeAllocation(jobId);
-				taskManagerRegistration.occupySlot();
-				resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.PENDING, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
+				if (!jobId.equals(slot.getJobId())) {
+					internalFreeSlot(slot);
+
+					slot.startAllocation(jobId, CompletableFuture.completedFuture(Acknowledge.get()));
+					updateStateForAllocatedSlot(slot, taskManagerRegistration, jobId);
+				} else {
+					resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.PENDING, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
+					slot.completeAllocation();
+					taskManagerRegistration.occupySlot();
+				}
 				break;
 			case ALLOCATED:
 				break;
 			case FREE:
 				// the slot is currently free --> it is stored in freeSlots
+				resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.FREE, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
 				freeSlots.remove(slot.getSlotId());
-				slot.updateAllocation(jobId);
+				slot.startAllocation(jobId, new CompletableFuture<>());
+				slot.completeAllocation();
 				taskManagerRegistration.occupySlot();
 
-				resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.FREE, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
 				break;
 		}
 	}
@@ -681,7 +692,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				// don't do anything because we expect the slot to be allocated soon
 				break;
 			case ALLOCATED:
-				resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.ALLOCATED, DeclarativeTaskManagerSlot.State.FREE, slot.getJobId(), slot.getResourceProfile());
 				internalFreeSlot(slot);
 				break;
 		}
@@ -851,11 +861,12 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 						} else {
 							if (throwable instanceof  CancellationException) {
 								LOG.debug("Slot allocation request for slot {} has been cancelled.", slotId, throwable);
+							} else {
+								internalFreeSlot(taskManagerSlot);
 							}
-							internalFreeSlot(taskManagerSlot);
-							resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.PENDING, DeclarativeTaskManagerSlot.State.FREE, jobId, taskManagerSlot.getResourceProfile());
 						}
 					}
+					resourceTracker.checkResourceRequirements();
 				} catch (Exception e) {
 					LOG.error("Error while completing the slot allocation.", e);
 				}
@@ -897,14 +908,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		DeclarativeTaskManagerSlot slot = slots.remove(slotId);
 
 		if (null != slot) {
-			if (slot.getState() == DeclarativeTaskManagerSlot.State.PENDING) {
-				slot.getAllocationFuture().completeExceptionally(new SlotAllocationException(cause));
-			}
-
-			if (slot.getJobId() != null) {
-				resourceTracker.notifySlotStatusChange(slot.getState(), DeclarativeTaskManagerSlot.State.FREE, slot.getJobId(), slot.getResourceProfile());
-			}
-
 			internalFreeSlot(slot);
 			freeSlots.remove(slotId);
 		} else {
@@ -1001,9 +1004,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				DeclarativeTaskManagerSlot pendingSlotAllocation = iterator.next();
 
 				if (currentTime - pendingSlotAllocation.getAllocationStartTimestamp() >= slotAllocationTimeout.toMilliseconds()) {
-					final JobID jobIdBeforeRemoval = pendingSlotAllocation.getJobId();
 					internalFreeSlot(pendingSlotAllocation);
-					resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.PENDING, DeclarativeTaskManagerSlot.State.FREE, jobIdBeforeRemoval, pendingSlotAllocation.getResourceProfile());
 				}
 			}
 		}

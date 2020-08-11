@@ -28,7 +28,7 @@ public interface RequirementsTracker {
 
 	void processResourceRequirements(ResourceRequirements resourceRequirements);
 
-	void notifyNewSlots();
+	void checkResourceRequirements();
 
 	void notifySlotStatusChange(DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile);
 

@@ -57,15 +57,12 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	// ---------------------------------------------------------------------------------------------
 
 	@Override
-	public void notifyNewSlots() {
-		checkResourceRequirements();
-	}
-
-	@Override
 	public void notifySlotStatusChange(DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile) {
+		if (previous == current) {
+			return;
+		}
 		findAndRemoveMatchingResource(jobId, resourceProfile, mapSlotState(previous));
 		addResource(jobId, resourceProfile, mapSlotState(current));
-		checkResourceRequirements();
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -129,7 +126,8 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 			: Optional.of(new ResourceRequirements(currentResourceRequirements.getJobId(), currentResourceRequirements.getTargetAddress(), newlyRequiredResources));
 	}
 
-	private void checkResourceRequirements() {
+	@Override
+	public void checkResourceRequirements() {
 		checkWhetherAnyResourceRequirementsAreOverBudget();
 		checkWhetherAnyResourceRequirementsAreUnderBudget();
 		checkWhetherAnyResourceRequirementsCanBeFulfilled();
