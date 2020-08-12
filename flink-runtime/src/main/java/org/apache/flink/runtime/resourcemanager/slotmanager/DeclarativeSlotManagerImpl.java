@@ -355,7 +355,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	@Override
 	public void processResourceRequirements(ResourceRequirements resourceRequirements) {
 		checkInit();
-		resourceTracker.processResourceRequirements(resourceRequirements);
+		resourceTracker.notifyResourceRequirements(resourceRequirements);
 		checkResourceRequirements();
 	}
 
@@ -537,7 +537,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	private void checkResourceRequirements() {
-		final Collection<ResourceRequirements> resourceAllocationInfo = resourceTracker.getResourceAllocationInfo();
+		final Collection<ResourceRequirements> resourceAllocationInfo = resourceTracker.getExceedingOrRequiredResources();
 		for (ResourceRequirements resourceRequirements : resourceAllocationInfo) {
 			for (ResourceRequirement resourceRequirement : resourceRequirements.getResourceRequirements()) {
 				if (resourceRequirement.getNumberOfRequiredSlots() > 0) {

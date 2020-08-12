@@ -28,11 +28,30 @@ import java.util.Collection;
  */
 public interface RequirementsTracker {
 
-	void processResourceRequirements(ResourceRequirements resourceRequirements);
+	/**
+	 * Notifies the tracker about a new or updated {@link ResourceRequirements}.
+	 *
+	 * @param resourceRequirements new or updated resource requirements
+	 */
+	void notifyResourceRequirements(ResourceRequirements resourceRequirements);
 
+	/**
+	 * Notifies the tracker about a change in the state of a slot.
+	 *
+	 * @param previous previous state of the slot
+	 * @param current new state of the slot
+	 * @param jobId job the slot is allocated for
+	 * @param resourceProfile resource profile of the slot
+	 */
 	void notifySlotStatusChange(DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile);
 
-	Collection<ResourceRequirements> getResourceAllocationInfo();
+	/**
+	 * Returns a collection of {@link ResourceRequirements} that describe which resources the corresponding job is
+	 * in need/excess of.
+	 *
+	 * @return required/exceeding resources for each jobs
+	 */
+	Collection<ResourceRequirements> getExceedingOrRequiredResources();
 
 	/**
 	 * Removes all state from the tracker.

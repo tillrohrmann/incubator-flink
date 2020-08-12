@@ -64,7 +64,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	// ---------------------------------------------------------------------------------------------
 
 	@Override
-	public void processResourceRequirements(ResourceRequirements resourceRequirements) {
+	public void notifyResourceRequirements(ResourceRequirements resourceRequirements) {
 		if (resourceRequirements.getResourceRequirements().isEmpty()) {
 			jobResources.remove(resourceRequirements.getJobId());
 			resourceRequirementsByJob.remove(resourceRequirements.getJobId());
@@ -112,7 +112,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	}
 
 	@Override
-	public Collection<ResourceRequirements> getResourceAllocationInfo() {
+	public Collection<ResourceRequirements> getExceedingOrRequiredResources() {
 		return checkWhetherAnyResourceRequirementsAreUnderBudget();
 	}
 
