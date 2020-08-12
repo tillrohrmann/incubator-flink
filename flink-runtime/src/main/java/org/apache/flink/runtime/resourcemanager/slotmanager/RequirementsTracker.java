@@ -21,6 +21,8 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 
+import java.util.Collection;
+
 /**
  * A tracker for {@link ResourceRequirements}.
  */
@@ -28,9 +30,9 @@ public interface RequirementsTracker {
 
 	void processResourceRequirements(ResourceRequirements resourceRequirements);
 
-	void checkResourceRequirements();
-
 	void notifySlotStatusChange(DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile);
+
+	Collection<ResourceRequirements> getResourceAllocationInfo();
 
 	/**
 	 * Removes all state from the tracker.

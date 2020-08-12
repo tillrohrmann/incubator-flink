@@ -40,12 +40,6 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 
 	private final Map<JobID, ResourceRequirements> resourceRequirementsByJob = new LinkedHashMap<>();
 
-	private final SlotAllocator slotAllocator;
-
-	public DefaultRequirementsTracker(SlotAllocator slotAllocator) {
-		this.slotAllocator = slotAllocator;
-	}
-
 	@Override
 	public void clear() {
 		jobResources.clear();
@@ -71,16 +65,10 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 
 	@Override
 	public void processResourceRequirements(ResourceRequirements resourceRequirements) {
-		if (internalProcessResourceRequirements(resourceRequirements)) {
-			checkResourceRequirements();
-		}
-	}
-
-	private boolean internalProcessResourceRequirements(ResourceRequirements resourceRequirements) {
 		if (resourceRequirements.getResourceRequirements().isEmpty()) {
 			jobResources.remove(resourceRequirements.getJobId());
 			resourceRequirementsByJob.remove(resourceRequirements.getJobId());
-			return true;
+			return;
 		}
 
 		ResourceRequirements previousResourceRequirements = this.resourceRequirementsByJob.put(resourceRequirements.getJobId(), resourceRequirements);
@@ -88,13 +76,10 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 			Optional<ResourceRequirements> newlyRequiredResources = computeNewlyRequiredResources(previousResourceRequirements, resourceRequirements);
 			if (newlyRequiredResources.isPresent()) {
 				addMissingResourceEntriesFor(newlyRequiredResources.get());
-				return true;
 			}
 		} else {
 			addMissingResourceEntriesFor(resourceRequirements);
-			return true;
 		}
-		return false;
 	}
 
 	private void addMissingResourceEntriesFor(ResourceRequirements requirements) {
@@ -127,32 +112,25 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	}
 
 	@Override
-	public void checkResourceRequirements() {
-		checkWhetherAnyResourceRequirementsAreOverBudget();
-		checkWhetherAnyResourceRequirementsAreUnderBudget();
-		checkWhetherAnyResourceRequirementsCanBeFulfilled();
+	public Collection<ResourceRequirements> getResourceAllocationInfo() {
+		return checkWhetherAnyResourceRequirementsAreUnderBudget();
 	}
 
-	private void checkWhetherAnyResourceRequirementsAreOverBudget() {
-		// TODO
-	}
+	private Collection<ResourceRequirements> checkWhetherAnyResourceRequirementsAreUnderBudget() {
+		final Collection<ResourceRequirements> requiredResources = new ArrayList<>();
 
-	private void checkWhetherAnyResourceRequirementsAreUnderBudget() {
-		// TODO
-	}
-
-	private void checkWhetherAnyResourceRequirementsCanBeFulfilled() {
 		// only process resource for which we have requirements, as there are edge-cases where slots can be assigned
-		// to a job without has having a requirement for the corresponding job
+		// to a job without us having a requirement for the corresponding job
 		for (Map.Entry<JobID, ResourceRequirements> jobRequirements : resourceRequirementsByJob.entrySet()) {
 			final JobID jobId = jobRequirements.getKey();
 			final JobResources resources = jobResources.get(jobId);
 			final Collection<ResourceRequirement> missingResources = resources.getMissingResources();
 
 			if (!missingResources.isEmpty()) {
-				slotAllocator.requestSlotAllocations(jobId, resourceRequirementsByJob.get(jobId).getTargetAddress(), missingResources);
+				requiredResources.add(new ResourceRequirements(jobId, jobRequirements.getValue().getTargetAddress(), missingResources));
 			}
 		}
+		return requiredResources;
 	}
 
 	// ---------------------------------------------------------------------------------------------
