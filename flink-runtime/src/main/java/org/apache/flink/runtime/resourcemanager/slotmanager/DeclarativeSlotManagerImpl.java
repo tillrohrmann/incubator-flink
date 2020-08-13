@@ -576,8 +576,22 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 						slotId)));
 		}
 
+		final Optional<PendingTaskManagerSlot> pendingTaskManagerSlot = findExactlyMatchingPendingTaskManagerSlot(resourceProfile);
+		if (pendingTaskManagerSlot.isPresent()) {
+			pendingSlots.remove(pendingTaskManagerSlot.get().getTaskManagerSlotId());
+		}
 		createAndRegisterTaskManagerSlot(slotId, resourceProfile, taskManagerConnection);
 		updateSlot(slotId, jobId);
+	}
+
+	private Optional<PendingTaskManagerSlot> findExactlyMatchingPendingTaskManagerSlot(ResourceProfile resourceProfile) {
+		for (PendingTaskManagerSlot pendingTaskManagerSlot : pendingSlots.values()) {
+			if (isPendingSlotExactlyMatchingResourceProfile(pendingTaskManagerSlot, resourceProfile)) {
+				return Optional.of(pendingTaskManagerSlot);
+			}
+		}
+
+		return Optional.empty();
 	}
 
 	private void createAndRegisterTaskManagerSlot(SlotID slotId, ResourceProfile resourceProfile, TaskExecutorConnection taskManagerConnection) {
