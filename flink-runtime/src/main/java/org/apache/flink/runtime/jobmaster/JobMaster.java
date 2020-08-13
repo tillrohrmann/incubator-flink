@@ -83,6 +83,7 @@ import org.apache.flink.runtime.rpc.akka.AkkaRpcServiceUtils;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerNGFactory;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
+import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorToJobManagerHeartbeatPayload;
@@ -734,6 +735,11 @@ public class JobMaster extends FencedRpcEndpoint<JobMasterId> implements JobMast
 	@Override
 	public void notifyAllocationFailure(AllocationID allocationID, Exception cause) {
 		internalFailAllocation(allocationID, cause);
+	}
+
+	@Override
+	public void notifyNotEnoughResourcesAvailable(Collection<ResourceRequirement> acquiredResources) {
+		// TODO: implement
 	}
 
 	@Override
