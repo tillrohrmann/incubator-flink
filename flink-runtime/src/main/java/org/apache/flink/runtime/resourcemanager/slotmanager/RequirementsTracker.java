@@ -19,6 +19,7 @@ package org.apache.flink.runtime.resourcemanager.slotmanager;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
+import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 
 import java.util.Collection;
@@ -52,6 +53,14 @@ public interface RequirementsTracker {
 	 * @return required/exceeding resources for each jobs
 	 */
 	Collection<ResourceRequirements> getExceedingOrRequiredResources();
+
+	/**
+	 * Returns a collection of {@link ResourceRequirement}s that describe which resources have been assigned to a job.
+	 *
+	 * @param jobId job ID
+	 * @return required/exceeding resources for each jobs
+	 */
+	Collection<ResourceRequirement> getAcquiredResources(JobID jobId);
 
 	/**
 	 * Removes all state from the tracker.

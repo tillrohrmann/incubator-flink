@@ -719,12 +719,21 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	 */
 	private void internalRequestSlots(JobID jobId, String targetAddress, ResourceRequirement resourceRequirement) {
 		final ResourceProfile resourceProfile = resourceRequirement.getResourceProfile();
+
+		boolean allRequirementsMayBeFulfilled = true;
 		for (int x = 0; x < resourceRequirement.getNumberOfRequiredSlots(); x++) {
 			final Optional<DeclarativeTaskManagerSlot> reservedSlot = findMatchingSlot(resourceProfile);
 			if (reservedSlot.isPresent()) {
 				allocateSlot(reservedSlot.get(), jobId, targetAddress, resourceProfile);
 			} else {
-				allocateResource(resourceProfile);
+				Optional<PendingTaskManagerSlot> pendingTaskManagerSlot = allocateResource(resourceProfile);
+				if (!pendingTaskManagerSlot.isPresent()) {
+					// this isn't really correct, since we are not reserving the pending slot
+					// thus a single pending slot can "fulfill" any number of requirements, so long as the profiles fit
+					if (!isFulfillableByPendingSlots(resourceProfile)) {
+						allRequirementsMayBeFulfilled = false;
+					}
+				}
 				// TODO: Rework how pending slots are handled; currently we repeatedly ask for pending slots until enough
 				// TODO: were allocated to fulfill the current requirements, but we'll generally request
 				// TODO: more than we actually need because we don't mark the soon(TM) fulfilled requirements as pending.
@@ -733,15 +742,13 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				// TODO: then only react to slot registrations by task executors.
 			}
 		}
+
+		if (!allRequirementsMayBeFulfilled) {
+			resourceActions.notifyNotEnoughResourcesAvailable(jobId, resourceTracker.getAcquiredResources(jobId));
+		}
 	}
 
-	private boolean isFulfillableByRegisteredOrPendingSlots(ResourceProfile resourceProfile) {
-		for (DeclarativeTaskManagerSlot slot : slots.values()) {
-			if (slot.getResourceProfile().isMatching(resourceProfile)) {
-				return true;
-			}
-		}
-
+	private boolean isFulfillableByPendingSlots(ResourceProfile resourceProfile) {
 		for (PendingTaskManagerSlot slot : pendingSlots.values()) {
 			if (slot.getResourceProfile().isMatching(resourceProfile)) {
 				return true;

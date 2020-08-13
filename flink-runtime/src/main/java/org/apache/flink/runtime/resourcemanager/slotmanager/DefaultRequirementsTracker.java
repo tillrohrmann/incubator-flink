@@ -26,6 +26,7 @@ import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -114,6 +115,15 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	@Override
 	public Collection<ResourceRequirements> getExceedingOrRequiredResources() {
 		return checkWhetherAnyResourceRequirementsAreUnderBudget();
+	}
+
+	@Override
+	public Collection<ResourceRequirement> getAcquiredResources(JobID jobId) {
+		JobResources jobResources = this.jobResources.get(jobId);
+		if (jobResources == null) {
+			return Collections.emptyList();
+		}
+		return jobResources.getPendingAndAllocatedResources();
 	}
 
 	private Collection<ResourceRequirements> checkWhetherAnyResourceRequirementsAreUnderBudget() {

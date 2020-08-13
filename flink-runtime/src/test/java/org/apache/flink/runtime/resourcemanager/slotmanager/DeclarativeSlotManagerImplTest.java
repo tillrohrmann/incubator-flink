@@ -20,6 +20,7 @@ package org.apache.flink.runtime.resourcemanager.slotmanager;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple6;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
@@ -55,6 +56,7 @@ import javax.annotation.Nonnull;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -74,6 +76,7 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.core.IsCollectionContaining.hasItem;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -1370,6 +1373,33 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		assertThat(
 			SlotManagerImpl.generateDefaultSlotResourceProfile(workerResourceSpec, numSlots),
 			is(resourceProfile));
+	}
+
+	@Test
+	public void testNotificationAboutNotEnoughResources() throws Exception {
+		final JobID jobId = new JobID();
+
+		CompletableFuture<Tuple2<JobID, Collection<ResourceRequirement>>> notEnoughResourceNotification = new CompletableFuture<>();
+		ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
+			.setAllocateResourceFunction(ignored -> false)
+			.setNotEnoughResourcesConsumer((jobId1, acquiredResources) -> notEnoughResourceNotification.complete(Tuple2.of(jobId1, acquiredResources)))
+			.build();
+
+		try (DeclarativeSlotManagerImpl slotManager = createDeclarativeSlotManagerBuilder()
+			.buildAndStartWithDirectExec(ResourceManagerId.generate(), resourceManagerActions)) {
+
+			final ResourceID taskExecutorResourceId = ResourceID.generate();
+			final TaskExecutorConnection taskExecutionConnection = new TaskExecutorConnection(taskExecutorResourceId, new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway());
+			final SlotReport slotReport = createSlotReport(taskExecutorResourceId, 1);
+			slotManager.registerTaskManager(taskExecutionConnection, slotReport);
+
+			ResourceRequirements resourceRequirements = createResourceRequirements(jobId, 3);
+			slotManager.processResourceRequirements(resourceRequirements);
+
+			Tuple2<JobID, Collection<ResourceRequirement>> jobIDCollectionTuple2 = notEnoughResourceNotification.get();
+			assertThat(jobIDCollectionTuple2.f0, is(jobId));
+			assertThat(jobIDCollectionTuple2.f1, hasItem(new ResourceRequirement(ResourceProfile.ANY, 1)));
+		}
 	}
 
 	private static ResourceRequirements createResourceRequirementsForSingleSlot() {

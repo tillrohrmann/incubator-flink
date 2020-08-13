@@ -21,6 +21,8 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 
+import org.apache.flink.shaded.curator4.com.google.common.collect.Streams;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -40,6 +42,16 @@ class JobResources {
 
 	public Collection<ResourceRequirement> getMissingResources() {
 		return missingResources.entrySet().stream().map(entry -> ResourceRequirement.create(entry.getKey(), entry.getValue())).collect(Collectors.toList());
+	}
+
+	public Collection<ResourceRequirement> getPendingAndAllocatedResources() {
+		return Streams
+			.concat(pendingResources.keySet().stream(), allocatedResources.keySet().stream())
+			.distinct()
+			.map(profile -> ResourceRequirement.create(
+				profile,
+				pendingResources.getOrDefault(profile, 0) + allocatedResources.getOrDefault(profile, 0)))
+			.collect(Collectors.toList());
 	}
 
 	public void addResource(ResourceProfile resourceProfile, JobResourceState state) {
