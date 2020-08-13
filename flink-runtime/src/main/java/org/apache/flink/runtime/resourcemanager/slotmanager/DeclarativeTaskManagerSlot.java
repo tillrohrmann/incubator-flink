@@ -21,13 +21,10 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.clusterframework.types.SlotID;
 import org.apache.flink.runtime.instance.InstanceID;
-import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
 import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nullable;
-
-import java.util.concurrent.CompletableFuture;
 
 /**
  * TODO: Add javadoc.
@@ -56,9 +53,6 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 	private JobID jobId;
 
 	private State state = State.FREE;
-
-	@Nullable
-	private CompletableFuture<Acknowledge> allocationFuture;
 
 	private long allocationStartTimeStamp;
 
@@ -100,13 +94,12 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 		return allocationStartTimeStamp;
 	}
 
-	public void startAllocation(JobID jobId, CompletableFuture<Acknowledge> allocationFuture) {
+	public void startAllocation(JobID jobId) {
 		Preconditions.checkState(state == State.FREE, "Slot must be free to be assigned a slot request.");
 
 		this.jobId = jobId;
 		this.state = State.PENDING;
 		this.allocationStartTimeStamp = System.currentTimeMillis();
-		this.allocationFuture = Preconditions.checkNotNull(allocationFuture);
 	}
 
 	public void cancelAllocation() {
@@ -115,16 +108,12 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 		this.jobId = null;
 		this.state = State.FREE;
 		this.allocationStartTimeStamp = 0;
-		this.allocationFuture.cancel(false);
-		this.allocationFuture = null;
 	}
 
 	public void completeAllocation() {
 		Preconditions.checkState(state == State.PENDING, "In order to complete an allocation, the slot has to be allocated.");
 
 		this.state = State.ALLOCATED;
-		this.allocationFuture.cancel(false);
-		this.allocationFuture = null;
 	}
 
 	public void freeSlot() {

@@ -86,6 +86,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	/** Index of all currently pending slots. */
 	private final HashMap<SlotID, DeclarativeTaskManagerSlot> pendingSlotAllocations;
+	private final HashMap<SlotID, CompletableFuture<Acknowledge>> pendingSlotAllocationFutures;
 
 	/** Index of all currently free slots. */
 	private final LinkedHashMap<SlotID, DeclarativeTaskManagerSlot> freeSlots;
@@ -165,6 +166,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		slots = new HashMap<>(16);
 		pendingSlotAllocations = new HashMap<>(16);
+		pendingSlotAllocationFutures = new HashMap<>(16);
 		freeSlots = new LinkedHashMap<>(16);
 		taskManagerRegistrations = new HashMap<>(4);
 		pendingSlots = new HashMap<>(16);
@@ -672,6 +674,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				break;
 			case PENDING:
 				slot.cancelAllocation();
+				cancelAllocationFuture(slot.getSlotId());
 				handleFreeSlot(slot);
 				break;
 			case ALLOCATED:
@@ -687,10 +690,11 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				if (!jobId.equals(slot.getJobId())) {
 					internalFreeSlot(slot);
 
-					slot.startAllocation(jobId, CompletableFuture.completedFuture(Acknowledge.get()));
+					slot.startAllocation(jobId);
 					updateStateForAllocatedSlot(slot, taskManagerRegistration, jobId);
 				} else {
 					resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.PENDING, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
+					cancelAllocationFuture(slot.getSlotId());
 					slot.completeAllocation();
 					taskManagerRegistration.occupySlot();
 				}
@@ -701,7 +705,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				// the slot is currently free --> it is stored in freeSlots
 				resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.FREE, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
 				freeSlots.remove(slot.getSlotId());
-				slot.startAllocation(jobId, new CompletableFuture<>());
+				slot.startAllocation(jobId);
 				slot.completeAllocation();
 				taskManagerRegistration.occupySlot();
 
@@ -848,8 +852,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		final SlotID slotId = taskManagerSlot.getSlotId();
 		final InstanceID instanceID = taskManagerSlot.getInstanceId();
 
-		taskManagerSlot.startAllocation(jobId, completableFuture);
+		taskManagerSlot.startAllocation(jobId);
 		resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.FREE, DeclarativeTaskManagerSlot.State.PENDING, jobId, taskManagerSlot.getResourceProfile());
+		pendingSlotAllocationFutures.put(slotId, completableFuture);
 
 		TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(instanceID);
 
@@ -903,6 +908,14 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				}
 			},
 			mainThreadExecutor);
+	}
+
+	private void cancelAllocationFuture(SlotID slotId) {
+		final CompletableFuture<Acknowledge> acknowledgeCompletableFuture = pendingSlotAllocationFutures.remove(slotId);
+		// the future may be null if we are just re-playing the state transitions due to a slot report
+		if (acknowledgeCompletableFuture != null) {
+			acknowledgeCompletableFuture.cancel(false);
+		}
 	}
 
 	/**
