@@ -21,8 +21,6 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 
-import org.apache.flink.shaded.curator4.com.google.common.collect.Streams;
-
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -37,20 +35,17 @@ import java.util.stream.Collectors;
 class JobResources {
 
 	private final Map<ResourceProfile, Integer> missingResources = new LinkedHashMap<>();
-	private final Map<ResourceProfile, Integer> pendingResources = new LinkedHashMap<>();
-	private final Map<ResourceProfile, Integer> allocatedResources = new HashMap<>();
+	private final Map<ResourceProfile, Integer> acquiredResources = new HashMap<>();
 
 	public Collection<ResourceRequirement> getMissingResources() {
 		return missingResources.entrySet().stream().map(entry -> ResourceRequirement.create(entry.getKey(), entry.getValue())).collect(Collectors.toList());
 	}
 
 	public Collection<ResourceRequirement> getPendingAndAllocatedResources() {
-		return Streams
-			.concat(pendingResources.keySet().stream(), allocatedResources.keySet().stream())
-			.distinct()
-			.map(profile -> ResourceRequirement.create(
-				profile,
-				pendingResources.getOrDefault(profile, 0) + allocatedResources.getOrDefault(profile, 0)))
+		return acquiredResources
+			.entrySet()
+			.stream()
+			.map(entry -> ResourceRequirement.create(entry.getKey(), entry.getValue()))
 			.collect(Collectors.toList());
 	}
 
@@ -59,11 +54,8 @@ class JobResources {
 			case MISSING:
 				incrementCount(missingResources, resourceProfile);
 				break;
-			case PENDING:
-				incrementCount(pendingResources, resourceProfile);
-				break;
-			case ALLOCATED:
-				incrementCount(allocatedResources, resourceProfile);
+			case ACQUIRED:
+				incrementCount(acquiredResources, resourceProfile);
 				break;
 		}
 	}
@@ -82,10 +74,8 @@ class JobResources {
 		switch (state) {
 			case MISSING:
 				return new ResourceIterator(missingResources);
-			case PENDING:
-				return new ResourceIterator(pendingResources);
-			case ALLOCATED:
-				return new ResourceIterator(allocatedResources);
+			case ACQUIRED:
+				return new ResourceIterator(acquiredResources);
 		}
 		throw new IllegalStateException("Unknown resource state:" + state);
 	}

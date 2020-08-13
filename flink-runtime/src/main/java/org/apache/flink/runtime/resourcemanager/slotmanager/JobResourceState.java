@@ -21,10 +21,8 @@ package org.apache.flink.runtime.resourcemanager.slotmanager;
  * Possible states for a job resource.
  */
 public enum JobResourceState {
-	/** Indicates that a slot is required. */
+	/** Indicates that a resource is required. */
 	MISSING,
-	/** Indicates that the allocation of a slot has been started. */
-	PENDING,
-	/** Indicates that the allocation of a slot has been completed. */
-	ALLOCATED;
+	/** Indicates that a resource has been acquired. */
+	ACQUIRED;
 }

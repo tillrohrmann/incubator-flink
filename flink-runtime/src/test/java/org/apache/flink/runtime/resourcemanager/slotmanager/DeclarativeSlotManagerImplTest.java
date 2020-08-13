@@ -640,7 +640,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			// let the first attempt fail --> this should trigger a second attempt
 			slotRequestFuture1.completeExceptionally(new SlotAllocationException("Test exception."));
 
-			assertThat(slotManager.getNumResources(jobId, JobResourceState.PENDING), is(1));
+			assertThat(slotManager.getNumResources(jobId, JobResourceState.ACQUIRED), is(1));
 
 			// the second attempt succeeds
 			slotRequestFuture2.complete(Acknowledge.get());
@@ -1013,7 +1013,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			assertThat(slot.getJobId(), equalTo(firstRequest.f1));
 
 			assertThat(slotManager.getNumberRegisteredSlots(), is(1));
-			assertThat(slotManager.getNumResources(jobID, JobResourceState.ALLOCATED), is(1));
+			assertThat(slotManager.getNumResources(jobID, JobResourceState.ACQUIRED), is(1));
 		}
 	}
 

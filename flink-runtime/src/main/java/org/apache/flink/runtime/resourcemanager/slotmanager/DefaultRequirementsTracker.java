@@ -51,13 +51,14 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	// Event triggers
 	// ---------------------------------------------------------------------------------------------
 
-	@Override
-	public void notifySlotStatusChange(DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile) {
-		if (previous == current) {
-			return;
-		}
-		findAndRemoveMatchingResource(jobId, resourceProfile, mapSlotState(previous));
-		addResource(jobId, resourceProfile, mapSlotState(current));
+	public void notifyAcquiredResource(JobID jobId, ResourceProfile resourceProfile) {
+		findAndRemoveMatchingResource(jobId, resourceProfile, JobResourceState.MISSING);
+		addResource(jobId, resourceProfile, JobResourceState.ACQUIRED);
+	}
+
+	public void notifyLostResource(JobID jobId, ResourceProfile resourceProfile) {
+		findAndRemoveMatchingResource(jobId, resourceProfile, JobResourceState.ACQUIRED);
+		addResource(jobId, resourceProfile, JobResourceState.MISSING);
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -157,22 +158,6 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 
 	private void findAndRemoveMatchingResource(JobID jobId, ResourceProfile profile, JobResourceState resourceState) {
 		getJobResources(jobId).findAndRemoveMatchingResource(profile, resourceState);
-	}
-
-	// ---------------------------------------------------------------------------------------------
-	// Utilities
-	// ---------------------------------------------------------------------------------------------
-
-	private static JobResourceState mapSlotState(DeclarativeTaskManagerSlot.State state) {
-		switch (state) {
-			case FREE:
-				return JobResourceState.MISSING;
-			case PENDING:
-				return JobResourceState.PENDING;
-			case ALLOCATED:
-				return JobResourceState.ALLOCATED;
-		}
-		throw new IllegalStateException("Unknown TaskManagerSlot state :" + state);
 	}
 
 	// ---------------------------------------------------------------------------------------------

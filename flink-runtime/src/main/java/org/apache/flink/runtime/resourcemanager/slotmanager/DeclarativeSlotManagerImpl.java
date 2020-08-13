@@ -668,16 +668,17 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	private void internalFreeSlot(DeclarativeTaskManagerSlot slot) {
 		final TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(slot.getInstanceId());
 
-		resourceTracker.notifySlotStatusChange(slot.getState(), DeclarativeTaskManagerSlot.State.FREE, slot.getJobId(), slot.getResourceProfile());
 		switch (slot.getState()) {
 			case FREE:
 				break;
 			case PENDING:
+				resourceTracker.notifyLostResource(slot.getJobId(), slot.getResourceProfile());
 				slot.cancelAllocation();
 				cancelAllocationFuture(slot.getSlotId());
 				handleFreeSlot(slot);
 				break;
 			case ALLOCATED:
+				resourceTracker.notifyLostResource(slot.getJobId(), slot.getResourceProfile());
 				slot.freeSlot();
 				taskManagerRegistration.freeSlot();
 				handleFreeSlot(slot);
@@ -691,9 +692,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 					internalFreeSlot(slot);
 
 					slot.startAllocation(jobId);
+					resourceTracker.notifyAcquiredResource(jobId, slot.getResourceProfile());
 					updateStateForAllocatedSlot(slot, taskManagerRegistration, jobId);
 				} else {
-					resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.PENDING, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
 					cancelAllocationFuture(slot.getSlotId());
 					slot.completeAllocation();
 					taskManagerRegistration.occupySlot();
@@ -703,9 +704,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				break;
 			case FREE:
 				// the slot is currently free --> it is stored in freeSlots
-				resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.FREE, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
 				freeSlots.remove(slot.getSlotId());
 				slot.startAllocation(jobId);
+				resourceTracker.notifyAcquiredResource(jobId, slot.getResourceProfile());
 				slot.completeAllocation();
 				taskManagerRegistration.occupySlot();
 
@@ -853,7 +854,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		final InstanceID instanceID = taskManagerSlot.getInstanceId();
 
 		taskManagerSlot.startAllocation(jobId);
-		resourceTracker.notifySlotStatusChange(DeclarativeTaskManagerSlot.State.FREE, DeclarativeTaskManagerSlot.State.PENDING, jobId, taskManagerSlot.getResourceProfile());
+		resourceTracker.notifyAcquiredResource(jobId, taskManagerSlot.getResourceProfile());
 		pendingSlotAllocationFutures.put(slotId, completableFuture);
 
 		TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(instanceID);

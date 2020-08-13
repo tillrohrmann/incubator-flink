@@ -37,14 +37,20 @@ public interface RequirementsTracker {
 	void notifyResourceRequirements(ResourceRequirements resourceRequirements);
 
 	/**
-	 * Notifies the tracker about a change in the state of a slot.
+	 * Notifies the tracker about the acquisition of a resource with the given resource profile, for the given job.
 	 *
-	 * @param previous previous state of the slot
-	 * @param current new state of the slot
-	 * @param jobId job the slot is allocated for
-	 * @param resourceProfile resource profile of the slot
+	 * @param jobId           the job that acquired the resource
+	 * @param resourceProfile profile of the resource
 	 */
-	void notifySlotStatusChange(DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile);
+	void notifyAcquiredResource(JobID jobId, ResourceProfile resourceProfile);
+
+	/**
+	 * Notifies the tracker about the loss of a resource with the given resource profile, for the given job.
+	 *
+	 * @param jobId           the job that lost the resource
+	 * @param resourceProfile profile of the resource
+	 */
+	void notifyLostResource(JobID jobId, ResourceProfile resourceProfile);
 
 	/**
 	 * Returns a collection of {@link ResourceRequirements} that describe which resources the corresponding job is
