@@ -122,6 +122,11 @@ public class DefaultPoolService implements PoolService {
 	}
 
 	@Override
+	public boolean containsSlot(AllocationID allocationId) {
+		return registeredSlots.containsKey(allocationId);
+	}
+
+	@Override
 	public Collection<FreeSlotInfo> getFreeSlotsInformation() {
 		final Map<ResourceID, Integer> freeSlotsPerTaskExecutor = new HashMap<>();
 

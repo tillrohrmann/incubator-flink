@@ -128,10 +128,21 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 			TaskManagerLocation taskManagerLocation,
 			TaskManagerGateway taskManagerGateway,
 			long currentTime) {
-		final Collection<SlotOfferMatching> matchings = matchOffersWithOutstandingRequirements(offers);
+		final Collection<SlotOffer> acceptedSlotOffers = new ArrayList<>();
+		final Collection<SlotOffer> candidates = new ArrayList<>();
+
+		for (SlotOffer offer : offers) {
+			final AllocationID allocationId = offer.getAllocationId();
+			if (slotPool.containsSlot(allocationId)) {
+				acceptedSlotOffers.add(offer);
+			} else {
+				candidates.add(offer);
+			}
+		}
+
+		final Collection<SlotOfferMatching> matchings = matchOffersWithOutstandingRequirements(candidates);
 
 		final Collection<AllocatedSlot> acceptedSlots = new ArrayList<>();
-		final Collection<SlotOffer> acceptedSlotOffers = new ArrayList<>();
 		final ResourceCounter acceptedResources = ResourceCounter.empty();
 
 		for (SlotOfferMatching matching : matchings) {

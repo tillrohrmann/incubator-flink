@@ -115,4 +115,11 @@ public class ResourceCounter {
 	public static ResourceCounter withResources(ResourceCounter initialResources) {
 		return new ResourceCounter(initialResources.resources);
 	}
+
+	@Override
+	public String toString() {
+		return "ResourceCounter{" +
+			"resources=" + resources +
+			'}';
+	}
 }

@@ -35,4 +35,6 @@ public interface PoolService extends Pool {
 	Collection<AllocatedSlot> removeSlots(ResourceID owner);
 
 	boolean containsSlots(ResourceID owner);
+
+	boolean containsSlot(AllocationID allocationId);
 }
