@@ -124,6 +124,11 @@ public interface SlotPool extends AllocatedSlotActions, AutoCloseable {
 	 */
 	Optional<ResourceID> failAllocation(AllocationID allocationID, Exception cause);
 
+	default Optional<ResourceID> failAllocation(@Nullable ResourceID resourceId, AllocationID allocationID, Exception cause) {
+		Preconditions.checkArgument(resourceId == null);
+		return failAllocation(allocationID, cause);
+	}
+
 	// ------------------------------------------------------------------------
 	//  allocating and disposing slots
 	// ------------------------------------------------------------------------

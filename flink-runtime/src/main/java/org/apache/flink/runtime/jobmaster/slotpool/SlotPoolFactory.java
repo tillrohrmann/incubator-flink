@@ -42,7 +42,7 @@ public interface SlotPoolFactory {
 		final Time batchSlotTimeout = Time.milliseconds(configuration.getLong(JobManagerOptions.SLOT_REQUEST_TIMEOUT));
 
 		if (ClusterOptions.isDeclarativeResourceManagementEnabled(configuration)) {
-			return new DeclarativeSlotPoolFactory(
+			return new FutureSlotPoolFactory(
 				SystemClock.getInstance(),
 				rpcTimeout,
 				slotIdleTimeout,

@@ -1,0 +1,557 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.flink.runtime.jobmaster.slotpool;
+
+import org.apache.flink.api.common.JobID;
+import org.apache.flink.api.common.time.Time;
+import org.apache.flink.runtime.clusterframework.types.AllocationID;
+import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
+import org.apache.flink.runtime.concurrent.FutureUtils;
+import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
+import org.apache.flink.runtime.jobmaster.AllocatedSlotInfo;
+import org.apache.flink.runtime.jobmaster.AllocatedSlotReport;
+import org.apache.flink.runtime.jobmaster.JobMasterId;
+import org.apache.flink.runtime.jobmaster.SlotInfo;
+import org.apache.flink.runtime.jobmaster.SlotRequestId;
+import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
+import org.apache.flink.runtime.slotsbro.ResourceRequirement;
+import org.apache.flink.runtime.slotsbro.ResourceRequirements;
+import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
+import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.clock.Clock;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+/**
+ * {@link SlotPool} implementation which returns slots which can be completed in the future.
+ */
+public class FutureSlotPool implements SlotPool {
+
+	private static final Logger LOG = LoggerFactory.getLogger(FutureSlotPool.class);
+
+	private final JobID jobId;
+
+	private final DeclarativeSlotPoolNg declarativeSlotPool;
+
+	private final Map<SlotRequestId, PendingRequest> pendingRequests;
+
+	private final Map<SlotRequestId, AllocationID> fulfilledRequests;
+
+	private final Set<ResourceID> registeredTaskManagers;
+
+	private final Clock clock;
+
+	private final Time rpcTimeout;
+
+	private final Time idleSlotTimeout;
+
+	private final Time batchSlotTimeout;
+
+	@Nullable
+	private JobMasterId jobMasterId;
+
+	@Nullable
+	private String jobManagerAddress;
+
+	@Nullable
+	private ComponentMainThreadExecutor componentMainThreadExecutor;
+
+	@Nullable
+	private ResourceManagerGateway resourceManagerGateway;
+
+	private boolean isBatchSlotRequestTimeoutCheckEnabled;
+
+	public FutureSlotPool(JobID jobId, DeclarativeSlotPoolNgFactory declarativeSlotPoolFactory, Clock clock, Time rpcTimeout, Time idleSlotTimeout, Time batchSlotTimeout) {
+		this.jobId = jobId;
+		this.declarativeSlotPool = declarativeSlotPoolFactory.create(
+			this::declareNewResourceRequirements,
+			this::newSlotsAreAvailable,
+			idleSlotTimeout,
+			rpcTimeout);
+		this.clock = clock;
+		this.rpcTimeout = rpcTimeout;
+		this.idleSlotTimeout = idleSlotTimeout;
+		this.batchSlotTimeout = batchSlotTimeout;
+		this.pendingRequests = new LinkedHashMap<>();
+		this.fulfilledRequests = new HashMap<>();
+		this.registeredTaskManagers = new HashSet<>();
+		this.isBatchSlotRequestTimeoutCheckEnabled = true;
+	}
+
+	@Override
+	public void start(JobMasterId jobMasterId, String newJobManagerAddress, ComponentMainThreadExecutor jmMainThreadScheduledExecutor) throws Exception {
+		this.jobMasterId = jobMasterId;
+		this.jobManagerAddress = newJobManagerAddress;
+		this.componentMainThreadExecutor = jmMainThreadScheduledExecutor;
+
+		componentMainThreadExecutor.schedule(this::checkIdleSlotTimeout, idleSlotTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
+		componentMainThreadExecutor.schedule(this::checkBatchSlotTimeout, batchSlotTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
+	}
+
+	@Override
+	public void suspend() {
+		assertRunningInMainThread();
+		LOG.info("Suspending SlotPool.");
+
+		clearState();
+	}
+
+	private void clearState() {
+		cancelPendingRequests();
+
+		jobMasterId = null;
+		jobManagerAddress = null;
+		resourceManagerGateway = null;
+		registeredTaskManagers.clear();
+	}
+
+	private void cancelPendingRequests() {
+		final Map<ResourceProfile, Integer> decreasedResourceRequirements = new HashMap<>();
+
+		for (PendingRequest pendingRequest : pendingRequests.values()) {
+			pendingRequest.cancelRequest();
+
+			decreasedResourceRequirements.compute(pendingRequest.getResourceProfile(), (resourceProfile, integer) -> {
+				if (integer == null) {
+					return 1;
+				} else {
+					return integer + 1;
+				}
+			});
+		}
+
+		pendingRequests.clear();
+		declarativeSlotPool.decreaseResourceRequirementsBy(decreasedResourceRequirements);
+	}
+
+	@Override
+	public void close() {
+		LOG.info("Closing SlotPool.");
+		clearState();
+	}
+
+	@Override
+	public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {
+		this.resourceManagerGateway = resourceManagerGateway;
+
+		declareResourceRequirements(declarativeSlotPool.getResourceRequirements());
+	}
+
+	private void declareResourceRequirements(Collection<ResourceRequirement> resourceRequirements) {
+		Preconditions.checkNotNull(resourceManagerGateway);
+
+		resourceManagerGateway.declareRequiredResources(
+			jobMasterId,
+			new ResourceRequirements(
+				jobId,
+				jobManagerAddress,
+				resourceRequirements),
+			rpcTimeout);
+	}
+
+	private void declareNewResourceRequirements(Collection<ResourceRequirement> newResourceRequirements) {
+		if (resourceManagerGateway != null) {
+			declareResourceRequirements(newResourceRequirements);
+		}
+	}
+
+	@Override
+	public void disconnectResourceManager() {
+		this.resourceManagerGateway = null;
+	}
+
+	@Override
+	public boolean registerTaskManager(ResourceID resourceID) {
+		assertRunningInMainThread();
+
+		LOG.debug("Register new TaskExecutor {}.", resourceID);
+		return registeredTaskManagers.add(resourceID);
+	}
+
+	@Override
+	public boolean releaseTaskManager(ResourceID resourceId, Exception cause) {
+		assertRunningInMainThread();
+
+		if (registeredTaskManagers.remove(resourceId)) {
+			declarativeSlotPool.failSlots(resourceId, cause);
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	@Override
+	public Collection<SlotOffer> offerSlots(TaskManagerLocation taskManagerLocation, TaskManagerGateway taskManagerGateway, Collection<SlotOffer> offers) {
+		assertRunningInMainThread();
+
+		if (!registeredTaskManagers.contains(taskManagerLocation.getResourceID())) {
+			return Collections.emptyList();
+		}
+
+		return declarativeSlotPool.offerSlots(offers, taskManagerLocation, taskManagerGateway, clock.relativeTimeMillis());
+	}
+
+	private void newSlotsAreAvailable(Collection<? extends PhysicalSlot> newSlots) {
+		for (PhysicalSlot newSlot : newSlots) {
+			final Optional<PendingRequest> matchingPendingRequest = findMatchingPendingRequest(newSlot);
+
+			matchingPendingRequest.ifPresent(pendingRequest -> fulfillPendingRequest(newSlot, pendingRequest));
+		}
+	}
+
+	private void fulfillPendingRequest(PhysicalSlot newSlot, PendingRequest pendingRequest) {
+		Preconditions.checkState(pendingRequest.fulfill(newSlot), "Pending requests must be fulfillable.");
+		declarativeSlotPool.allocateFreeSlot(newSlot.getAllocationId());
+		pendingRequests.remove(pendingRequest.getSlotRequestId());
+		fulfilledRequests.put(pendingRequest.getSlotRequestId(), newSlot.getAllocationId());
+	}
+
+	private Optional<PendingRequest> findMatchingPendingRequest(PhysicalSlot slot) {
+		final ResourceProfile resourceProfile = slot.getResourceProfile();
+
+		for (PendingRequest pendingRequest : pendingRequests.values()) {
+			if (resourceProfile.isMatching(pendingRequest.getResourceProfile())) {
+				return Optional.of(pendingRequest);
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	@Override
+	public Optional<ResourceID> failAllocation(AllocationID allocationID, Exception cause) {
+		throw new UnsupportedOperationException("Please call failAllocation(ResourceID, AllocationID, Exception)");
+	}
+
+	@Override
+	public Optional<ResourceID> failAllocation(@Nullable ResourceID resourceId, AllocationID allocationID, Exception cause) {
+		assertRunningInMainThread();
+
+		Preconditions.checkNotNull(resourceId, "The FutureSlotPool only supports failAllocation calls coming from the TaskExecutor.");
+
+		declarativeSlotPool.failSlot(allocationID, cause);
+
+		if (declarativeSlotPool.containsSlots(resourceId)) {
+			return Optional.empty();
+		} else {
+			return Optional.of(resourceId);
+		}
+	}
+
+	@Override
+	public Collection<SlotInfoWithUtilization> getAvailableSlotsInformation() {
+		assertRunningInMainThread();
+
+		return declarativeSlotPool.getFreeSlotsInformation();
+	}
+
+	@Override
+	public Collection<SlotInfo> getAllocatedSlotsInformation() {
+		assertRunningInMainThread();
+
+		@SuppressWarnings("unchecked")
+		final Collection<SlotInfo> result = (Collection<SlotInfo>) declarativeSlotPool.getAllSlotsInformation();
+		return result;
+	}
+
+	@Override
+	public Optional<PhysicalSlot> allocateAvailableSlot(@Nonnull SlotRequestId slotRequestId, @Nonnull AllocationID allocationID) {
+		assertRunningInMainThread();
+
+		return Optional.of(declarativeSlotPool.allocateFreeSlot(allocationID));
+	}
+
+	@Override
+	@Nonnull
+	public CompletableFuture<PhysicalSlot> requestNewAllocatedSlot(@Nonnull SlotRequestId slotRequestId, @Nonnull ResourceProfile resourceProfile, @Nullable Time timeout) {
+		assertRunningInMainThread();
+
+		final PendingRequest pendingRequest = PendingRequest.createNormalRequest(slotRequestId, resourceProfile);
+
+		if (timeout != null) {
+			FutureUtils
+				.orTimeout(
+					pendingRequest.getSlotFuture(),
+					timeout.toMilliseconds(),
+					TimeUnit.MILLISECONDS,
+					componentMainThreadExecutor)
+				.whenComplete((physicalSlot, throwable) -> {
+					if (throwable instanceof TimeoutException) {
+						timeoutPendingSlotRequest(slotRequestId);
+					}
+				});
+		}
+
+		return internalRequestNewAllocatedSlot(pendingRequest);
+	}
+
+	private void timeoutPendingSlotRequest(SlotRequestId slotRequestId) {
+		releaseSlot(slotRequestId, new TimeoutException("Pending slot request timed out in slot pool."));
+	}
+
+	@Override
+	@Nonnull
+	public CompletableFuture<PhysicalSlot> requestNewAllocatedBatchSlot(@Nonnull SlotRequestId slotRequestId, @Nonnull ResourceProfile resourceProfile) {
+		assertRunningInMainThread();
+
+		final PendingRequest pendingRequest = PendingRequest.createBatchRequest(slotRequestId, resourceProfile);
+
+		return internalRequestNewAllocatedSlot(pendingRequest);
+	}
+
+	private CompletableFuture<PhysicalSlot> internalRequestNewAllocatedSlot(PendingRequest pendingRequest) {
+		pendingRequests.put(pendingRequest.getSlotRequestId(), pendingRequest);
+
+		declarativeSlotPool.increaseResourceRequirementsBy(Collections.singletonMap(pendingRequest.getResourceProfile(), 1));
+
+		return pendingRequest.getSlotFuture();
+	}
+
+	@Override
+	public void disableBatchSlotRequestTimeoutCheck() {
+		assertRunningInMainThread();
+
+		isBatchSlotRequestTimeoutCheckEnabled = false;
+	}
+
+	@Override
+	public AllocatedSlotReport createAllocatedSlotReport(ResourceID taskManagerId) {
+		assertRunningInMainThread();
+
+		final Collection<? extends SlotInfo> allocatedSlotsInformation = declarativeSlotPool.getAllSlotsInformation();
+		final Collection<SlotInfoWithUtilization> availableSlotsInformation = declarativeSlotPool.getFreeSlotsInformation();
+
+		final Collection<AllocatedSlotInfo> allocatedSlotInfos = new ArrayList<>();
+
+		for (SlotInfo slotInfo : allocatedSlotsInformation) {
+			allocatedSlotInfos.add(new AllocatedSlotInfo(
+				slotInfo.getPhysicalSlotNumber(),
+				slotInfo.getAllocationId()));
+		}
+
+		for (SlotInfoWithUtilization slotInfoWithUtilization : availableSlotsInformation) {
+			allocatedSlotInfos.add(new AllocatedSlotInfo(
+				slotInfoWithUtilization.getPhysicalSlotNumber(),
+				slotInfoWithUtilization.getAllocationId()));
+		}
+
+		return new AllocatedSlotReport(jobId, allocatedSlotInfos);
+	}
+
+	@Override
+	public void releaseSlot(@Nonnull SlotRequestId slotRequestId, @Nullable Throwable cause) {
+		assertRunningInMainThread();
+
+		final PendingRequest pendingRequest = pendingRequests.remove(slotRequestId);
+
+		if (pendingRequest != null) {
+			declarativeSlotPool.decreaseResourceRequirementsBy(Collections.singletonMap(pendingRequest.getResourceProfile(), 1));
+			pendingRequest.failRequest(new FlinkException(
+				String.format("Pending slot request with %s has been released.", pendingRequest.getSlotRequestId()),
+				cause));
+		} else {
+			final AllocationID allocationId = fulfilledRequests.remove(slotRequestId);
+
+			if (allocationId != null) {
+				declarativeSlotPool.releaseSlot(allocationId, cause, clock.relativeTimeMillis());
+			}
+		}
+	}
+
+	private void assertRunningInMainThread() {
+		if (componentMainThreadExecutor != null) {
+			componentMainThreadExecutor.assertRunningInMainThread();
+		} else {
+			throw new IllegalStateException("The FutureSlotPool has not been started yet.");
+		}
+	}
+
+	private void checkIdleSlotTimeout() {
+		declarativeSlotPool.returnIdleSlots(clock.relativeTimeMillis());
+
+		if (componentMainThreadExecutor != null) {
+			componentMainThreadExecutor.schedule(this::checkIdleSlotTimeout, idleSlotTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
+		}
+	}
+
+	private void checkBatchSlotTimeout() {
+		if (!isBatchSlotRequestTimeoutCheckEnabled) {
+			return;
+		}
+
+		final Collection<PendingRequest> pendingBatchRequests = getPendingBatchRequests();
+
+		if (!pendingBatchRequests.isEmpty()) {
+			final Set<ResourceProfile> allResourceProfiles = getResourceProfilesFromAllSlots();
+
+			final Map<Boolean, List<PendingRequest>> fulfillableAndUnfulfillableRequests = pendingBatchRequests
+				.stream()
+				.collect(Collectors.partitioningBy(canBeFulfilledWithAnySlot(allResourceProfiles)));
+
+			final List<PendingRequest> fulfillableRequests = fulfillableAndUnfulfillableRequests.get(true);
+			final List<PendingRequest> unfulfillableRequests = fulfillableAndUnfulfillableRequests.get(false);
+
+			final long currentTimestamp = clock.relativeTimeMillis();
+
+			for (PendingRequest fulfillableRequest : fulfillableRequests) {
+				fulfillableRequest.markFulfillable();
+			}
+
+			for (PendingRequest unfulfillableRequest : unfulfillableRequests) {
+				unfulfillableRequest.markUnfulfillable(currentTimestamp);
+
+				if (unfulfillableRequest.getUnfulfillableSince() + batchSlotTimeout.toMilliseconds() <= currentTimestamp) {
+					timeoutPendingSlotRequest(unfulfillableRequest.getSlotRequestId());
+				}
+			}
+		}
+
+		if (componentMainThreadExecutor != null) {
+			componentMainThreadExecutor.schedule(this::checkBatchSlotTimeout, batchSlotTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
+		}
+	}
+
+	private Set<ResourceProfile> getResourceProfilesFromAllSlots() {
+		return Stream
+			.concat(
+				getAvailableSlotsInformation().stream(),
+				getAllocatedSlotsInformation().stream())
+			.map(SlotInfo::getResourceProfile)
+			.collect(Collectors.toSet());
+	}
+
+	private Collection<PendingRequest> getPendingBatchRequests() {
+		return pendingRequests.values().stream()
+			.filter(PendingRequest::isBatchRequest)
+			.collect(Collectors.toList());
+	}
+
+	private Predicate<PendingRequest> canBeFulfilledWithAnySlot(Set<ResourceProfile> allocatedResourceProfiles) {
+		return pendingRequest -> {
+			for (ResourceProfile allocatedResourceProfile : allocatedResourceProfiles) {
+				if (allocatedResourceProfile.isMatching(pendingRequest.getResourceProfile())) {
+					return true;
+				}
+			}
+
+			return false;
+		};
+	}
+
+	private static final class PendingRequest {
+
+		private final SlotRequestId slotRequestId;
+
+		private final ResourceProfile resourceProfile;
+
+		private final CompletableFuture<PhysicalSlot> slotFuture;
+
+		private final boolean isBatchRequest;
+
+		private long unfulfillableSince;
+
+		private PendingRequest(SlotRequestId slotRequestId, ResourceProfile resourceProfile, boolean isBatchRequest) {
+			this.slotRequestId = slotRequestId;
+			this.resourceProfile = resourceProfile;
+			this.isBatchRequest = isBatchRequest;
+			this.slotFuture = new CompletableFuture<>();
+			this.unfulfillableSince = Long.MAX_VALUE;
+		}
+
+		static PendingRequest createBatchRequest(SlotRequestId slotRequestId, ResourceProfile resourceProfile) {
+			return new PendingRequest(
+				slotRequestId,
+				resourceProfile,
+				true);
+		}
+
+		static PendingRequest createNormalRequest(SlotRequestId slotRequestId, ResourceProfile resourceProfile) {
+			return new PendingRequest(
+				slotRequestId,
+				resourceProfile,
+				false);
+		}
+
+		SlotRequestId getSlotRequestId() {
+			return slotRequestId;
+		}
+
+		ResourceProfile getResourceProfile() {
+			return resourceProfile;
+		}
+
+		CompletableFuture<PhysicalSlot> getSlotFuture() {
+			return slotFuture;
+		}
+
+		void cancelRequest() {
+			slotFuture.completeExceptionally(new CancellationException("The slot request has been cancelled."));
+		}
+
+		void failRequest(Exception cause) {
+			slotFuture.completeExceptionally(cause);
+		}
+
+		public boolean isBatchRequest() {
+			return isBatchRequest;
+		}
+
+		public void markFulfillable() {
+			this.unfulfillableSince = Long.MAX_VALUE;
+		}
+
+		public void markUnfulfillable(long currentTimestamp) {
+			this.unfulfillableSince = currentTimestamp;
+		}
+
+		public long getUnfulfillableSince() {
+			return unfulfillableSince;
+		}
+
+		public boolean fulfill(PhysicalSlot slot) {
+			return slotFuture.complete(slot);
+		}
+	}
+}
