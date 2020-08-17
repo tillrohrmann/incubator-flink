@@ -33,7 +33,6 @@ import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.jobmaster.SlotRequestId;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
-import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.util.FlinkException;
@@ -93,18 +92,9 @@ public class FutureSlotPool implements SlotPool {
 	private final Time batchSlotTimeout;
 
 	@Nullable
-	private JobMasterId jobMasterId;
-
-	@Nullable
-	private String jobManagerAddress;
-
-	@Nullable
 	private ComponentMainThreadExecutor componentMainThreadExecutor;
 
 	private ResourceManagerConnectionManager resourceManagerConnectionManager;
-
-	@Nullable
-	private ResourceManagerGateway resourceManagerGateway;
 
 	private boolean isBatchSlotRequestTimeoutCheckDisabled;
 
@@ -117,7 +107,7 @@ public class FutureSlotPool implements SlotPool {
 			Time batchSlotTimeout) {
 		this.jobId = jobId;
 		this.declarativeSlotPool = declarativeSlotPoolFactory.create(
-			this::declareNewResourceRequirements,
+			this::declareResourceRequirements,
 			this::newSlotsAreAvailable,
 			idleSlotTimeout,
 			rpcTimeout);
@@ -128,14 +118,19 @@ public class FutureSlotPool implements SlotPool {
 		this.pendingRequests = new LinkedHashMap<>();
 		this.fulfilledRequests = new HashMap<>();
 		this.registeredTaskManagers = new HashSet<>();
+		this.resourceManagerConnectionManager = ResourceManagerConnectionManager.notStarted();
 		this.isBatchSlotRequestTimeoutCheckDisabled = false;
 	}
 
 	@Override
 	public void start(JobMasterId jobMasterId, String newJobManagerAddress, ComponentMainThreadExecutor jmMainThreadScheduledExecutor) throws Exception {
-		this.jobMasterId = jobMasterId;
-		this.jobManagerAddress = newJobManagerAddress;
 		this.componentMainThreadExecutor = jmMainThreadScheduledExecutor;
+		this.resourceManagerConnectionManager = ResourceManagerConnectionManager.create(
+			jobId,
+			jobMasterId,
+			newJobManagerAddress,
+			componentMainThreadExecutor,
+			rpcTimeout);
 
 		componentMainThreadExecutor.schedule(this::checkIdleSlotTimeout, idleSlotTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
 		componentMainThreadExecutor.schedule(this::checkBatchSlotTimeout, batchSlotTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
@@ -151,9 +146,8 @@ public class FutureSlotPool implements SlotPool {
 	}
 
 	private void clearState() {
-		jobMasterId = null;
-		jobManagerAddress = null;
-		resourceManagerGateway = null;
+		resourceManagerConnectionManager.close();
+		resourceManagerConnectionManager = ResourceManagerConnectionManager.notStarted();
 		registeredTaskManagers.clear();
 	}
 
@@ -189,34 +183,19 @@ public class FutureSlotPool implements SlotPool {
 	public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {
 		assertRunningInMainThread();
 
-		this.resourceManagerGateway = resourceManagerGateway;
+		resourceManagerConnectionManager.connect(resourceManagerGateway);
 		declareResourceRequirements(declarativeSlotPool.getResourceRequirements());
 	}
 
 	private void declareResourceRequirements(Collection<ResourceRequirement> resourceRequirements) {
-		Preconditions.checkNotNull(resourceManagerGateway);
-
-		resourceManagerGateway.declareRequiredResources(
-			jobMasterId,
-			new ResourceRequirements(
-				jobId,
-				jobManagerAddress,
-				resourceRequirements),
-			rpcTimeout);
-	}
-
-	private void declareNewResourceRequirements(Collection<ResourceRequirement> newResourceRequirements) {
 		assertRunningInMainThread();
-
-		if (resourceManagerGateway != null) {
-			declareResourceRequirements(newResourceRequirements);
-		}
+		resourceManagerConnectionManager.declareResourceRequirements(resourceRequirements);
 	}
 
 	@Override
 	public void disconnectResourceManager() {
 		assertRunningInMainThread();
-		this.resourceManagerGateway = null;
+		this.resourceManagerConnectionManager.disconnect();
 	}
 
 	@Override
