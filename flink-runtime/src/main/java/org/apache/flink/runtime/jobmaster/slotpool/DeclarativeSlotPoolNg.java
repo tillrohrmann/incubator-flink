@@ -20,7 +20,6 @@ package org.apache.flink.runtime.jobmaster.slotpool;
 
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
-import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
@@ -28,15 +27,14 @@ import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 
 import java.util.Collection;
-import java.util.Map;
 
 /**
  *
  */
 public interface DeclarativeSlotPoolNg {
-	void increaseResourceRequirementsBy(Map<ResourceProfile, Integer> increment);
+	void increaseResourceRequirementsBy(ResourceCounter increment);
 
-	void decreaseResourceRequirementsBy(Map<ResourceProfile, Integer> decrement);
+	void decreaseResourceRequirementsBy(ResourceCounter decrement);
 
 	Collection<ResourceRequirement> getResourceRequirements();
 

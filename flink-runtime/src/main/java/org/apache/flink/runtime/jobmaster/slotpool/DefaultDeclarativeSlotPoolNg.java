@@ -86,17 +86,13 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	@Override
-	public void increaseResourceRequirementsBy(Map<ResourceProfile, Integer> increment) {
+	public void increaseResourceRequirementsBy(ResourceCounter increment) {
 		resourceRequirements.add(increment);
 
 		declareResourceRequirements();
 	}
 
 	@Override
-	public void decreaseResourceRequirementsBy(Map<ResourceProfile, Integer> decrement) {
-		decreaseResourceRequirementsBy(ResourceCounter.withResources(decrement));
-	}
-
 	public void decreaseResourceRequirementsBy(ResourceCounter decrement) {
 		resourceRequirements.subtract(decrement);
 

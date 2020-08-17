@@ -66,6 +66,9 @@ import java.util.stream.Stream;
 
 /**
  * {@link SlotPool} implementation which returns slots which can be completed in the future.
+ *
+ * <p>The implementation is based on {@link DeclarativeSlotPoolNg} which offers a pool of slots and
+ * callbacks to notify the user of newly arrived slots. This feature is used to complete pending requests.
  */
 public class FutureSlotPool implements SlotPool {
 
@@ -98,12 +101,20 @@ public class FutureSlotPool implements SlotPool {
 	@Nullable
 	private ComponentMainThreadExecutor componentMainThreadExecutor;
 
+	private ResourceManagerConnectionManager resourceManagerConnectionManager;
+
 	@Nullable
 	private ResourceManagerGateway resourceManagerGateway;
 
-	private boolean isBatchSlotRequestTimeoutCheckEnabled;
+	private boolean isBatchSlotRequestTimeoutCheckDisabled;
 
-	public FutureSlotPool(JobID jobId, DeclarativeSlotPoolNgFactory declarativeSlotPoolFactory, Clock clock, Time rpcTimeout, Time idleSlotTimeout, Time batchSlotTimeout) {
+	public FutureSlotPool(
+			JobID jobId,
+			DeclarativeSlotPoolNgFactory declarativeSlotPoolFactory,
+			Clock clock,
+			Time rpcTimeout,
+			Time idleSlotTimeout,
+			Time batchSlotTimeout) {
 		this.jobId = jobId;
 		this.declarativeSlotPool = declarativeSlotPoolFactory.create(
 			this::declareNewResourceRequirements,
@@ -117,7 +128,7 @@ public class FutureSlotPool implements SlotPool {
 		this.pendingRequests = new LinkedHashMap<>();
 		this.fulfilledRequests = new HashMap<>();
 		this.registeredTaskManagers = new HashSet<>();
-		this.isBatchSlotRequestTimeoutCheckEnabled = true;
+		this.isBatchSlotRequestTimeoutCheckDisabled = false;
 	}
 
 	@Override
@@ -133,14 +144,13 @@ public class FutureSlotPool implements SlotPool {
 	@Override
 	public void suspend() {
 		assertRunningInMainThread();
-		LOG.info("Suspending SlotPool.");
+		LOG.info("Suspending FutureSlotPool.");
 
+		cancelPendingRequests();
 		clearState();
 	}
 
 	private void clearState() {
-		cancelPendingRequests();
-
 		jobMasterId = null;
 		jobManagerAddress = null;
 		resourceManagerGateway = null;
@@ -148,18 +158,11 @@ public class FutureSlotPool implements SlotPool {
 	}
 
 	private void cancelPendingRequests() {
-		final Map<ResourceProfile, Integer> decreasedResourceRequirements = new HashMap<>();
+		final ResourceCounter decreasedResourceRequirements = ResourceCounter.empty();
 
 		for (PendingRequest pendingRequest : pendingRequests.values()) {
 			pendingRequest.cancelRequest();
-
-			decreasedResourceRequirements.compute(pendingRequest.getResourceProfile(), (resourceProfile, integer) -> {
-				if (integer == null) {
-					return 1;
-				} else {
-					return integer + 1;
-				}
-			});
+			decreasedResourceRequirements.add(pendingRequest.getResourceProfile(), 1);
 		}
 
 		pendingRequests.clear();
@@ -168,14 +171,25 @@ public class FutureSlotPool implements SlotPool {
 
 	@Override
 	public void close() {
-		LOG.info("Closing SlotPool.");
+		LOG.info("Closing FutureSlotPool.");
+		cancelPendingRequests();
+		releaseAllTaskManagers(new FlinkException("Closing FutureSlotPool."));
 		clearState();
+	}
+
+	private void releaseAllTaskManagers(FlinkException cause) {
+		for (ResourceID registeredTaskManager : registeredTaskManagers) {
+			internalReleaseTaskManager(registeredTaskManager, cause);
+		}
+
+		registeredTaskManagers.clear();
 	}
 
 	@Override
 	public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {
-		this.resourceManagerGateway = resourceManagerGateway;
+		assertRunningInMainThread();
 
+		this.resourceManagerGateway = resourceManagerGateway;
 		declareResourceRequirements(declarativeSlotPool.getResourceRequirements());
 	}
 
@@ -192,6 +206,8 @@ public class FutureSlotPool implements SlotPool {
 	}
 
 	private void declareNewResourceRequirements(Collection<ResourceRequirement> newResourceRequirements) {
+		assertRunningInMainThread();
+
 		if (resourceManagerGateway != null) {
 			declareResourceRequirements(newResourceRequirements);
 		}
@@ -199,6 +215,7 @@ public class FutureSlotPool implements SlotPool {
 
 	@Override
 	public void disconnectResourceManager() {
+		assertRunningInMainThread();
 		this.resourceManagerGateway = null;
 	}
 
@@ -215,11 +232,15 @@ public class FutureSlotPool implements SlotPool {
 		assertRunningInMainThread();
 
 		if (registeredTaskManagers.remove(resourceId)) {
-			declarativeSlotPool.failSlots(resourceId, cause);
+			internalReleaseTaskManager(resourceId, cause);
 			return true;
 		} else {
 			return false;
 		}
+	}
+
+	private void internalReleaseTaskManager(ResourceID resourceId, Exception cause) {
+		declarativeSlotPool.failSlots(resourceId, cause);
 	}
 
 	@Override
@@ -344,7 +365,7 @@ public class FutureSlotPool implements SlotPool {
 	private CompletableFuture<PhysicalSlot> internalRequestNewAllocatedSlot(PendingRequest pendingRequest) {
 		pendingRequests.put(pendingRequest.getSlotRequestId(), pendingRequest);
 
-		declarativeSlotPool.increaseResourceRequirementsBy(Collections.singletonMap(pendingRequest.getResourceProfile(), 1));
+		declarativeSlotPool.increaseResourceRequirementsBy(ResourceCounter.withResource(pendingRequest.getResourceProfile(), 1));
 
 		return pendingRequest.getSlotFuture();
 	}
@@ -353,7 +374,7 @@ public class FutureSlotPool implements SlotPool {
 	public void disableBatchSlotRequestTimeoutCheck() {
 		assertRunningInMainThread();
 
-		isBatchSlotRequestTimeoutCheckEnabled = false;
+		isBatchSlotRequestTimeoutCheckDisabled = true;
 	}
 
 	@Override
@@ -387,7 +408,7 @@ public class FutureSlotPool implements SlotPool {
 		final PendingRequest pendingRequest = pendingRequests.remove(slotRequestId);
 
 		if (pendingRequest != null) {
-			declarativeSlotPool.decreaseResourceRequirementsBy(Collections.singletonMap(pendingRequest.getResourceProfile(), 1));
+			declarativeSlotPool.decreaseResourceRequirementsBy(ResourceCounter.withResource(pendingRequest.getResourceProfile(), 1));
 			pendingRequest.failRequest(new FlinkException(
 				String.format("Pending slot request with %s has been released.", pendingRequest.getSlotRequestId()),
 				cause));
@@ -417,7 +438,7 @@ public class FutureSlotPool implements SlotPool {
 	}
 
 	private void checkBatchSlotTimeout() {
-		if (!isBatchSlotRequestTimeoutCheckEnabled) {
+		if (isBatchSlotRequestTimeoutCheckDisabled) {
 			return;
 		}
 

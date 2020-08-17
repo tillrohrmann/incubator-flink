@@ -21,6 +21,7 @@ package org.apache.flink.runtime.jobmaster.slotpool;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -114,6 +115,10 @@ public class ResourceCounter {
 
 	public static ResourceCounter withResources(ResourceCounter initialResources) {
 		return new ResourceCounter(initialResources.resources);
+	}
+
+	public static ResourceCounter withResource(ResourceProfile resourceProfile, int count) {
+		return new ResourceCounter(Collections.singletonMap(resourceProfile, count));
 	}
 
 	@Override
