@@ -18,32 +18,22 @@
 
 package org.apache.flink.runtime.jobmaster.slotpool;
 
-import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
+import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 
-import java.util.Collection;
-
-public enum NotStartedResourceManagerConnectionManager implements ResourceManagerConnectionManager {
+/**
+ * No-op implementation of the {@link ResourceManagerConnectionManager}.
+ */
+public enum NoOpResourceManagerConnectionManager implements ResourceManagerConnectionManager {
 	INSTANCE;
 
 	@Override
-	public void connect(ResourceManagerGateway resourceManagerGateway) {
-		throwNotStartedException();
-	}
-
-	private void throwNotStartedException() {
-		throw new UnsupportedOperationException(String.format("The %s has not been started.", getClass().getSimpleName()));
-	}
+	public void connect(DeclareResourceRequirementsService declareResourceRequirementsService) {}
 
 	@Override
-	public void disconnect() {
-		throwNotStartedException();
-	}
+	public void disconnect() {}
 
 	@Override
-	public void declareResourceRequirements(Collection<ResourceRequirement> resourceRequirements) {
-		throwNotStartedException();
-	}
+	public void declareResourceRequirements(ResourceRequirements resourceRequirements) {}
 
 	@Override
 	public void close() {}

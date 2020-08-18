@@ -33,6 +33,7 @@ import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.jobmaster.SlotRequestId;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
+import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.util.FlinkException;
@@ -94,6 +95,12 @@ public class FutureSlotPool implements SlotPool {
 	@Nullable
 	private ComponentMainThreadExecutor componentMainThreadExecutor;
 
+	@Nullable
+	private String jobManagerAddress;
+
+	@Nullable
+	private JobMasterId jobMasterId;
+
 	private ResourceManagerConnectionManager resourceManagerConnectionManager;
 
 	private boolean isBatchSlotRequestTimeoutCheckDisabled;
@@ -118,19 +125,16 @@ public class FutureSlotPool implements SlotPool {
 		this.pendingRequests = new LinkedHashMap<>();
 		this.fulfilledRequests = new HashMap<>();
 		this.registeredTaskManagers = new HashSet<>();
-		this.resourceManagerConnectionManager = ResourceManagerConnectionManager.notStarted();
+		this.resourceManagerConnectionManager = NoOpResourceManagerConnectionManager.INSTANCE;
 		this.isBatchSlotRequestTimeoutCheckDisabled = false;
 	}
 
 	@Override
 	public void start(JobMasterId jobMasterId, String newJobManagerAddress, ComponentMainThreadExecutor jmMainThreadScheduledExecutor) throws Exception {
 		this.componentMainThreadExecutor = jmMainThreadScheduledExecutor;
-		this.resourceManagerConnectionManager = ResourceManagerConnectionManager.create(
-			jobId,
-			jobMasterId,
-			newJobManagerAddress,
-			componentMainThreadExecutor,
-			rpcTimeout);
+		this.jobManagerAddress = newJobManagerAddress;
+		this.jobMasterId = jobMasterId;
+		this.resourceManagerConnectionManager = DefaultResourceManagerConnectionManager.create(componentMainThreadExecutor);
 
 		componentMainThreadExecutor.schedule(this::checkIdleSlotTimeout, idleSlotTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
 		componentMainThreadExecutor.schedule(this::checkBatchSlotTimeout, batchSlotTimeout.toMilliseconds(), TimeUnit.MILLISECONDS);
@@ -147,8 +151,10 @@ public class FutureSlotPool implements SlotPool {
 
 	private void clearState() {
 		resourceManagerConnectionManager.close();
-		resourceManagerConnectionManager = ResourceManagerConnectionManager.notStarted();
+		resourceManagerConnectionManager = NoOpResourceManagerConnectionManager.INSTANCE;
 		registeredTaskManagers.clear();
+		jobManagerAddress = null;
+		jobMasterId = null;
 	}
 
 	private void cancelPendingRequests() {
@@ -183,13 +189,14 @@ public class FutureSlotPool implements SlotPool {
 	public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {
 		assertRunningInMainThread();
 
-		resourceManagerConnectionManager.connect(resourceManagerGateway);
+		resourceManagerConnectionManager.connect(resourceRequirements -> resourceManagerGateway.declareRequiredResources(jobMasterId, resourceRequirements, rpcTimeout));
 		declareResourceRequirements(declarativeSlotPool.getResourceRequirements());
 	}
 
 	private void declareResourceRequirements(Collection<ResourceRequirement> resourceRequirements) {
 		assertRunningInMainThread();
-		resourceManagerConnectionManager.declareResourceRequirements(resourceRequirements);
+
+		resourceManagerConnectionManager.declareResourceRequirements(new ResourceRequirements(jobId, jobManagerAddress, resourceRequirements));
 	}
 
 	@Override

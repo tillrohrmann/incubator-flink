@@ -22,6 +22,7 @@ import org.apache.flink.api.common.JobID;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Objects;
 
 /**
  * TODO: Add javadoc.
@@ -52,6 +53,25 @@ public class ResourceRequirements implements Serializable {
 
 	public Collection<ResourceRequirement> getResourceRequirements() {
 		return resourceRequirements;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		ResourceRequirements that = (ResourceRequirements) o;
+		return Objects.equals(jobId, that.jobId) &&
+			Objects.equals(targetAddress, that.targetAddress) &&
+			Objects.equals(resourceRequirements, that.resourceRequirements);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(jobId, targetAddress, resourceRequirements);
 	}
 
 	public static ResourceRequirements empty(JobID jobId, String targetAddress) {

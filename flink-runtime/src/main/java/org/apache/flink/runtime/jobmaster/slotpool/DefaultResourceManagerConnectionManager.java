@@ -18,13 +18,8 @@
 
 package org.apache.flink.runtime.jobmaster.slotpool;
 
-import org.apache.flink.api.common.JobID;
-import org.apache.flink.api.common.time.Time;
-import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
-import org.apache.flink.runtime.jobmaster.JobMasterId;
+import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.messages.Acknowledge;
-import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 
 import org.apache.commons.lang3.ObjectUtils;
@@ -32,93 +27,84 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 
 import java.time.Duration;
-import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Component which is responsible to manage the connection to the ResourceManager for
- * the {@link FutureSlotPool}.
+ * Default implementation of {@link ResourceManagerConnectionManager}.
+ *
+ * <p>The resource manager connection manager is responsible for sending new
+ * resource requirements to the resource manager. In case of faults it continues
+ * retrying to send the latest resource requirements to the resource manager with
+ * an exponential backoff strategy.
  */
 class DefaultResourceManagerConnectionManager implements ResourceManagerConnectionManager {
 
 	private static final Logger LOG = LoggerFactory.getLogger(DefaultResourceManagerConnectionManager.class);
 
-	private final JobID jobId;
+	private final Object lock = new Object();
 
-	private final JobMasterId jobMasterId;
-
-	private final String jobManagerAddress;
-
-	private final ComponentMainThreadExecutor componentMainThreadExecutor;
-
-	private final Time rpcTimeout;
+	private final ScheduledExecutor scheduledExecutor;
 
 	@Nullable
-	private ResourceManagerGateway resourceManagerGateway;
+	@GuardedBy("lock")
+	private DeclareResourceRequirementsService declareResourceRequirementsService;
 
 	@Nullable
+	@GuardedBy("lock")
 	private ResourceRequirements currentResourceRequirements;
 
-	DefaultResourceManagerConnectionManager(
-			JobID jobId,
-			JobMasterId jobMasterId,
-			String jobManagerAddress,
-			ComponentMainThreadExecutor componentMainThreadExecutor,
-			Time rpcTimeout) {
-		this.jobId = jobId;
-		this.jobMasterId = jobMasterId;
-		this.jobManagerAddress = jobManagerAddress;
-		this.componentMainThreadExecutor = componentMainThreadExecutor;
-		this.rpcTimeout = rpcTimeout;
+	DefaultResourceManagerConnectionManager(ScheduledExecutor scheduledExecutor) {
+		this.scheduledExecutor = scheduledExecutor;
 	}
 
 	@Override
-	public void connect(ResourceManagerGateway resourceManagerGateway) {
-		componentMainThreadExecutor.assertRunningInMainThread();
-		this.resourceManagerGateway = resourceManagerGateway;
+	public void connect(DeclareResourceRequirementsService declareResourceRequirementsService) {
+		synchronized (lock) {
+			this.declareResourceRequirementsService = declareResourceRequirementsService;
+		}
 	}
 
 	@Override
 	public void disconnect() {
-		componentMainThreadExecutor.assertRunningInMainThread();
-		this.resourceManagerGateway = null;
-	}
-
-	@Override
-	public void declareResourceRequirements(Collection<ResourceRequirement> resourceRequirements) {
-		componentMainThreadExecutor.assertRunningInMainThread();
-
-		if (resourceManagerGateway != null) {
-			currentResourceRequirements = new ResourceRequirements(
-				jobId,
-				jobManagerAddress,
-				resourceRequirements);
-
-			sendResourceRequirements(Duration.ofMillis(1L), Duration.ofMillis(10000L), currentResourceRequirements);
+		synchronized (lock) {
+			this.declareResourceRequirementsService = null;
 		}
 	}
 
-	private void sendResourceRequirements(Duration sleepOnError, Duration maxSleepOnError, ResourceRequirements resourceRequirementsToSend) {
-		componentMainThreadExecutor.assertRunningInMainThread();
+	@Override
+	public void declareResourceRequirements(ResourceRequirements resourceRequirements) {
+		synchronized (lock) {
+			if (declareResourceRequirementsService != null) {
+				currentResourceRequirements = resourceRequirements;
 
-		if (resourceManagerGateway != null) {
+				sendResourceRequirements(Duration.ofMillis(1L), Duration.ofMillis(10000L), currentResourceRequirements);
+			}
+		}
+	}
+
+	@GuardedBy("lock")
+	private void sendResourceRequirements(Duration sleepOnError, Duration maxSleepOnError, ResourceRequirements resourceRequirementsToSend) {
+
+		if (declareResourceRequirementsService != null) {
 			if (resourceRequirementsToSend == currentResourceRequirements) {
-				final CompletableFuture<Acknowledge> declareResourcesFuture = resourceManagerGateway.declareRequiredResources(
-					jobMasterId,
-					resourceRequirementsToSend,
-					rpcTimeout);
+				final CompletableFuture<Acknowledge> declareResourcesFuture = declareResourceRequirementsService.declareResourceRequirements(resourceRequirementsToSend);
 
 				declareResourcesFuture.whenComplete(
 					(acknowledge, throwable) -> {
 						if (throwable != null) {
-							componentMainThreadExecutor.schedule(
-								() -> sendResourceRequirements(
-									ObjectUtils.min(sleepOnError.multipliedBy(2), maxSleepOnError),
-									maxSleepOnError,
-									resourceRequirementsToSend),
+							scheduledExecutor.schedule(
+								() -> {
+									synchronized (lock) {
+										sendResourceRequirements(
+											ObjectUtils.min(sleepOnError.multipliedBy(2), maxSleepOnError),
+											maxSleepOnError,
+											resourceRequirementsToSend);
+									}
+								},
 								sleepOnError.toMillis(),
 								TimeUnit.MILLISECONDS);
 						}
@@ -133,22 +119,13 @@ class DefaultResourceManagerConnectionManager implements ResourceManagerConnecti
 
 	@Override
 	public void close() {
-		componentMainThreadExecutor.assertRunningInMainThread();
-		resourceManagerGateway = null;
-		currentResourceRequirements = null;
+		synchronized (lock) {
+			declareResourceRequirementsService = null;
+			currentResourceRequirements = null;
+		}
 	}
 
-	public static ResourceManagerConnectionManager create(
-			JobID jobId,
-			JobMasterId jobMasterId,
-			String jobManagerAddress,
-			ComponentMainThreadExecutor componentMainThreadExecutor,
-			Time rpcTimeout) {
-		return new DefaultResourceManagerConnectionManager(
-			jobId,
-			jobMasterId,
-			jobManagerAddress,
-			componentMainThreadExecutor,
-			rpcTimeout);
+	public static ResourceManagerConnectionManager create(ScheduledExecutor scheduledExecutor) {
+		return new DefaultResourceManagerConnectionManager(scheduledExecutor);
 	}
 }

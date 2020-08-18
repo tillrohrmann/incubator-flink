@@ -18,40 +18,48 @@
 
 package org.apache.flink.runtime.jobmaster.slotpool;
 
-import org.apache.flink.api.common.JobID;
-import org.apache.flink.api.common.time.Time;
-import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
-import org.apache.flink.runtime.jobmaster.JobMasterId;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
+import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 
-import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
 
+/**
+ * Component which is responsible to manage the connection to the ResourceManager and
+ * to declare new resource requirements.
+ *
+ * <p>The resource manager connection manager can only send resource requirements to the
+ * resource manager if it is connected.
+ */
 public interface ResourceManagerConnectionManager {
 
-	void connect(ResourceManagerGateway resourceManagerGateway);
+	/**
+	 * Connect to the resource manager identified by the given {@link ResourceManagerGateway}.
+	 *
+	 * @param declareResourceRequirementsService declareResourceRequirementsService to declare new resource requirements
+	 */
+	void connect(DeclareResourceRequirementsService declareResourceRequirementsService);
 
+	/**
+	 * Disconnect from the current resource manager.
+	 */
 	void disconnect();
 
-	void declareResourceRequirements(Collection<ResourceRequirement> resourceRequirements);
+	/**
+	 * Declares the given resource requirements at the connected resource manager. If the resource
+	 * manager connection manager is not connected, then this call will be ignored.
+	 *
+	 * @param resourceRequirements resourceRequirements to declare at the connected resource manager
+	 */
+	void declareResourceRequirements(ResourceRequirements resourceRequirements);
 
+	/**
+	 * Close the resource manager connection manager. A closed manager is not supposed to be
+	 * used again.
+	 */
 	void close();
 
-	static ResourceManagerConnectionManager notStarted() {
-		return NotStartedResourceManagerConnectionManager.INSTANCE;
-	}
-
-	static ResourceManagerConnectionManager create(
-			JobID jobId,
-			JobMasterId jobMasterId,
-			String newJobManagerAddress,
-			ComponentMainThreadExecutor componentMainThreadExecutor,
-			Time rpcTimeout) {
-		return DefaultResourceManagerConnectionManager.create(
-			jobId,
-			jobMasterId,
-			newJobManagerAddress,
-			componentMainThreadExecutor,
-			rpcTimeout);
+	interface DeclareResourceRequirementsService {
+		CompletableFuture<Acknowledge> declareResourceRequirements(ResourceRequirements resourceRequirements);
 	}
 }
