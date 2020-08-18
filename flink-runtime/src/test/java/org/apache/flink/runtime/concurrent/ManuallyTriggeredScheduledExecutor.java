@@ -137,6 +137,16 @@ public class ManuallyTriggeredScheduledExecutor implements ScheduledExecutor {
 		triggerNonPeriodicScheduledTasks();
 	}
 
+	public void drainNonPeriodicScheduledTasks() {
+		while (!nonPeriodicScheduledTasks.isEmpty()) {
+			final ScheduledTask<?> task = nonPeriodicScheduledTasks.poll();
+
+			if (!task.isCancelled()) {
+				task.execute();
+			}
+		}
+	}
+
 	/**
 	 * Triggers a single non-periodically scheduled task.
 	 *
