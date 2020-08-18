@@ -65,10 +65,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * {@link SlotPool} implementation which returns slots which can be completed in the future.
- *
- * <p>The implementation is based on {@link DeclarativeSlotPoolNg} which offers a pool of slots and
- * callbacks to notify the user of newly arrived slots. This feature is used to complete pending requests.
+ * {@link SlotPool} implementation which uses the {@link DeclarativeSlotPoolNg} to allocate slots.
  */
 public class FutureSlotPool implements SlotPool {
 
