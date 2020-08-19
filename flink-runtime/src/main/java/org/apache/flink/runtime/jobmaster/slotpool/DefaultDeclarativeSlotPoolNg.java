@@ -56,10 +56,6 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 	private final PoolService slotPool;
 
-	private final ResourceCounter resourceRequirements;
-
-	private final ResourceCounter availableResources;
-
 	private final Map<AllocationID, ResourceProfile> slotToResourceProfileMappings;
 
 	private final Consumer<? super Collection<ResourceRequirement>> notifyNewResourceRequirements;
@@ -68,6 +64,10 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 	private final Time idleSlotTimeout;
 	private final Time rpcTimeout;
+
+	private ResourceCounter resourceRequirements;
+
+	private ResourceCounter availableResources;
 
 	public DefaultDeclarativeSlotPoolNg(
 			PoolService slotPool,
@@ -87,20 +87,20 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 	@Override
 	public void increaseResourceRequirementsBy(ResourceCounter increment) {
-		resourceRequirements.add(increment);
+		resourceRequirements = resourceRequirements.add(increment);
 
 		declareResourceRequirements();
 	}
 
 	@Override
 	public void decreaseResourceRequirementsBy(ResourceCounter decrement) {
-		resourceRequirements.subtract(decrement);
+		resourceRequirements = resourceRequirements.subtract(decrement);
 
 		declareResourceRequirements();
 	}
 
 	private void increaseAvailableResources(ResourceCounter acceptedResources) {
-		availableResources.add(acceptedResources);
+		availableResources = availableResources.add(acceptedResources);
 	}
 
 	private void declareResourceRequirements() {
@@ -111,7 +111,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	public Collection<ResourceRequirement> getResourceRequirements() {
 		final Collection<ResourceRequirement> currentResourceRequirements = new ArrayList<>();
 
-		for (Map.Entry<ResourceProfile, Integer> resourceRequirement : resourceRequirements.entrySet()) {
+		for (Map.Entry<ResourceProfile, Integer> resourceRequirement : resourceRequirements.getResourcesWithCount()) {
 			currentResourceRequirements.add(new ResourceRequirement(resourceRequirement.getKey(), resourceRequirement.getValue()));
 		}
 
@@ -139,7 +139,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		final Collection<SlotOfferMatching> matchings = matchOffersWithOutstandingRequirements(candidates);
 
 		final Collection<AllocatedSlot> acceptedSlots = new ArrayList<>();
-		final ResourceCounter acceptedResources = ResourceCounter.empty();
+		ResourceCounter acceptedResources = ResourceCounter.empty();
 
 		for (SlotOfferMatching matching : matchings) {
 			if (matching.getMatching().isPresent()) {
@@ -153,7 +153,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 				acceptedSlots.add(allocatedSlot);
 				acceptedSlotOffers.add(matching.getSlotOffer());
 
-				acceptedResources.add(matchedResourceProfile, 1);
+				acceptedResources = acceptedResources.add(matchedResourceProfile, 1);
 
 				slotToResourceProfileMappings.put(allocatedSlot.getAllocationId(), matchedResourceProfile);
 			}
@@ -179,7 +179,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	private Collection<SlotOfferMatching> matchOffersWithOutstandingRequirements(Collection<SlotOffer> slotOffers) {
-		final ResourceCounter unfulfilledResources = calculateUnfulfilledResources();
+		ResourceCounter unfulfilledResources = calculateUnfulfilledResources();
 
 		final Collection<SlotOfferMatching> matching = new ArrayList<>();
 
@@ -187,7 +187,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 			ResourceProfile matchingResourceProfile = null;
 
 			if (unfulfilledResources.containsResource(slotOffer.getResourceProfile())) {
-				unfulfilledResources.subtract(slotOffer.getResourceProfile(), 1);
+				unfulfilledResources = unfulfilledResources.subtract(slotOffer.getResourceProfile(), 1);
 
 				matchingResourceProfile = slotOffer.getResourceProfile();
 			} else {
@@ -213,10 +213,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	private ResourceCounter calculateUnfulfilledResources() {
-		final ResourceCounter unfulfilledResources = ResourceCounter.withResources(resourceRequirements);
-		unfulfilledResources.subtract(availableResources);
-
-		return unfulfilledResources;
+		return resourceRequirements.subtract(availableResources);
 	}
 
 	@Override
@@ -246,11 +243,11 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	private void releasePayloadAndDecreaseResourceRequirement(Collection<? extends AllocatedSlot> allocatedSlots, Throwable cause) {
-		final ResourceCounter resourceDecrement = ResourceCounter.empty();
+		ResourceCounter resourceDecrement = ResourceCounter.empty();
 
 		for (AllocatedSlot allocatedSlot : allocatedSlots) {
 			allocatedSlot.releasePayload(cause);
-			resourceDecrement.add(allocatedSlot.getResourceProfile(), 1);
+			resourceDecrement = resourceDecrement.add(allocatedSlot.getResourceProfile(), 1);
 		}
 
 		decreaseResourceRequirementsBy(resourceDecrement);
@@ -280,8 +277,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	public void returnIdleSlots(long currentTimeMillis) {
 		final Collection<Pool.FreeSlotInfo> freeSlotsInformation = slotPool.getFreeSlotsInformation();
 
-		final ResourceCounter excessResources = ResourceCounter.withResources(availableResources);
-		excessResources.subtract(resourceRequirements);
+		ResourceCounter excessResources = availableResources.subtract(resourceRequirements);
 
 		final Iterator<Pool.FreeSlotInfo> freeSlotIterator = freeSlotsInformation.iterator();
 
@@ -294,8 +290,8 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 				final ResourceProfile matchingProfile = slotToResourceProfileMappings.get(idleSlot.getAllocationId());
 
 				if (excessResources.containsResource(matchingProfile)) {
-					excessResources.subtract(matchingProfile, 1);
-					availableResources.subtract(matchingProfile, 1);
+					excessResources = excessResources.subtract(matchingProfile, 1);
+					availableResources = availableResources.subtract(matchingProfile, 1);
 					slotToResourceProfileMappings.remove(idleSlot.getAllocationId());
 					final Optional<AllocatedSlot> removedSlot = slotPool.removeSlot(idleSlot.getAllocationId());
 

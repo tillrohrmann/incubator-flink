@@ -27,96 +27,202 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Counter for {@link ResourceProfile}.
+ * Counter for {@link ResourceProfile ResourceProfiles}. This class is immutable.
+ *
+ * <p>ResourceCounter contains a set of {@link ResourceProfile ResourceProfiles} and their
+ * associated counts. The counts are always positive (> 0).
  */
-public class ResourceCounter {
+final class ResourceCounter {
 
 	private final Map<ResourceProfile, Integer> resources;
 
 	private ResourceCounter(Map<ResourceProfile, Integer> resources) {
-		this.resources = new HashMap<>(resources);
+		this.resources = Collections.unmodifiableMap(resources);
 	}
 
+	/**
+	 * Number of resources with the given {@link ResourceProfile}.
+	 *
+	 * @param resourceProfile resourceProfile for which to look up the count
+	 * @return number of resources with the given resourceProfile or {@code 0}
+	 * if the resource profile does not exist
+	 */
 	public int getResourceCount(ResourceProfile resourceProfile) {
 		return resources.getOrDefault(resourceProfile, 0);
 	}
 
-	public void add(ResourceCounter increment) {
-		internalAdd(increment.entrySet());
+	/**
+	 * Adds increment to this resource counter value and returns the resulting value.
+	 *
+	 * @param increment increment to add to this resource counter value
+	 * @return new ResourceCounter containing the result of the addition
+	 */
+	public ResourceCounter add(ResourceCounter increment) {
+		return internalAdd(increment.getResourcesWithCount());
 	}
 
-	public void add(Map<ResourceProfile, Integer> increment) {
-		internalAdd(increment.entrySet());
+	/**
+	 * Adds the given increment to this resource counter value and returns the resulting value.
+	 *
+	 * @param increment increment ot add to this resource counter value
+	 * @return new ResourceCounter containing the result of the addition
+	 */
+	public ResourceCounter add(Map<ResourceProfile, Integer> increment) {
+		return internalAdd(increment.entrySet());
 	}
 
-	private void internalAdd(Iterable<? extends Map.Entry<ResourceProfile, Integer>> entries) {
-		for (Map.Entry<ResourceProfile, Integer> resourceIncrement : entries) {
-			add(resourceIncrement.getKey(), resourceIncrement.getValue());
-		}
-	}
-
-	public void add(ResourceProfile resourceProfile, int increment) {
+	/**
+	 * Adds increment to the count of resourceProfile and returns the new value.
+	 *
+	 * @param resourceProfile resourceProfile to which to add increment
+	 * @param increment increment is the number by which to increase the resourceProfile
+	 * @return new ResourceCounter containing the result of the addition
+	 */
+	public ResourceCounter add(ResourceProfile resourceProfile, int increment) {
+		final Map<ResourceProfile, Integer> newValues = new HashMap<>(resources);
 		final int newValue = resources.getOrDefault(resourceProfile, 0) + increment;
 
-		updateNewValue(resourceProfile, newValue);
+		updateNewValue(newValues, resourceProfile, newValue);
+
+		return new ResourceCounter(newValues);
 	}
 
-	private void updateNewValue(ResourceProfile resourceProfile, int newValue) {
+	private ResourceCounter internalAdd(Iterable<? extends Map.Entry<ResourceProfile, Integer>> entries) {
+		final Map<ResourceProfile, Integer> newValues = new HashMap<>(resources);
+
+		for (Map.Entry<ResourceProfile, Integer> resourceIncrement : entries) {
+			final ResourceProfile resourceProfile = resourceIncrement.getKey();
+
+			final int newValue = resources.getOrDefault(resourceProfile, 0) + resourceIncrement.getValue();
+
+			updateNewValue(newValues, resourceProfile, newValue);
+		}
+
+		return new ResourceCounter(newValues);
+	}
+
+	private void updateNewValue(Map<ResourceProfile, Integer> newResources, ResourceProfile resourceProfile, int newValue) {
 		if (newValue > 0) {
-			resources.put(resourceProfile, newValue);
+			newResources.put(resourceProfile, newValue);
 		} else {
-			resources.remove(resourceProfile);
+			newResources.remove(resourceProfile);
 		}
 	}
 
-	public void subtract(ResourceCounter decrement) {
-		internalSubtract(decrement.entrySet());
+	/**
+	 * Subtracts decrement from this resource counter value and returns the new value.
+	 *
+	 * @param decrement decrement to subtract from this resource counter
+	 * @return new ResourceCounter containing the new value
+	 */
+	public ResourceCounter subtract(ResourceCounter decrement) {
+		return internalSubtract(decrement.getResourcesWithCount());
 	}
 
-	public void subtract(Map<ResourceProfile, Integer> decrement) {
-		internalSubtract(decrement.entrySet());
+	/**
+	 * Subtracts decrement from this resource counter value and returns the new value.
+	 *
+	 * @param decrement decrement to subtract from this resource counter
+	 * @return new ResourceCounter containing the new value
+	 */
+	public ResourceCounter subtract(Map<ResourceProfile, Integer> decrement) {
+		return internalSubtract(decrement.entrySet());
 	}
 
-	private void internalSubtract(Iterable<? extends Map.Entry<ResourceProfile, Integer>> entries) {
-		for (Map.Entry<ResourceProfile, Integer> resourceDecrement : entries) {
-			subtract(resourceDecrement.getKey(), resourceDecrement.getValue());
-		}
-	}
-
-	public void subtract(ResourceProfile resourceProfile, int decrement) {
+	/**
+	 * Subtracts decrement from the count of the given resourceProfile and returns the new value.
+	 *
+	 * @param resourceProfile resourceProfile from which to subtract decrement
+	 * @param decrement decrement is the number by which to decrease resourceProfile
+	 * @return new ResourceCounter containing the new value
+	 */
+	public ResourceCounter subtract(ResourceProfile resourceProfile, int decrement) {
+		final Map<ResourceProfile, Integer> newValues = new HashMap<>(resources);
 		final int newValue = resources.getOrDefault(resourceProfile, 0) - decrement;
 
-		updateNewValue(resourceProfile, newValue);
+		updateNewValue(newValues, resourceProfile, newValue);
+
+		return new ResourceCounter(newValues);
 	}
 
-	public Collection<Map.Entry<ResourceProfile, Integer>> entrySet() {
+	private ResourceCounter internalSubtract(Iterable<? extends Map.Entry<ResourceProfile, Integer>> entries) {
+		final Map<ResourceProfile, Integer> newValues = new HashMap<>(resources);
+
+		for (Map.Entry<ResourceProfile, Integer> resourceDecrement : entries) {
+			final ResourceProfile resourceProfile = resourceDecrement.getKey();
+			final int newValue = resources.getOrDefault(resourceProfile, 0) - resourceDecrement.getValue();
+
+			updateNewValue(newValues, resourceProfile, newValue);
+		}
+
+		return new ResourceCounter(newValues);
+	}
+
+	/**
+	 * Gets the stored resources and their counts. The counts are guaranteed to be positive (> 0).
+	 *
+	 * @return collection of {@link ResourceProfile} and count pairs
+	 */
+	public Collection<Map.Entry<ResourceProfile, Integer>> getResourcesWithCount() {
 		return resources.entrySet();
 	}
 
+	/**
+	 * Checks whether resourceProfile is contained in this counter.
+	 *
+	 * @param resourceProfile resourceProfile to check whether it is contained
+	 * @return {@code true} if the counter has a positive count for the given resourceProfile;
+	 * otherwise {@code false}
+	 */
 	public boolean containsResource(ResourceProfile resourceProfile) {
 		return resources.containsKey(resourceProfile);
 	}
 
+	/**
+	 * Gets all stored {@link ResourceProfile ResourceProfiles}.
+	 *
+	 * @return collection of stored {@link ResourceProfile ResourceProfiles}
+	 */
 	public Set<ResourceProfile> getResources() {
 		return resources.keySet();
 	}
 
+	/**
+	 * Checks whether the resource counter is empty.
+	 *
+	 * @return {@code true} if the counter does not contain any counts;
+	 * otherwise {@code false}
+	 */
 	public boolean isEmpty() {
 		return resources.isEmpty();
 	}
 
+	/**
+	 * Creates an empty resource counter.
+	 *
+	 * @return empty resource counter
+	 */
 	public static ResourceCounter empty() {
-		return new ResourceCounter(new HashMap<>());
+		return new ResourceCounter(Collections.emptyMap());
 	}
 
-	public static ResourceCounter withResources(Map<ResourceProfile, Integer> initialResources) {
-		return new ResourceCounter(initialResources);
+	/**
+	 * Creates a resource counter with the specified set of resources.
+	 *
+	 * @param resources resources with which to initialize the resource counter
+	 * @return ResourceCounter which contains the specified set of resources
+	 */
+	public static ResourceCounter withResources(Map<ResourceProfile, Integer> resources) {
+		return new ResourceCounter(new HashMap<>(resources));
 	}
 
-	public static ResourceCounter withResources(ResourceCounter initialResources) {
-		return new ResourceCounter(initialResources.resources);
-	}
-
+	/**
+	 * Creates a resource counter with the given resourceProfile and its count.
+	 *
+	 * @param resourceProfile resourceProfile for the given count
+	 * @param count count of the given resourceProfile
+	 * @return ResourceCounter which contains the specified resourceProfile and its count
+	 */
 	public static ResourceCounter withResource(ResourceProfile resourceProfile, int count) {
 		return new ResourceCounter(Collections.singletonMap(resourceProfile, count));
 	}

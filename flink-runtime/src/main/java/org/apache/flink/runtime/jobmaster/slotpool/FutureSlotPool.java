@@ -155,11 +155,11 @@ public class FutureSlotPool implements SlotPool {
 	}
 
 	private void cancelPendingRequests() {
-		final ResourceCounter decreasedResourceRequirements = ResourceCounter.empty();
+		ResourceCounter decreasedResourceRequirements = ResourceCounter.empty();
 
 		for (PendingRequest pendingRequest : pendingRequests.values()) {
 			pendingRequest.cancelRequest();
-			decreasedResourceRequirements.add(pendingRequest.getResourceProfile(), 1);
+			decreasedResourceRequirements = decreasedResourceRequirements.add(pendingRequest.getResourceProfile(), 1);
 		}
 
 		pendingRequests.clear();
