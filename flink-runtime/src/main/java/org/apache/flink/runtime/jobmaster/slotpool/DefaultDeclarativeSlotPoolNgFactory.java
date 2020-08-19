@@ -33,7 +33,7 @@ public class DefaultDeclarativeSlotPoolNgFactory implements DeclarativeSlotPoolN
 			Time idleSlotTimeout,
 			Time rpcTimeout) {
 		return new DefaultDeclarativeSlotPoolNg(
-			new DefaultPoolService(),
+			new DefaultAllocatedSlotPool(),
 			notifyNewResourceRequirements,
 			notifyNewSlots,
 			idleSlotTimeout,

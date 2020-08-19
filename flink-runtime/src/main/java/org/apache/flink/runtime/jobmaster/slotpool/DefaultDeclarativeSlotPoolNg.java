@@ -54,7 +54,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 	private static final Logger LOG = LoggerFactory.getLogger(DefaultDeclarativeSlotPoolNg.class);
 
-	private final PoolService slotPool;
+	private final AllocatedSlotPool slotPool;
 
 	private final Map<AllocationID, ResourceProfile> slotToResourceProfileMappings;
 
@@ -70,7 +70,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	private ResourceCounter availableResources;
 
 	public DefaultDeclarativeSlotPoolNg(
-			PoolService slotPool,
+			AllocatedSlotPool slotPool,
 			Consumer<? super Collection<ResourceRequirement>> notifyNewResourceRequirements,
 			Consumer<? super Collection<? extends PhysicalSlot>> notifyNewSlots,
 			Time idleSlotTimeout,
@@ -219,7 +219,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	@Override
 	public Collection<SlotInfoWithUtilization> getFreeSlotsInformation() {
 		return slotPool.getFreeSlotsInformation().stream()
-			.map(Pool.FreeSlotInfo::asSlotInfo)
+			.map(AllocatedSlotPool.FreeSlotInfo::asSlotInfo)
 			.collect(Collectors.toList());
 	}
 
@@ -275,18 +275,18 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 	@Override
 	public void returnIdleSlots(long currentTimeMillis) {
-		final Collection<Pool.FreeSlotInfo> freeSlotsInformation = slotPool.getFreeSlotsInformation();
+		final Collection<AllocatedSlotPool.FreeSlotInfo> freeSlotsInformation = slotPool.getFreeSlotsInformation();
 
 		ResourceCounter excessResources = availableResources.subtract(resourceRequirements);
 
-		final Iterator<Pool.FreeSlotInfo> freeSlotIterator = freeSlotsInformation.iterator();
+		final Iterator<AllocatedSlotPool.FreeSlotInfo> freeSlotIterator = freeSlotsInformation.iterator();
 
 		final Collection<AllocatedSlot> slotsToReturnToOwner = new ArrayList<>();
 
 		while (!excessResources.isEmpty() && freeSlotIterator.hasNext()) {
-			final Pool.FreeSlotInfo idleSlot = freeSlotIterator.next();
+			final AllocatedSlotPool.FreeSlotInfo idleSlot = freeSlotIterator.next();
 
-			if (currentTimeMillis > idleSlot.getIdleDuration() + idleSlotTimeout.toMilliseconds()) {
+			if (currentTimeMillis > idleSlot.getFreeSince() + idleSlotTimeout.toMilliseconds()) {
 				final ResourceProfile matchingProfile = slotToResourceProfileMappings.get(idleSlot.getAllocationId());
 
 				if (excessResources.containsResource(matchingProfile)) {

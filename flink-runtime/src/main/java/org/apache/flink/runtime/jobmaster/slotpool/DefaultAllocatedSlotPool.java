@@ -32,17 +32,23 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Default {@link PoolService} implementation.
+ * Default {@link AllocatedSlotPool} implementation.
  */
-public class DefaultPoolService implements PoolService {
+public class DefaultAllocatedSlotPool implements AllocatedSlotPool {
 
 	private final Map<AllocationID, AllocatedSlot> registeredSlots;
 
+	/**
+	 * Map containing all free slots and since when they are free.
+	 */
 	private final Map<AllocationID, Long> freeSlotsSince;
 
+	/**
+	 * Index containing a mapping between TaskExecutors and their slots.
+	 */
 	private final Map<ResourceID, Set<AllocationID>> slotsPerTaskExecutor;
 
-	public DefaultPoolService() {
+	public DefaultAllocatedSlotPool() {
 		this.registeredSlots = new HashMap<>();
 		this.slotsPerTaskExecutor = new HashMap<>();
 		this.freeSlotsSince = new HashMap<>();
@@ -161,26 +167,26 @@ public class DefaultPoolService implements PoolService {
 	}
 
 	@Override
-	public Optional<AllocatedSlot> releaseAllocatedSlot(AllocationID slotId, long currentTime) {
-		final AllocatedSlot allocatedSlot = registeredSlots.get(slotId);
+	public Optional<AllocatedSlot> releaseAllocatedSlot(AllocationID allocationId, long currentTime) {
+		final AllocatedSlot allocatedSlot = registeredSlots.get(allocationId);
 
-		if (allocatedSlot != null) {
-			freeSlotsSince.put(slotId, currentTime);
+		if (allocatedSlot != null && !freeSlotsSince.containsKey(allocationId)) {
+			freeSlotsSince.put(allocationId, currentTime);
 			return Optional.of(allocatedSlot);
 		} else {
 			return Optional.empty();
 		}
 	}
 
-	private static final class DefaultFreeSlotInfo implements Pool.FreeSlotInfo {
+	private static final class DefaultFreeSlotInfo implements AllocatedSlotPool.FreeSlotInfo {
 
 		private final SlotInfoWithUtilization slotInfoWithUtilization;
 
-		private final long idleSince;
+		private final long freeSince;
 
-		private DefaultFreeSlotInfo(SlotInfoWithUtilization slotInfoWithUtilization, long idleSince) {
+		private DefaultFreeSlotInfo(SlotInfoWithUtilization slotInfoWithUtilization, long freeSince) {
 			this.slotInfoWithUtilization = slotInfoWithUtilization;
-			this.idleSince = idleSince;
+			this.freeSince = freeSince;
 		}
 
 		@Override
@@ -189,8 +195,8 @@ public class DefaultPoolService implements PoolService {
 		}
 
 		@Override
-		public long getIdleDuration() {
-			return idleSince;
+		public long getFreeSince() {
+			return freeSince;
 		}
 
 		@Override
