@@ -68,5 +68,13 @@ public class ResourceRequirement implements Serializable {
 	public int hashCode() {
 		return Objects.hash(resourceProfile, numberOfRequiredSlots);
 	}
+
+	@Override
+	public String toString() {
+		return "ResourceRequirement{" +
+			"resourceProfile=" + resourceProfile +
+			", numberOfRequiredSlots=" + numberOfRequiredSlots +
+			'}';
+	}
 }
 
