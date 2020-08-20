@@ -233,6 +233,11 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	@VisibleForTesting
+	ResourceCounter getAvailableResources() {
+		return availableResources;
+	}
+
+	@VisibleForTesting
 	ResourceCounter calculateUnfulfilledResources() {
 		return resourceRequirements.subtract(availableResources);
 	}
@@ -254,13 +259,17 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		final Collection<AllocatedSlot> removedSlots = slotPool.removeSlots(owner);
 
 		releasePayloadAndDecreaseResourceRequirement(removedSlots, cause);
+		returnSlotsToOwner(removedSlots, cause);
 	}
 
 	@Override
 	public void failSlot(AllocationID allocationId, Exception cause) {
 		final Optional<AllocatedSlot> removedSlot = slotPool.removeSlot(allocationId);
 
-		removedSlot.ifPresent(allocatedSlot -> releasePayloadAndDecreaseResourceRequirement(Collections.singleton(allocatedSlot), cause));
+		removedSlot.ifPresent(allocatedSlot -> {
+			releasePayloadAndDecreaseResourceRequirement(Collections.singleton(allocatedSlot), cause);
+			returnSlotsToOwner(Collections.singleton(allocatedSlot), cause);
+		});
 	}
 
 	private void releasePayloadAndDecreaseResourceRequirement(Iterable<? extends AllocatedSlot> allocatedSlots, Throwable cause) {
@@ -268,10 +277,16 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 		for (AllocatedSlot allocatedSlot : allocatedSlots) {
 			allocatedSlot.releasePayload(cause);
-			resourceDecrement = resourceDecrement.add(allocatedSlot.getResourceProfile(), 1);
+			final ResourceProfile matchingResourceProfile = getMatchingResourceProfile(allocatedSlot.getAllocationId());
+			resourceDecrement = resourceDecrement.add(matchingResourceProfile, 1);
 		}
 
 		decreaseResourceRequirementsBy(resourceDecrement);
+	}
+
+	@Nonnull
+	private ResourceProfile getMatchingResourceProfile(AllocationID allocationId) {
+		return Preconditions.checkNotNull(slotToResourceProfileMappings.get(allocationId), "No matching resource profile found for %s", allocationId);
 	}
 
 	@Override
@@ -281,6 +296,8 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 	@Override
 	public void releaseSlot(AllocationID allocationId, @Nullable Throwable cause, long currentTime) {
+		LOG.debug("Release slot {}.", allocationId);
+
 		final Optional<AllocatedSlot> releasedSlot = slotPool.releaseAllocatedSlot(allocationId, currentTime);
 
 		releasedSlot.ifPresent(allocatedSlot -> {
@@ -329,17 +346,14 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 			final AllocatedSlotPool.FreeSlotInfo idleSlot = freeSlotIterator.next();
 
 			if (currentTimeMillis >= idleSlot.getFreeSince() + idleSlotTimeout.toMilliseconds()) {
-				final ResourceProfile matchingProfile = slotToResourceProfileMappings.get(idleSlot.getAllocationId());
+				final ResourceProfile matchingProfile = getMatchingResourceProfile(idleSlot.getAllocationId());
 
 				if (excessResources.containsResource(matchingProfile)) {
 					excessResources = excessResources.subtract(matchingProfile, 1);
-					availableResources = availableResources.subtract(matchingProfile, 1);
-					slotToResourceProfileMappings.remove(idleSlot.getAllocationId());
 					final Optional<AllocatedSlot> removedSlot = slotPool.removeSlot(idleSlot.getAllocationId());
 
-					if (removedSlot.isPresent()) {
-						slotsToReturnToOwner.add(removedSlot.get());
-					}
+					final AllocatedSlot allocatedSlot = removedSlot.orElseThrow(() -> new IllegalStateException(String.format("Could not find slot for allocation id %s.", idleSlot.getAllocationId())));
+					slotsToReturnToOwner.add(allocatedSlot);
 				}
 			}
 		}
@@ -348,12 +362,17 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	private void returnSlotsToOwner(Iterable<? extends AllocatedSlot> slotsToReturnToOwner, Throwable cause) {
-		for (AllocatedSlot expiredSlot : slotsToReturnToOwner) {
-			Preconditions.checkState(!expiredSlot.isUsed(), "Free slot must not be used.");
+		for (AllocatedSlot slotToReturn : slotsToReturnToOwner) {
+			Preconditions.checkState(!slotToReturn.isUsed(), "Free slot must not be used.");
 
-			LOG.info("Releasing idle slot [{}].", expiredSlot.getAllocationId());
-			final CompletableFuture<Acknowledge> freeSlotFuture = expiredSlot.getTaskManagerGateway().freeSlot(
-				expiredSlot.getAllocationId(),
+			LOG.info("Releasing slot [{}].", slotToReturn.getAllocationId());
+
+			final ResourceProfile matchingResourceProfile = getMatchingResourceProfile(slotToReturn.getAllocationId());
+			availableResources = availableResources.subtract(matchingResourceProfile, 1);
+			slotToResourceProfileMappings.remove(slotToReturn.getAllocationId());
+
+			final CompletableFuture<Acknowledge> freeSlotFuture = slotToReturn.getTaskManagerGateway().freeSlot(
+				slotToReturn.getAllocationId(),
 				cause,
 				rpcTimeout);
 
@@ -361,7 +380,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 				if (throwable != null) {
 					// The slot status will be synced to task manager in next heartbeat.
 					LOG.debug("Releasing slot [{}] of registered TaskExecutor {} failed. Discarding slot.",
-						expiredSlot.getAllocationId(), expiredSlot.getTaskManagerId(), throwable);
+						slotToReturn.getAllocationId(), slotToReturn.getTaskManagerId(), throwable);
 				}
 			});
 		}

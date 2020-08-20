@@ -24,6 +24,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -225,6 +226,23 @@ final class ResourceCounter {
 	 */
 	public static ResourceCounter withResource(ResourceProfile resourceProfile, int count) {
 		return new ResourceCounter(Collections.singletonMap(resourceProfile, count));
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		ResourceCounter that = (ResourceCounter) o;
+		return Objects.equals(resources, that.resources);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(resources);
 	}
 
 	@Override
