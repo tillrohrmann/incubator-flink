@@ -193,6 +193,8 @@ public class FutureSlotPool implements SlotPool {
 	private void declareResourceRequirements(Collection<ResourceRequirement> resourceRequirements) {
 		assertRunningInMainThread();
 
+		LOG.debug("Declare new resource requirements for job {}: {}.", jobId, resourceRequirements);
+
 		resourceManagerConnectionManager.declareResourceRequirements(new ResourceRequirements(jobId, jobManagerAddress, resourceRequirements));
 	}
 
@@ -241,18 +243,32 @@ public class FutureSlotPool implements SlotPool {
 		for (PhysicalSlot newSlot : newSlots) {
 			final Optional<PendingRequest> matchingPendingRequest = findMatchingPendingRequest(newSlot);
 
-			matchingPendingRequest.ifPresent(pendingRequest -> fulfillPendingRequest(newSlot, pendingRequest));
+			matchingPendingRequest.ifPresent(pendingRequest -> {
+				Preconditions.checkNotNull(pendingRequests.remove(pendingRequest.getSlotRequestId()), "Cannot fulfill a non existing pending slot request.");
+				fulfillPendingRequest(newSlot, pendingRequest);
+			});
 		}
 	}
 
 	private void fulfillPendingRequest(PhysicalSlot newSlot, PendingRequest pendingRequest) {
+		final SlotRequestId slotRequestId = pendingRequest.getSlotRequestId();
+		final AllocationID allocationId = newSlot.getAllocationId();
+
+		allocateFreeSlot(slotRequestId, allocationId);
+
 		Preconditions.checkState(pendingRequest.fulfill(newSlot), "Pending requests must be fulfillable.");
-		declarativeSlotPool.allocateFreeSlot(newSlot.getAllocationId());
-		pendingRequests.remove(pendingRequest.getSlotRequestId());
-		fulfilledRequests.put(pendingRequest.getSlotRequestId(), newSlot.getAllocationId());
+	}
+
+	private PhysicalSlot allocateFreeSlot(SlotRequestId slotRequestId, AllocationID allocationId) {
+		final PhysicalSlot physicalSlot = declarativeSlotPool.allocateFreeSlot(allocationId);
+		fulfilledRequests.put(slotRequestId, allocationId);
+
+		return physicalSlot;
 	}
 
 	private Optional<PendingRequest> findMatchingPendingRequest(PhysicalSlot slot) {
+		LOG.debug("Find matching pending request for slot {}.", slot);
+		LOG.debug("Pending requests: {}", pendingRequests.values());
 		final ResourceProfile resourceProfile = slot.getResourceProfile();
 
 		for (PendingRequest pendingRequest : pendingRequests.values()) {
@@ -304,13 +320,15 @@ public class FutureSlotPool implements SlotPool {
 	public Optional<PhysicalSlot> allocateAvailableSlot(@Nonnull SlotRequestId slotRequestId, @Nonnull AllocationID allocationID) {
 		assertRunningInMainThread();
 
-		return Optional.of(declarativeSlotPool.allocateFreeSlot(allocationID));
+		return Optional.of(allocateFreeSlot(slotRequestId, allocationID));
 	}
 
 	@Override
 	@Nonnull
 	public CompletableFuture<PhysicalSlot> requestNewAllocatedSlot(@Nonnull SlotRequestId slotRequestId, @Nonnull ResourceProfile resourceProfile, @Nullable Time timeout) {
 		assertRunningInMainThread();
+
+		LOG.debug("Request new allocated slot with slot request id {} and resource profile {}", slotRequestId, resourceProfile);
 
 		final PendingRequest pendingRequest = PendingRequest.createNormalRequest(slotRequestId, resourceProfile);
 
@@ -339,6 +357,8 @@ public class FutureSlotPool implements SlotPool {
 	@Nonnull
 	public CompletableFuture<PhysicalSlot> requestNewAllocatedBatchSlot(@Nonnull SlotRequestId slotRequestId, @Nonnull ResourceProfile resourceProfile) {
 		assertRunningInMainThread();
+
+		LOG.debug("Request new allocated batch slot with slot request id {} and resource profile {}", slotRequestId, resourceProfile);
 
 		final PendingRequest pendingRequest = PendingRequest.createBatchRequest(slotRequestId, resourceProfile);
 
@@ -386,6 +406,7 @@ public class FutureSlotPool implements SlotPool {
 
 	@Override
 	public void releaseSlot(@Nonnull SlotRequestId slotRequestId, @Nullable Throwable cause) {
+		LOG.debug("Release slot with slot request id {}", slotRequestId);
 		assertRunningInMainThread();
 
 		final PendingRequest pendingRequest = pendingRequests.remove(slotRequestId);
@@ -400,6 +421,8 @@ public class FutureSlotPool implements SlotPool {
 
 			if (allocationId != null) {
 				declarativeSlotPool.releaseSlot(allocationId, cause, clock.relativeTimeMillis());
+			} else {
+				LOG.debug("Could not find slot which has fulfilled slot request {}. Ignoring the release operation.", slotRequestId);
 			}
 		}
 	}
