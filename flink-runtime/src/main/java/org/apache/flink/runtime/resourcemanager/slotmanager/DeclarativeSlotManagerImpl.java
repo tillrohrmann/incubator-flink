@@ -662,6 +662,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	 * @param resourceProfile resource profile for the slot
 	 */
 	private void allocateSlot(DeclarativeTaskManagerSlot taskManagerSlot, JobID jobId, String targetAddress, ResourceProfile resourceProfile) {
+		LOG.debug("Allocate slot for job {} with resource profile {}.", jobId, resourceProfile);
 		Preconditions.checkState(taskManagerSlot.getState() == DeclarativeTaskManagerSlot.State.FREE);
 
 		TaskExecutorConnection taskExecutorConnection = taskManagerSlot.getTaskManagerConnection();
