@@ -83,7 +83,7 @@ public class DefaultAllocatedSlotPoolTest extends TestLogger {
 			assertTrue(slotsPerAllocationId.containsKey(slotInfo.getAllocationId()));
 			final AllocatedSlot allocatedSlot = slotsPerAllocationId.get(slotInfo.getAllocationId());
 
-			assertThat(slotInfo, matchesAllocatedSlot(allocatedSlot));
+			assertThat(slotInfo, matchesPhysicalSlot(allocatedSlot));
 		}
 	}
 
@@ -244,11 +244,11 @@ public class DefaultAllocatedSlotPoolTest extends TestLogger {
 		for (AllocatedSlotPool.FreeSlotInfo freeSlotInfo : freeSlotsInformation) {
 			assertTrue(allocatedSlotMap.containsKey(freeSlotInfo.getAllocationId()));
 
-			assertThat(freeSlotInfo.asSlotInfo(), matchesAllocatedSlot(allocatedSlotMap.get(freeSlotInfo.getAllocationId())));
+			assertThat(freeSlotInfo.asSlotInfo(), matchesPhysicalSlot(allocatedSlotMap.get(freeSlotInfo.getAllocationId())));
 		}
 	}
 
-	private Matcher<SlotInfo> matchesAllocatedSlot(AllocatedSlot allocatedSlot) {
+	static Matcher<SlotInfo> matchesPhysicalSlot(PhysicalSlot allocatedSlot) {
 		return new SlotInfoMatcher(allocatedSlot);
 	}
 
@@ -276,30 +276,30 @@ public class DefaultAllocatedSlotPoolTest extends TestLogger {
 			new RpcTaskManagerGateway(new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway(), JobMasterId.generate()));
 	}
 
-	private static class SlotInfoMatcher extends TypeSafeMatcher<SlotInfo> {
+	static class SlotInfoMatcher extends TypeSafeMatcher<SlotInfo> {
 
-		private final AllocatedSlot allocatedSlot;
+		private final PhysicalSlot physicalSlot;
 
-		private SlotInfoMatcher(AllocatedSlot allocatedSlot) {
-			this.allocatedSlot = allocatedSlot;
+		SlotInfoMatcher(PhysicalSlot physicalSlot) {
+			this.physicalSlot = physicalSlot;
 		}
 
 		@Override
 		public void describeTo(Description description) {
 			description.appendText("SlotInfo with values: ");
 			description.appendValueList("{", ",", "}",
-				allocatedSlot.getAllocationId(),
-				allocatedSlot.getPhysicalSlotNumber(),
-				allocatedSlot.getResourceProfile(),
-				allocatedSlot.getTaskManagerLocation());
+				physicalSlot.getAllocationId(),
+				physicalSlot.getPhysicalSlotNumber(),
+				physicalSlot.getResourceProfile(),
+				physicalSlot.getTaskManagerLocation());
 		}
 
 		@Override
 		protected boolean matchesSafely(SlotInfo item) {
-			return item.getAllocationId().equals(allocatedSlot.getAllocationId()) &&
-				item.getPhysicalSlotNumber() == allocatedSlot.getPhysicalSlotNumber() &&
-				item.getResourceProfile().equals(allocatedSlot.getResourceProfile()) &&
-				item.getTaskManagerLocation().equals(allocatedSlot.getTaskManagerLocation());
+			return item.getAllocationId().equals(physicalSlot.getAllocationId()) &&
+				item.getPhysicalSlotNumber() == physicalSlot.getPhysicalSlotNumber() &&
+				item.getResourceProfile().equals(physicalSlot.getResourceProfile()) &&
+				item.getTaskManagerLocation().equals(physicalSlot.getTaskManagerLocation());
 		}
 	}
 }

@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.jobmaster.slotpool;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
@@ -34,6 +35,7 @@ import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
@@ -49,6 +51,19 @@ import java.util.stream.Collectors;
 
 /**
  * Default {@link DeclarativeSlotPoolNg} implementation.
+ *
+ * <p>The implementation collects the current resource requirements and declares them
+ * at the ResourceManager. Whenever new slots are offered, the slot pool compares the
+ * offered slots to the set of available and required resources and only accepts those
+ * slots which are required.
+ *
+ * <p>Slots which are released won't be returned directly to their owners. Instead,
+ * the slot pool implementation will only return them after the idleSlotTimeout has
+ * been exceeded by a free slot.
+ *
+ * <p>The slot pool will call {@link #notifyNewSlots} whenever newly offered slots are
+ * accepted or if an allocated slot should become free after it is being
+ * {@link #releaseSlot released}.
  */
 public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
@@ -120,13 +135,14 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 	@Override
 	public Collection<SlotOffer> offerSlots(
-			Collection<SlotOffer> offers,
+			Collection<? extends SlotOffer> offers,
 			TaskManagerLocation taskManagerLocation,
 			TaskManagerGateway taskManagerGateway,
 			long currentTime) {
 		final Collection<SlotOffer> acceptedSlotOffers = new ArrayList<>();
 		final Collection<SlotOffer> candidates = new ArrayList<>();
 
+		// filter out already accepted offers
 		for (SlotOffer offer : offers) {
 			final AllocationID allocationId = offer.getAllocationId();
 			if (slotPool.containsSlot(allocationId)) {
@@ -155,13 +171,17 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 				acceptedResources = acceptedResources.add(matchedResourceProfile, 1);
 
+				// store the ResourceProfile against which the given slot has matched for future book-keeping
 				slotToResourceProfileMappings.put(allocatedSlot.getAllocationId(), matchedResourceProfile);
 			}
 		}
 
 		slotPool.addSlots(acceptedSlots, currentTime);
 		increaseAvailableResources(acceptedResources);
-		notifyNewSlots.accept(acceptedSlots);
+
+		if (!acceptedSlots.isEmpty()) {
+			notifyNewSlots.accept(acceptedSlots);
+		}
 
 		return acceptedSlotOffers;
 	}
@@ -212,7 +232,8 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		return matching;
 	}
 
-	private ResourceCounter calculateUnfulfilledResources() {
+	@VisibleForTesting
+	ResourceCounter calculateUnfulfilledResources() {
 		return resourceRequirements.subtract(availableResources);
 	}
 
@@ -229,20 +250,20 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	@Override
-	public void failSlots(ResourceID resourceId, Exception cause) {
-		final Collection<AllocatedSlot> removedSlots = slotPool.removeSlots(resourceId);
+	public void failSlots(ResourceID owner, Exception cause) {
+		final Collection<AllocatedSlot> removedSlots = slotPool.removeSlots(owner);
 
 		releasePayloadAndDecreaseResourceRequirement(removedSlots, cause);
 	}
 
 	@Override
-	public void failSlot(AllocationID allocationID, Exception cause) {
-		final Optional<AllocatedSlot> removedSlot = slotPool.removeSlot(allocationID);
+	public void failSlot(AllocationID allocationId, Exception cause) {
+		final Optional<AllocatedSlot> removedSlot = slotPool.removeSlot(allocationId);
 
 		removedSlot.ifPresent(allocatedSlot -> releasePayloadAndDecreaseResourceRequirement(Collections.singleton(allocatedSlot), cause));
 	}
 
-	private void releasePayloadAndDecreaseResourceRequirement(Collection<? extends AllocatedSlot> allocatedSlots, Throwable cause) {
+	private void releasePayloadAndDecreaseResourceRequirement(Iterable<? extends AllocatedSlot> allocatedSlots, Throwable cause) {
 		ResourceCounter resourceDecrement = ResourceCounter.empty();
 
 		for (AllocatedSlot allocatedSlot : allocatedSlots) {
@@ -254,23 +275,44 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	@Override
-	public PhysicalSlot allocateFreeSlot(AllocationID allocationID) {
-		return slotPool.allocateFreeSlot(allocationID);
+	public PhysicalSlot allocateFreeSlot(AllocationID allocationId) {
+		return slotPool.allocateFreeSlot(allocationId);
 	}
 
 	@Override
-	public void releaseSlot(AllocationID allocationId, Throwable cause, long currentTime) {
+	public void releaseSlot(AllocationID allocationId, @Nullable Throwable cause, long currentTime) {
 		final Optional<AllocatedSlot> releasedSlot = slotPool.releaseAllocatedSlot(allocationId, currentTime);
 
 		releasedSlot.ifPresent(allocatedSlot -> {
 			releasePayloadAndDecreaseResourceRequirement(Collections.singleton(allocatedSlot), cause);
+			tryToFulfillResourceRequirement(allocatedSlot);
 			notifyNewSlots.accept(Collections.singletonList(allocatedSlot));
 		});
 	}
 
+	private void tryToFulfillResourceRequirement(AllocatedSlot allocatedSlot) {
+		final Collection<SlotOfferMatching> slotOfferMatchings = matchOffersWithOutstandingRequirements(Collections.singleton(allocatedSlotToSlotOffer(allocatedSlot)));
+
+		for (SlotOfferMatching slotOfferMatching : slotOfferMatchings) {
+			if (slotOfferMatching.getMatching().isPresent()) {
+				final ResourceProfile matchedResourceProfile = slotOfferMatching.getMatching().get();
+
+				final ResourceProfile oldResourceProfile = Preconditions.checkNotNull(slotToResourceProfileMappings.put(allocatedSlot.getAllocationId(), matchedResourceProfile), "Expected slot profile matching to be non-empty.");
+
+				availableResources = availableResources.add(matchedResourceProfile, 1);
+				availableResources = availableResources.subtract(oldResourceProfile, 1);
+			}
+		}
+	}
+
+	@Nonnull
+	private SlotOffer allocatedSlotToSlotOffer(AllocatedSlot allocatedSlot) {
+		return new SlotOffer(allocatedSlot.getAllocationId(), allocatedSlot.getPhysicalSlotNumber(), allocatedSlot.getResourceProfile());
+	}
+
 	@Override
-	public boolean containsSlots(ResourceID resourceId) {
-		return slotPool.containsSlots(resourceId);
+	public boolean containsSlots(ResourceID owner) {
+		return slotPool.containsSlots(owner);
 	}
 
 	@Override
@@ -286,7 +328,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		while (!excessResources.isEmpty() && freeSlotIterator.hasNext()) {
 			final AllocatedSlotPool.FreeSlotInfo idleSlot = freeSlotIterator.next();
 
-			if (currentTimeMillis > idleSlot.getFreeSince() + idleSlotTimeout.toMilliseconds()) {
+			if (currentTimeMillis >= idleSlot.getFreeSince() + idleSlotTimeout.toMilliseconds()) {
 				final ResourceProfile matchingProfile = slotToResourceProfileMappings.get(idleSlot.getAllocationId());
 
 				if (excessResources.containsResource(matchingProfile)) {
@@ -302,11 +344,10 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 			}
 		}
 
-		returnSlotsToOwner(slotsToReturnToOwner);
+		returnSlotsToOwner(slotsToReturnToOwner, new FlinkException("Returning idle slots to their owners."));
 	}
 
-	private void returnSlotsToOwner(Collection<AllocatedSlot> slotsToReturnToOwner) {
-		final FlinkException cause = new FlinkException("");
+	private void returnSlotsToOwner(Iterable<? extends AllocatedSlot> slotsToReturnToOwner, Throwable cause) {
 		for (AllocatedSlot expiredSlot : slotsToReturnToOwner) {
 			Preconditions.checkState(!expiredSlot.isUsed(), "Free slot must not be used.");
 
