@@ -369,7 +369,6 @@ public class SlotManagerImpl implements SlotManager {
 
 	@Override
 	public void processResourceRequirements(ResourceRequirements resourceRequirements) {
-		throw new UnsupportedOperationException();
 	}
 
 	/**

@@ -873,6 +873,8 @@ public abstract class ResourceManager<WorkerType extends ResourceIDRetrievable>
 
 			jmResourceIdRegistrations.remove(jobManagerResourceId);
 
+			slotManager.processResourceRequirements(ResourceRequirements.empty(jobId, jobMasterGateway.getAddress()));
+
 			// tell the job manager about the disconnect
 			jobMasterGateway.disconnectResourceManager(getFencingToken(), cause);
 		} else {
