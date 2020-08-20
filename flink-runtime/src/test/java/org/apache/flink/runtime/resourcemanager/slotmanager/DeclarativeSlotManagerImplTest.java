@@ -49,6 +49,7 @@ import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.function.FunctionUtils;
 import org.apache.flink.util.function.ThrowingRunnable;
 
+import akka.pattern.AskTimeoutException;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -556,13 +557,10 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	/**
-	 * Tests that slot allocation time out after the specified request timeout. If a slot allocation
-	 * times out, then a pending resource is declared missing.
+	 * Tests that if a slot allocation times out we try to allocate another slot.
 	 */
 	@Test
 	public void testSlotAllocationTimeout() throws Exception {
-		final long allocationTimeout = 50L;
-
 		final JobID jobId = new JobID();
 
 		final CompletableFuture<Void> secondSlotRequestFuture = new CompletableFuture<>();
@@ -571,6 +569,9 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			.setRequestSlotFunction(ignored -> {
 				if (slotRequestsCount.getAndAdd(1) == 1) {
 					secondSlotRequestFuture.complete(null);
+				} else {
+					// mimic RPC timeout
+					return FutureUtils.completedExceptionally(new AskTimeoutException("timeout"));
 				}
 				return new CompletableFuture<>();
 			})
@@ -580,7 +581,6 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 		final Executor mainThreadExecutor = TestingUtils.defaultExecutor();
 
 		try (DeclarativeSlotManagerImpl slotManager = createDeclarativeSlotManagerBuilder()
-			.setSlotRequestTimeout(Time.milliseconds(allocationTimeout))
 			.build()) {
 
 			slotManager.start(ResourceManagerId.generate(), mainThreadExecutor, new TestingResourceActionsBuilder().build());

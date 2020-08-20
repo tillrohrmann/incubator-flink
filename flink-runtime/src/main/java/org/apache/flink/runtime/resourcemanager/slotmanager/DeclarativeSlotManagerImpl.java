@@ -50,7 +50,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -74,14 +73,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	/** Timeout for slot requests to the task manager. */
 	private final Time taskManagerRequestTimeout;
 
-	/** Timeout after which an allocation is discarded. */
-	private final Time slotAllocationTimeout;
-
 	/** Timeout after which an unused TaskManager is released. */
 	private final Time taskManagerTimeout;
 
-	/** Index of all currently pending slots. */
-	private final HashMap<SlotID, DeclarativeTaskManagerSlot> pendingSlotAllocations;
 	private final HashMap<SlotID, CompletableFuture<Acknowledge>> pendingSlotAllocationFutures;
 
 	/** All currently registered task managers. */
@@ -145,7 +139,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 		Preconditions.checkNotNull(slotManagerConfiguration);
 		this.taskManagerRequestTimeout = slotManagerConfiguration.getTaskManagerRequestTimeout();
-		this.slotAllocationTimeout = slotManagerConfiguration.getSlotRequestTimeout();
 		this.taskManagerTimeout = slotManagerConfiguration.getTaskManagerTimeout();
 		this.waitResultConsumedBeforeRelease = slotManagerConfiguration.isWaitResultConsumedBeforeRelease();
 		this.defaultWorkerResourceSpec = slotManagerConfiguration.getDefaultWorkerResourceSpec();
@@ -156,7 +149,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		this.redundantTaskManagerNum = slotManagerConfiguration.getRedundantTaskManagerNum();
 		this.resourceTracker = new DefaultRequirementsTracker();
 
-		pendingSlotAllocations = new HashMap<>(16);
 		pendingSlotAllocationFutures = new HashMap<>(16);
 		taskManagerRegistrations = new HashMap<>(4);
 		pendingSlots = new HashMap<>(16);
@@ -305,13 +297,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 				this::checkTaskManagerTimeoutsAndRedundancy),
 			0L,
 			taskManagerTimeout.toMilliseconds(),
-			TimeUnit.MILLISECONDS);
-
-		slotRequestTimeoutCheck = scheduledExecutor.scheduleWithFixedDelay(
-			() -> mainThreadExecutor.execute(
-				this::checkSlotAllocationTimeouts),
-			0L,
-			slotAllocationTimeout.toMilliseconds(),
 			TimeUnit.MILLISECONDS);
 
 		registerSlotManagerMetrics();
@@ -686,8 +671,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		final SlotID slotId = taskManagerSlot.getSlotId();
 		final InstanceID instanceID = taskManagerSlot.getInstanceId();
 
-		pendingSlotAllocations.put(slotId, taskManagerSlot);
-		pendingSlotAllocationFutures.put(slotId, completableFuture);
 		slotTracker.notifyAllocationStart(slotId, jobId);
 
 		TaskManagerRegistration taskManagerRegistration = taskManagerRegistrations.get(instanceID);
@@ -721,7 +704,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		completableFuture.whenCompleteAsync(
 			(Acknowledge acknowledge, Throwable throwable) -> {
 				try {
-					pendingSlotAllocations.remove(slotId);
 					if (acknowledge != null) {
 						slotTracker.notifySlotAllocation(slotId, jobId);
 					} else {
@@ -831,21 +813,6 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		final FlinkException cause = new FlinkException("TaskExecutor exceeded the idle timeout.");
 		LOG.debug("Release TaskExecutor {} because it exceeded the idle timeout.", timedOutTaskManagerId);
 		resourceActions.releaseResource(timedOutTaskManagerId, cause);
-	}
-
-	private void checkSlotAllocationTimeouts() {
-		if (!pendingSlotAllocations.isEmpty()) {
-			long currentTime = System.currentTimeMillis();
-
-			for (Iterator<DeclarativeTaskManagerSlot> iterator = pendingSlotAllocations.values().iterator(); iterator.hasNext(); ) {
-				DeclarativeTaskManagerSlot pendingSlotAllocation = iterator.next();
-
-				if (currentTime - pendingSlotAllocation.getAllocationStartTimestamp() >= slotAllocationTimeout.toMilliseconds()) {
-					iterator.remove();
-					slotTracker.freeSlot(pendingSlotAllocation.getSlotId());
-				}
-			}
-		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
