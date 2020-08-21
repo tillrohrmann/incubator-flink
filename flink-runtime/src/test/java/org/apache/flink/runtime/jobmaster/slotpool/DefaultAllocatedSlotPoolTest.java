@@ -234,6 +234,13 @@ public class DefaultAllocatedSlotPoolTest extends TestLogger {
 		}
 	}
 
+	@Test
+	public void testRemoveSlotsOfUnknownOwner() {
+		final DefaultAllocatedSlotPool slotPool = new DefaultAllocatedSlotPool();
+
+		slotPool.removeSlots(ResourceID.generate());
+	}
+
 	private void assertSlotPoolContainsFreeSlots(DefaultAllocatedSlotPool slotPool, Collection<AllocatedSlot> allocatedSlots) {
 		final Collection<AllocatedSlotPool.FreeSlotInfo> freeSlotsInformation = slotPool.getFreeSlotsInformation();
 

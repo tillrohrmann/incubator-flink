@@ -25,6 +25,7 @@ import org.apache.flink.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -113,13 +114,17 @@ public class DefaultAllocatedSlotPool implements AllocatedSlotPool {
 	public Collection<AllocatedSlot> removeSlots(ResourceID owner) {
 		final Set<AllocationID> slotsOfTaskExecutor = slotsPerTaskExecutor.remove(owner);
 
-		final Collection<AllocatedSlot> removedSlots = new ArrayList<>();
+		if (slotsOfTaskExecutor != null) {
+			final Collection<AllocatedSlot> removedSlots = new ArrayList<>();
 
-		for (AllocationID allocationId : slotsOfTaskExecutor) {
-			removedSlots.add(Preconditions.checkNotNull(removeSlotInternal(allocationId)));
+			for (AllocationID allocationId : slotsOfTaskExecutor) {
+				removedSlots.add(Preconditions.checkNotNull(removeSlotInternal(allocationId)));
+			}
+
+			return removedSlots;
+		} else {
+			return Collections.emptyList();
 		}
-
-		return removedSlots;
 	}
 
 	@Override
