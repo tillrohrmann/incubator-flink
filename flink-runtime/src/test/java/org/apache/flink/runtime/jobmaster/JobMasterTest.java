@@ -1737,14 +1737,15 @@ public class JobMasterTest extends TestLogger {
 
 			final JobMasterGateway jobMasterGateway = jobMaster.getSelfGateway(JobMasterGateway.class);
 
-			final Collection<SlotOffer> slotOffers = registerSlotsAtJobMaster(1, jobMasterGateway, testingTaskExecutorGateway);
+			final LocalUnresolvedTaskManagerLocation unresolvedTaskManagerLocation = new LocalUnresolvedTaskManagerLocation();
+			final Collection<SlotOffer> slotOffers = registerSlotsAtJobMaster(1, jobMasterGateway, testingTaskExecutorGateway, unresolvedTaskManagerLocation);
 
 			// check that we accepted the offered slot
 			assertThat(slotOffers, hasSize(1));
 			final AllocationID allocationId = slotOffers.iterator().next().getAllocationId();
 
 			// now fail the allocation and check that we close the connection to the TaskExecutor
-			jobMasterGateway.notifyAllocationFailure(allocationId, new FlinkException("Fail alloction test exception"));
+			jobMasterGateway.failSlot(unresolvedTaskManagerLocation.getResourceID(), allocationId, new FlinkException("Fail alloction test exception"));
 
 			// we should free the slot and then disconnect from the TaskExecutor because we use no longer slots from it
 			assertThat(freedSlotFuture.get(), equalTo(allocationId));
@@ -1796,7 +1797,7 @@ public class JobMasterTest extends TestLogger {
 			assertThat(slotOffers, hasSize(1));
 			final AllocationID allocationId = slotOffers.iterator().next().getAllocationId();
 
-			jobMasterGateway.notifyAllocationFailure(allocationId, new FlinkException("Fail allocation test exception"));
+			jobMasterGateway.failSlot(taskManagerUnresolvedLocation.getResourceID(), allocationId, new FlinkException("Fail allocation test exception"));
 
 			// we should free the slot, but not disconnect from the TaskExecutor as we still have an allocated partition
 			assertThat(freedSlotFuture.get(), equalTo(allocationId));
