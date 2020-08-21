@@ -95,6 +95,7 @@ public interface DeclarativeSlotPoolNg {
 	 * @param owner owner identifying the owning TaskExecutor
 	 * @param cause cause for failing the slots
 	 */
+	// TODO: Don't decrease resource requirements here, move the responsibility to another component (user of this class)
 	void failSlots(ResourceID owner, Exception cause);
 
 	/**
@@ -105,6 +106,7 @@ public interface DeclarativeSlotPoolNg {
 	 * @param allocationId allocationId identifying the slot to fail
 	 * @param cause cause for failing the slot
 	 */
+	// TODO: Don't decrease resource requirements here, move the responsibility to another component (user of this class)
 	void failSlot(AllocationID allocationId, Exception cause);
 
 	/**
@@ -128,6 +130,7 @@ public interface DeclarativeSlotPoolNg {
 	 * @param cause cause for releasing the slot; can be {@code null}
 	 * @param currentTime currentTime when the slot was released
 	 */
+	// TODO: Don't decrease resource requirements here, move the responsibility to another component (user of this class)
 	void releaseSlot(AllocationID allocationId, @Nullable Throwable cause, long currentTime);
 
 	/**
@@ -159,5 +162,7 @@ public interface DeclarativeSlotPoolNg {
 	 * @throw IllegalStateException if no free slot with the given allocationId exists or if
 	 * the specified slot cannot fulfill the requiredSlotProfile
 	 */
+	// TODO: Try to get rid of this method; a prerequisite is probably a non static matching between the resource requirements
+	//  and slots, meaning that a slot can match against different resource requirements at different points in time
 	PhysicalSlot allocateFreeSlotForResource(AllocationID allocationId, ResourceProfile requiredSlotProfile);
 }
