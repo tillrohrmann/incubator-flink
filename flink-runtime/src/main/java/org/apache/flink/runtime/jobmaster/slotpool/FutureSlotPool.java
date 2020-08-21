@@ -263,8 +263,13 @@ public class FutureSlotPool implements SlotPool {
 		Preconditions.checkState(pendingRequest.fulfill(newSlot), "Pending requests must be fulfillable.");
 	}
 
-	private PhysicalSlot allocateFreeSlot(SlotRequestId slotRequestId, AllocationID allocationId) {
-		final PhysicalSlot physicalSlot = declarativeSlotPool.allocateFreeSlot(allocationId);
+	private void allocateFreeSlot(SlotRequestId slotRequestId, AllocationID allocationId) {
+		declarativeSlotPool.allocateFreeSlot(allocationId);
+		fulfilledRequests.put(slotRequestId, allocationId);
+	}
+
+	private PhysicalSlot allocateFreeSlotForResource(SlotRequestId slotRequestId, AllocationID allocationId, ResourceProfile requiredSlotProfile) {
+		final PhysicalSlot physicalSlot = declarativeSlotPool.allocateFreeSlotForResource(allocationId, requiredSlotProfile);
 		fulfilledRequests.put(slotRequestId, allocationId);
 
 		return physicalSlot;
@@ -322,9 +327,15 @@ public class FutureSlotPool implements SlotPool {
 
 	@Override
 	public Optional<PhysicalSlot> allocateAvailableSlot(@Nonnull SlotRequestId slotRequestId, @Nonnull AllocationID allocationID) {
-		assertRunningInMainThread();
+		throw new UnsupportedOperationException("This method should not be used when using declarative resource management.");
+	}
 
-		return Optional.of(allocateFreeSlot(slotRequestId, allocationID));
+	@Override
+	public Optional<PhysicalSlot> allocateAvailableSlot(@Nonnull SlotRequestId slotRequestId, @Nonnull AllocationID allocationID, @Nullable ResourceProfile requiredSlotProfile) {
+		assertRunningInMainThread();
+		Preconditions.checkNotNull(requiredSlotProfile, "The requiredSlotProfile must not be null.");
+
+		return Optional.of(allocateFreeSlotForResource(slotRequestId, allocationID, requiredSlotProfile));
 	}
 
 	@Override

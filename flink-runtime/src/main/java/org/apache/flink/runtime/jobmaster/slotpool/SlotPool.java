@@ -162,6 +162,22 @@ public interface SlotPool extends AllocatedSlotActions, AutoCloseable {
 		@Nonnull AllocationID allocationID);
 
 	/**
+	 * Allocates the available slot with the given allocation id under the given request id. This method returns
+	 * {@code null} if no slot with the given allocation id is available.
+	 *
+	 * @param slotRequestId identifying the requested slot
+	 * @param allocationID the allocation id of the requested available slot
+	 * @param requiredSlotProfile requiredSlotProfile for which to allocate the slot
+	 * @return the previously available slot with the given allocation id or {@code null} if no such slot existed.
+	 */
+	default Optional<PhysicalSlot> allocateAvailableSlot(
+		@Nonnull SlotRequestId slotRequestId,
+		@Nonnull AllocationID allocationID,
+		@Nullable ResourceProfile requiredSlotProfile) {
+		return allocateAvailableSlot(slotRequestId, allocationID);
+	}
+
+	/**
 	 * Request the allocation of a new slot from the resource manager. This method will not return a slot from the
 	 * already available slots from the pool, but instead will add a new slot to that pool that is immediately allocated
 	 * and returned.

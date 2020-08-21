@@ -20,6 +20,7 @@ package org.apache.flink.runtime.jobmaster.slotpool;
 
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
@@ -32,6 +33,7 @@ import javax.annotation.Nullable;
 
 import java.util.Collection;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -60,6 +62,8 @@ final class TestingDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 
 	private final Function<AllocationID, PhysicalSlot> allocateFreeSlotFunction;
 
+	private final BiFunction<AllocationID, ResourceProfile, PhysicalSlot> allocateFreeSlotForResourceFunction;
+
 	private final TriConsumer<AllocationID, Throwable, Long> releaseSlotConsumer;
 
 	private final Function<ResourceID, Boolean> containsSlotsFunction;
@@ -76,6 +80,7 @@ final class TestingDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		BiConsumer<ResourceID, Exception> failSlotsConsumer,
 		BiConsumer<AllocationID, Exception> failSlotConsumer,
 		Function<AllocationID, PhysicalSlot> allocateFreeSlotFunction,
+		BiFunction<AllocationID, ResourceProfile, PhysicalSlot> allocateFreeSlotForResourceFunction,
 		TriConsumer<AllocationID, Throwable, Long> releaseSlotConsumer,
 		Function<ResourceID, Boolean> containsSlotsFunction,
 		LongConsumer returnIdleSlotsConsumer) {
@@ -88,6 +93,7 @@ final class TestingDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		this.failSlotsConsumer = failSlotsConsumer;
 		this.failSlotConsumer = failSlotConsumer;
 		this.allocateFreeSlotFunction = allocateFreeSlotFunction;
+		this.allocateFreeSlotForResourceFunction = allocateFreeSlotForResourceFunction;
 		this.releaseSlotConsumer = releaseSlotConsumer;
 		this.containsSlotsFunction = containsSlotsFunction;
 		this.returnIdleSlotsConsumer = returnIdleSlotsConsumer;
@@ -136,6 +142,11 @@ final class TestingDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	@Override
 	public PhysicalSlot allocateFreeSlot(AllocationID allocationId) {
 		return allocateFreeSlotFunction.apply(allocationId);
+	}
+
+	@Override
+	public PhysicalSlot allocateFreeSlotForResource(AllocationID allocationId, ResourceProfile requiredSlotProfile) {
+		return allocateFreeSlotForResourceFunction.apply(allocationId, requiredSlotProfile);
 	}
 
 	@Override

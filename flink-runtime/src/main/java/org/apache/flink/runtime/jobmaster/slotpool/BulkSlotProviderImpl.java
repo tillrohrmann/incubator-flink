@@ -152,7 +152,8 @@ class BulkSlotProviderImpl implements BulkSlotProvider {
 		return selectedAvailableSlot.flatMap(
 			slotInfoAndLocality -> slotPool.allocateAvailableSlot(
 				slotRequestId,
-				slotInfoAndLocality.getSlotInfo().getAllocationId())
+				slotInfoAndLocality.getSlotInfo().getAllocationId(),
+				slotProfile.getPhysicalSlotResourceProfile())
 		);
 	}
 

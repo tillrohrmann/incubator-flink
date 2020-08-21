@@ -139,6 +139,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 			TaskManagerLocation taskManagerLocation,
 			TaskManagerGateway taskManagerGateway,
 			long currentTime) {
+		LOG.debug("Received {} slot offers from TaskExecutor {}.", offers.size(), taskManagerLocation);
 		final Collection<SlotOffer> acceptedSlotOffers = new ArrayList<>();
 		final Collection<SlotOffer> candidates = new ArrayList<>();
 
@@ -295,6 +296,18 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	@Override
+	public PhysicalSlot allocateFreeSlotForResource(AllocationID allocationId, ResourceProfile requiredSlotProfile) {
+		increaseResourceRequirementsBy(ResourceCounter.withResource(requiredSlotProfile, 1));
+		final AllocatedSlot allocatedSlot = slotPool.allocateFreeSlot(allocationId);
+
+		Preconditions.checkState(allocatedSlot.getResourceProfile().isMatching(requiredSlotProfile), "");
+
+		updateSlotToResourceProfileMapping(allocationId, requiredSlotProfile);
+
+		return allocatedSlot;
+	}
+
+	@Override
 	public void releaseSlot(AllocationID allocationId, @Nullable Throwable cause, long currentTime) {
 		LOG.debug("Release slot {}.", allocationId);
 
@@ -314,12 +327,16 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 			if (slotOfferMatching.getMatching().isPresent()) {
 				final ResourceProfile matchedResourceProfile = slotOfferMatching.getMatching().get();
 
-				final ResourceProfile oldResourceProfile = Preconditions.checkNotNull(slotToResourceProfileMappings.put(allocatedSlot.getAllocationId(), matchedResourceProfile), "Expected slot profile matching to be non-empty.");
-
-				availableResources = availableResources.add(matchedResourceProfile, 1);
-				availableResources = availableResources.subtract(oldResourceProfile, 1);
+				updateSlotToResourceProfileMapping(allocatedSlot.getAllocationId(), matchedResourceProfile);
 			}
 		}
+	}
+
+	private void updateSlotToResourceProfileMapping(AllocationID allocationId, ResourceProfile matchedResourceProfile) {
+		final ResourceProfile oldResourceProfile = Preconditions.checkNotNull(slotToResourceProfileMappings.put(allocationId, matchedResourceProfile), "Expected slot profile matching to be non-empty.");
+
+		availableResources = availableResources.add(matchedResourceProfile, 1);
+		availableResources = availableResources.subtract(oldResourceProfile, 1);
 	}
 
 	@Nonnull

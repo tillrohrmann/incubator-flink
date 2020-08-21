@@ -20,6 +20,7 @@ package org.apache.flink.runtime.jobmaster.slotpool;
 
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
+import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
@@ -31,6 +32,7 @@ import org.apache.flink.util.function.TriConsumer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -53,6 +55,7 @@ public class TestingDeclarativeSlotPoolNgBuilder {
 	private TriConsumer<AllocationID, Throwable, Long> releaseSlotConsumer = (ignoredA, ignoredB, ignoredC) -> {};
 	private Function<ResourceID, Boolean> containsSlotsFunction = ignored -> false;
 	private LongConsumer returnIdleSlotsConsumer = ignored -> {};
+	private BiFunction<AllocationID, ResourceProfile, PhysicalSlot> allocateFreeSlotForResourceFunction = (ignoredA, ignoredB) -> null;
 
 	public TestingDeclarativeSlotPoolNgBuilder setIncreaseResourceRequirementsByConsumer(Consumer<ResourceCounter> increaseResourceRequirementsByConsumer) {
 		this.increaseResourceRequirementsByConsumer = increaseResourceRequirementsByConsumer;
@@ -99,6 +102,11 @@ public class TestingDeclarativeSlotPoolNgBuilder {
 		return this;
 	}
 
+	public TestingDeclarativeSlotPoolNgBuilder setAllocateFreeSlotForResourceFunction(BiFunction<AllocationID, ResourceProfile, PhysicalSlot> allocateFreeSlotForResourceFunction) {
+		this.allocateFreeSlotForResourceFunction = allocateFreeSlotForResourceFunction;
+		return this;
+	}
+
 	public TestingDeclarativeSlotPoolNgBuilder setReleaseSlotConsumer(TriConsumer<AllocationID, Throwable, Long> releaseSlotConsumer) {
 		this.releaseSlotConsumer = releaseSlotConsumer;
 		return this;
@@ -125,6 +133,7 @@ public class TestingDeclarativeSlotPoolNgBuilder {
 			failSlotsConsumer,
 			failSlotConsumer,
 			allocateFreeSlotFunction,
+			allocateFreeSlotForResourceFunction,
 			releaseSlotConsumer,
 			containsSlotsFunction,
 			returnIdleSlotsConsumer);

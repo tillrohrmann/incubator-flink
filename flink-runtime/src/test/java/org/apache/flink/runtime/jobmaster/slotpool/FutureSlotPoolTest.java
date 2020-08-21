@@ -36,6 +36,8 @@ import org.apache.flink.util.clock.SystemClock;
 
 import org.junit.Test;
 
+import javax.annotation.Nonnull;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -68,39 +70,39 @@ public class FutureSlotPoolTest extends TestLogger {
 
 		final TestingDeclarativeSlotPoolNgBuilder builder = TestingDeclarativeSlotPoolNg
 			.builder()
-			.setAllocateFreeSlotFunction(allocationId -> {
+			.setAllocateFreeSlotForResourceFunction((allocationId, resourceProfile) -> {
 				assertThat(allocationId, is(expectedAllocationId));
 				return allocatedSlot;
 			})
 			.setReleaseSlotConsumer((allocationID, throwable, aLong) -> releaseSlotFuture.complete(allocationID));
 
-		try (FutureSlotPool futureSlotPool = new FutureSlotPool(
-				jobId,
-				new TestingDeclarativeSlotPoolFactory(builder),
-				SystemClock.getInstance(),
-				rpcTimeout,
-				idleSlotTimeout,
-				batchSlotTimeout)) {
+		final TestingDeclarativeSlotPoolFactory declarativeSlotPoolFactory = new TestingDeclarativeSlotPoolFactory(builder);
+		try (FutureSlotPool futureSlotPool = createFutureSlotPool(declarativeSlotPoolFactory)) {
 			futureSlotPool.start(jobMasterId, "localhost", mainThreadExecutor);
 
 			final SlotRequestId slotRequestId = new SlotRequestId();
 
-			futureSlotPool.allocateAvailableSlot(slotRequestId, expectedAllocationId);
+			futureSlotPool.allocateAvailableSlot(slotRequestId, expectedAllocationId, allocatedSlot.getResourceProfile());
 			futureSlotPool.releaseSlot(slotRequestId, null);
 
 			assertThat(releaseSlotFuture.join(), is(expectedAllocationId));
 		}
 	}
 
-	@Test
-	public void testNoConcurrentModificationWhenSuspendingAndReleasingSlot() throws Exception {
-		try (FutureSlotPool futureSlotPool = new FutureSlotPool(
+	@Nonnull
+	private FutureSlotPool createFutureSlotPool(DeclarativeSlotPoolNgFactory declarativeSlotPoolFactory) {
+		return new FutureSlotPool(
 			jobId,
-			new DefaultDeclarativeSlotPoolNgFactory(),
+			declarativeSlotPoolFactory,
 			SystemClock.getInstance(),
 			rpcTimeout,
 			idleSlotTimeout,
-			batchSlotTimeout)) {
+			batchSlotTimeout);
+	}
+
+	@Test
+	public void testNoConcurrentModificationWhenSuspendingAndReleasingSlot() throws Exception {
+		try (FutureSlotPool futureSlotPool = createFutureSlotPool(new DefaultDeclarativeSlotPoolNgFactory())) {
 
 			futureSlotPool.start(jobMasterId, "localhost", mainThreadExecutor);
 

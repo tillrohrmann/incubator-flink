@@ -440,6 +440,27 @@ public class DefaultDeclarativeSlotPoolNgTest extends TestLogger {
 		assertTrue(slotPool.calculateUnfulfilledResources().isEmpty());
 	}
 
+	@Test
+	public void testAllocateFreeSlotForResourceIncreasesResourceRequirements() throws InterruptedException {
+		final NewResourceRequirementsService notifyNewResourceRequirements = new NewResourceRequirementsService();
+		final DefaultDeclarativeSlotPoolNg slotPool = DefaultDeclarativeSlotPoolBuilder.builder()
+			.setNotifyNewResourceRequirements(notifyNewResourceRequirements)
+			.build();
+
+		final ResourceProfile largeResourceProfile = ResourceProfile.newBuilder().setManagedMemoryMB(1024).build();
+		final ResourceProfile smallResourceProfile = ResourceProfile.newBuilder().setManagedMemoryMB(512).build();
+
+		final ResourceCounter resourceRequirements = ResourceCounter.withResource(largeResourceProfile, 1);
+		increaseRequirementsAndOfferSlotsToSlotPool(slotPool, resourceRequirements, null);
+		notifyNewResourceRequirements.takeResourceRequirements();
+
+		final SlotInfoWithUtilization firstSlot = slotPool.getFreeSlotsInformation().iterator().next();
+
+		slotPool.allocateFreeSlotForResource(firstSlot.getAllocationId(), smallResourceProfile);
+
+		assertThat(notifyNewResourceRequirements.takeResourceRequirements(), is(toResourceRequirements(resourceRequirements.add(smallResourceProfile, 1))));
+	}
+
 	@Nonnull
 	private Collection<PhysicalSlot> drainNewSlotService(NewSlotsService notifyNewSlots) throws InterruptedException {
 		final Collection<PhysicalSlot> newSlots = new ArrayList<>();

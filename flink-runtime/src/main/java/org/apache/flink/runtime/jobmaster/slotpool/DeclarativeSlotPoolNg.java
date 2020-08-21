@@ -147,4 +147,17 @@ public interface DeclarativeSlotPoolNg {
 	 * @param relativeTimeMillis relativeTimeMillis denotes the current time
 	 */
 	void returnIdleSlots(long relativeTimeMillis);
+
+	/**
+	 * Allocates a free slot identified by the given allocationId and maps it to
+	 * the given requiredSlotProfile. Moreover, this method increase the required
+	 * resources by the given requiredSlotProfile
+	 *
+	 * @param allocationId allocationId identifies the free slot to allocate
+	 * @param requiredSlotProfile requiredSlotProfile specifying the resource requirement
+	 * @return a PhysicalSlot representing the allocated slot
+	 * @throw IllegalStateException if no free slot with the given allocationId exists or if
+	 * the specified slot cannot fulfill the requiredSlotProfile
+	 */
+	PhysicalSlot allocateFreeSlotForResource(AllocationID allocationId, ResourceProfile requiredSlotProfile);
 }
