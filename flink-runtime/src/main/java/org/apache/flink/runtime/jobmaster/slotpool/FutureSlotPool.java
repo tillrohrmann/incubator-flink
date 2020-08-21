@@ -157,12 +157,16 @@ public class FutureSlotPool implements SlotPool {
 	private void cancelPendingRequests() {
 		ResourceCounter decreasedResourceRequirements = ResourceCounter.empty();
 
-		for (PendingRequest pendingRequest : pendingRequests.values()) {
-			pendingRequest.cancelRequest();
+		final FlinkException cancelCause = new FlinkException("Cancelling all pending requests.");
+
+		final Iterable<PendingRequest> pendingRequestsToFail = new ArrayList<>(pendingRequests.values());
+		pendingRequests.clear();
+
+		for (PendingRequest pendingRequest : pendingRequestsToFail) {
+			pendingRequest.failRequest(cancelCause);
 			decreasedResourceRequirements = decreasedResourceRequirements.add(pendingRequest.getResourceProfile(), 1);
 		}
 
-		pendingRequests.clear();
 		declarativeSlotPool.decreaseResourceRequirementsBy(decreasedResourceRequirements);
 	}
 
