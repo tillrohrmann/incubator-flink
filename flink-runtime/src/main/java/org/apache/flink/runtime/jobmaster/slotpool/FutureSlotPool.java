@@ -89,6 +89,8 @@ public class FutureSlotPool implements SlotPool {
 
 	private final Time batchSlotTimeout;
 
+	private final Set<AllocationID> newSlotsSet = new HashSet<>();
+
 	@Nullable
 	private ComponentMainThreadExecutor componentMainThreadExecutor;
 
@@ -244,14 +246,26 @@ public class FutureSlotPool implements SlotPool {
 	}
 
 	private void newSlotsAreAvailable(Collection<? extends PhysicalSlot> newSlots) {
+		// Avoid notifying new slots multiple times due to SchedulerImpl allocating and releasing slots
+		// in order to find the best shared slot
+		final Collection<PhysicalSlot> slotsToProcess = new ArrayList<>();
 		for (PhysicalSlot newSlot : newSlots) {
+			if (newSlotsSet.add(newSlot.getAllocationId())) {
+				slotsToProcess.add(newSlot);
+			}
+		}
+
+		for (PhysicalSlot newSlot : slotsToProcess) {
 			final Optional<PendingRequest> matchingPendingRequest = findMatchingPendingRequest(newSlot);
 
 			matchingPendingRequest.ifPresent(pendingRequest -> {
 				Preconditions.checkNotNull(pendingRequests.remove(pendingRequest.getSlotRequestId()), "Cannot fulfill a non existing pending slot request.");
 				fulfillPendingRequest(newSlot, pendingRequest);
 			});
+
+			newSlotsSet.remove(newSlot.getAllocationId());
 		}
+
 	}
 
 	private void fulfillPendingRequest(PhysicalSlot newSlot, PendingRequest pendingRequest) {
@@ -264,6 +278,7 @@ public class FutureSlotPool implements SlotPool {
 	}
 
 	private void allocateFreeSlot(SlotRequestId slotRequestId, AllocationID allocationId) {
+		LOG.debug("Allocate slot {} for slot request id {}", allocationId, slotRequestId);
 		declarativeSlotPool.allocateFreeSlot(allocationId);
 		fulfilledRequests.put(slotRequestId, allocationId);
 	}
@@ -594,6 +609,16 @@ public class FutureSlotPool implements SlotPool {
 
 		public boolean fulfill(PhysicalSlot slot) {
 			return slotFuture.complete(slot);
+		}
+
+		@Override
+		public String toString() {
+			return "PendingRequest{" +
+				"slotRequestId=" + slotRequestId +
+				", resourceProfile=" + resourceProfile +
+				", isBatchRequest=" + isBatchRequest +
+				", unfulfillableSince=" + unfulfillableSince +
+				'}';
 		}
 	}
 }
