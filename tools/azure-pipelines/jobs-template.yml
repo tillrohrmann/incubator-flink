@@ -87,22 +87,22 @@ jobs:
     clean: all
   strategy:
     matrix:
-      core:
-        module: core
-      python:
-        module: python
-      libraries:
-        module: libraries
-      blink_planner:
-        module: blink_planner
-      connectors:
-        module: connectors
-      kafka_gelly:
-        module: kafka/gelly
-      tests:
-        module: tests
-      misc:
-        module: misc
+#      core:
+#        module: core
+#      python:
+#        module: python
+#      libraries:
+#        module: libraries
+#      blink_planner:
+#        module: blink_planner
+#      connectors:
+#        module: connectors
+#      kafka_gelly:
+#        module: kafka/gelly
+#      tests:
+#        module: tests
+#      misc:
+#        module: misc
       declarative:
         module: declarative
   steps:
@@ -167,76 +167,76 @@ jobs:
       targetPath: $(DEBUG_FILES_OUTPUT_DIR)
       artifact: logs-${{parameters.stage_name}}-$(DEBUG_FILES_NAME)
 
-- job: e2e_${{parameters.stage_name}}
-  # uncomment below condition to run the e2e tests only on request.
-  #condition: or(eq(variables['MODE'], 'e2e'), eq(${{parameters.run_end_to_end}}, 'true'))
-  # We are running this in a separate pool
-  pool: ${{parameters.e2e_pool_definition}}
-  timeoutInMinutes: 260
-  cancelTimeoutInMinutes: 1
-  workspace:
-    clean: all
-  steps:
-    # Skip e2e test execution if this is a documentation only pull request (master / release builds will still be checked regularly)
-    - bash: |
-        source ./tools/azure-pipelines/build_properties.sh
-        is_docs_only_pullrequest
-        if [[ "$?" == 0 ]] ; then
-          echo "##[debug]This is a documentation-only change. Skipping e2e execution."
-          echo "##vso[task.setvariable variable=skip;]1"
-        else
-          echo "##[debug]This is a regular CI build. Continuing ..."
-          echo "##vso[task.setvariable variable=skip;]0"
-        fi
-      displayName: Check if Docs only PR
-    - task: Cache@2
-      inputs:
-        key: $(CACHE_KEY)
-        restoreKeys: $(CACHE_FALLBACK_KEY)
-        path: $(MAVEN_CACHE_FOLDER)
-      displayName: Cache Maven local repo
-      continueOnError: true
-      condition: not(eq(variables['SKIP'], '1'))
-    - task: Cache@2
-      inputs:
-        key: e2e-cache | flink-end-to-end-tests/**/*.java, !**/avro/**
-        path: $(E2E_CACHE_FOLDER)
-      displayName: Cache E2E files
-      continueOnError: true
-      condition: not(eq(variables['SKIP'], '1'))
-    - script: |
-        echo "##vso[task.setvariable variable=JAVA_HOME]$JAVA_HOME_11_X64"
-        echo "##vso[task.setvariable variable=PATH]$JAVA_HOME_11_X64/bin:$PATH"
-      displayName: "Set to jdk11"
-      condition: eq('${{parameters.jdk}}', 'jdk11')
-    - script: |
-        echo "Setting up Maven"
-        source ./tools/ci/maven-utils.sh
-        setup_maven
-
-        echo "Free up disk space"
-        ./tools/azure-pipelines/free_disk_space.sh
-
-        echo "Installing required software"
-        sudo apt-get install -y bc
-      displayName: Prepare E2E run
-      condition: not(eq(variables['SKIP'], '1'))
-    - script: ${{parameters.environment}} ./tools/ci/compile.sh
-      displayName: Build Flink
-      condition: not(eq(variables['SKIP'], '1'))
-    - script: ${{parameters.environment}} FLINK_DIR=`pwd`/build-target flink-end-to-end-tests/run-nightly-tests.sh
-      displayName: Run e2e tests
-      env:
-        IT_CASE_S3_BUCKET: $(SECRET_S3_BUCKET)
-        IT_CASE_S3_ACCESS_KEY: $(SECRET_S3_ACCESS_KEY)
-        IT_CASE_S3_SECRET_KEY: $(SECRET_S3_SECRET_KEY)
-      condition: not(eq(variables['SKIP'], '1'))
-      # upload debug artifacts
-    - task: PublishPipelineArtifact@1
-      condition: and(succeededOrFailed(), not(eq(variables['SKIP'], '1')), not(eq(variables['ARTIFACT_DIR'], '')))
-      displayName: Upload Logs
-      inputs:
-        targetPath: $(ARTIFACT_DIR)
-        artifact: logs-${{parameters.stage_name}}-e2e
+#- job: e2e_${{parameters.stage_name}}
+#  # uncomment below condition to run the e2e tests only on request.
+#  #condition: or(eq(variables['MODE'], 'e2e'), eq(${{parameters.run_end_to_end}}, 'true'))
+#  # We are running this in a separate pool
+#  pool: ${{parameters.e2e_pool_definition}}
+#  timeoutInMinutes: 260
+#  cancelTimeoutInMinutes: 1
+#  workspace:
+#    clean: all
+#  steps:
+#    # Skip e2e test execution if this is a documentation only pull request (master / release builds will still be checked regularly)
+#    - bash: |
+#        source ./tools/azure-pipelines/build_properties.sh
+#        is_docs_only_pullrequest
+#        if [[ "$?" == 0 ]] ; then
+#          echo "##[debug]This is a documentation-only change. Skipping e2e execution."
+#          echo "##vso[task.setvariable variable=skip;]1"
+#        else
+#          echo "##[debug]This is a regular CI build. Continuing ..."
+#          echo "##vso[task.setvariable variable=skip;]0"
+#        fi
+#      displayName: Check if Docs only PR
+#    - task: Cache@2
+#      inputs:
+#        key: $(CACHE_KEY)
+#        restoreKeys: $(CACHE_FALLBACK_KEY)
+#        path: $(MAVEN_CACHE_FOLDER)
+#      displayName: Cache Maven local repo
+#      continueOnError: true
+#      condition: not(eq(variables['SKIP'], '1'))
+#    - task: Cache@2
+#      inputs:
+#        key: e2e-cache | flink-end-to-end-tests/**/*.java, !**/avro/**
+#        path: $(E2E_CACHE_FOLDER)
+#      displayName: Cache E2E files
+#      continueOnError: true
+#      condition: not(eq(variables['SKIP'], '1'))
+#    - script: |
+#        echo "##vso[task.setvariable variable=JAVA_HOME]$JAVA_HOME_11_X64"
+#        echo "##vso[task.setvariable variable=PATH]$JAVA_HOME_11_X64/bin:$PATH"
+#      displayName: "Set to jdk11"
+#      condition: eq('${{parameters.jdk}}', 'jdk11')
+#    - script: |
+#        echo "Setting up Maven"
+#        source ./tools/ci/maven-utils.sh
+#        setup_maven
+#
+#        echo "Free up disk space"
+#        ./tools/azure-pipelines/free_disk_space.sh
+#
+#        echo "Installing required software"
+#        sudo apt-get install -y bc
+#      displayName: Prepare E2E run
+#      condition: not(eq(variables['SKIP'], '1'))
+#    - script: ${{parameters.environment}} ./tools/ci/compile.sh
+#      displayName: Build Flink
+#      condition: not(eq(variables['SKIP'], '1'))
+#    - script: ${{parameters.environment}} FLINK_DIR=`pwd`/build-target flink-end-to-end-tests/run-nightly-tests.sh
+#      displayName: Run e2e tests
+#      env:
+#        IT_CASE_S3_BUCKET: $(SECRET_S3_BUCKET)
+#        IT_CASE_S3_ACCESS_KEY: $(SECRET_S3_ACCESS_KEY)
+#        IT_CASE_S3_SECRET_KEY: $(SECRET_S3_SECRET_KEY)
+#      condition: not(eq(variables['SKIP'], '1'))
+#      # upload debug artifacts
+#    - task: PublishPipelineArtifact@1
+#      condition: and(succeededOrFailed(), not(eq(variables['SKIP'], '1')), not(eq(variables['ARTIFACT_DIR'], '')))
+#      displayName: Upload Logs
+#      inputs:
+#        targetPath: $(ARTIFACT_DIR)
+#        artifact: logs-${{parameters.stage_name}}-e2e
         
 
