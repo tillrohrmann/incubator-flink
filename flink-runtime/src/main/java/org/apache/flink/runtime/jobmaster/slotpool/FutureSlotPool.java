@@ -414,21 +414,17 @@ public class FutureSlotPool implements SlotPool {
 	public AllocatedSlotReport createAllocatedSlotReport(ResourceID taskManagerId) {
 		assertRunningInMainThread();
 
+		// TODO: Can be improved by asking the DeclarativeSlotPool for slots belonging to taskManagerId
 		final Collection<? extends SlotInfo> allocatedSlotsInformation = declarativeSlotPool.getAllSlotsInformation();
-		final Collection<SlotInfoWithUtilization> availableSlotsInformation = declarativeSlotPool.getFreeSlotsInformation();
 
 		final Collection<AllocatedSlotInfo> allocatedSlotInfos = new ArrayList<>();
 
 		for (SlotInfo slotInfo : allocatedSlotsInformation) {
-			allocatedSlotInfos.add(new AllocatedSlotInfo(
-				slotInfo.getPhysicalSlotNumber(),
-				slotInfo.getAllocationId()));
-		}
-
-		for (SlotInfoWithUtilization slotInfoWithUtilization : availableSlotsInformation) {
-			allocatedSlotInfos.add(new AllocatedSlotInfo(
-				slotInfoWithUtilization.getPhysicalSlotNumber(),
-				slotInfoWithUtilization.getAllocationId()));
+			if (slotInfo.getTaskManagerLocation().getResourceID().equals(taskManagerId)) {
+				allocatedSlotInfos.add(new AllocatedSlotInfo(
+					slotInfo.getPhysicalSlotNumber(),
+					slotInfo.getAllocationId()));
+			}
 		}
 
 		return new AllocatedSlotReport(jobId, allocatedSlotInfos);
