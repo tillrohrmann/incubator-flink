@@ -24,6 +24,9 @@ import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 import org.apache.flink.runtime.slotsbro.ResourceRequirements;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -36,6 +39,8 @@ import java.util.stream.Collectors;
  * Default {@link RequirementsTracker} implementation.
  */
 public class DefaultRequirementsTracker implements RequirementsTracker {
+
+	private static final Logger LOG = LoggerFactory.getLogger(DefaultRequirementsTracker.class);
 
 	private final Map<JobID, JobResources> jobResources = new LinkedHashMap<>();
 
@@ -57,6 +62,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	}
 
 	public void notifyLostResource(JobID jobId, ResourceProfile resourceProfile) {
+		LOG.debug("Notify lost resource {} of job {}.", resourceProfile, jobId);
 		findAndRemoveMatchingResource(jobId, resourceProfile, JobResourceState.ACQUIRED);
 		addResource(jobId, resourceProfile, JobResourceState.MISSING);
 	}
@@ -135,6 +141,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 		for (Map.Entry<JobID, ResourceRequirements> jobRequirements : resourceRequirementsByJob.entrySet()) {
 			final JobID jobId = jobRequirements.getKey();
 			final JobResources resources = jobResources.get(jobId);
+			LOG.debug("Job resources for job {}: {}", jobId, resources);
 			final Collection<ResourceRequirement> missingResources = resources.getMissingResources();
 
 			if (!missingResources.isEmpty()) {
@@ -153,6 +160,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	}
 
 	private void addResource(JobID jobId, ResourceProfile resourceProfile, JobResourceState resourceState) {
+		LOG.debug("Add resource {} for job {} with state {}.", resourceProfile, jobId, resourceState);
 		getJobResources(jobId).addResource(resourceProfile, resourceState);
 	}
 

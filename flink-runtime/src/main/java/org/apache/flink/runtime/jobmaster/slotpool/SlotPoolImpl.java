@@ -234,6 +234,8 @@ public class SlotPoolImpl implements SlotPool {
 
 		log.info("Suspending SlotPool.");
 
+		log.debug(printStatus());
+
 		cancelPendingSlotRequests();
 
 		// do not accept any requests
@@ -260,6 +262,8 @@ public class SlotPoolImpl implements SlotPool {
 	@Override
 	public void close() {
 		log.info("Stopping SlotPool.");
+
+		log.debug(printStatus());
 
 		cancelPendingSlotRequests();
 
@@ -641,6 +645,8 @@ public class SlotPoolImpl implements SlotPool {
 			}
 		}
 
+		log.debug("After slot offerings: {}", printStatus());
+
 		return result;
 	}
 
@@ -853,6 +859,7 @@ public class SlotPoolImpl implements SlotPool {
 	}
 
 	private void releaseTaskManagerInternal(final ResourceID resourceId, final Exception cause) {
+		log.debug("Release TaskManager {}.", resourceId, cause);
 		final Set<AllocatedSlot> removedSlots = new HashSet<>(allocatedSlots.removeSlotsForTaskManager(resourceId));
 
 		for (AllocatedSlot allocatedSlot : removedSlots) {

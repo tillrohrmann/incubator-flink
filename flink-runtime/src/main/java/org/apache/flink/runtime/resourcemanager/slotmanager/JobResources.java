@@ -21,6 +21,9 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.slotsbro.ResourceRequirement;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -33,6 +36,8 @@ import java.util.stream.Collectors;
  * Data-structure for tracking missing/pending/allocated resources.
  */
 class JobResources {
+
+	private static final Logger LOG = LoggerFactory.getLogger(JobResources.class);
 
 	private final Map<ResourceProfile, Integer> missingResources = new LinkedHashMap<>();
 	private final Map<ResourceProfile, Integer> acquiredResources = new HashMap<>();
@@ -50,6 +55,8 @@ class JobResources {
 	}
 
 	public void addResource(ResourceProfile resourceProfile, JobResourceState state) {
+		LOG.debug("Add resource {} with state {}.", resourceProfile, state);
+		LOG.debug("State before operation: {}", this);
 		switch (state) {
 			case MISSING:
 				incrementCount(missingResources, resourceProfile);
@@ -58,6 +65,7 @@ class JobResources {
 				incrementCount(acquiredResources, resourceProfile);
 				break;
 		}
+		LOG.debug("State after operation: {}", this);
 	}
 
 	private void incrementCount(Map<ResourceProfile, Integer> resources, ResourceProfile resourceProfile) {
@@ -67,7 +75,10 @@ class JobResources {
 	}
 
 	public void findAndRemoveMatchingResource(ResourceProfile profile, JobResourceState resourceState) {
+		LOG.debug("Find and remove matching resource {} with state {}.", profile, resourceState);
+		LOG.debug("State before operation: {}", this);
 		findAndRemoveResource(getResources(resourceState), profile);
+		LOG.debug("State after operation: {}", this);
 	}
 
 	private Iterator<ResourceProfile> getResources(JobResourceState state) {
@@ -89,6 +100,15 @@ class JobResources {
 			}
 		}
 	}
+
+	@Override
+	public String toString() {
+		return "JobResources{" +
+			"missingResources=" + missingResources +
+			", acquiredResources=" + acquiredResources +
+			'}';
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Testing
 	// ---------------------------------------------------------------------------------------------

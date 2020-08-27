@@ -150,6 +150,11 @@ final class TestingDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 	}
 
 	@Override
+	public void printStatus() {
+
+	}
+
+	@Override
 	public void releaseSlot(AllocationID allocationId, @Nullable Throwable cause, long currentTime) {
 		releaseSlotConsumer.accept(allocationId, cause, currentTime);
 	}

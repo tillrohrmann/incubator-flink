@@ -144,6 +144,8 @@ public class FutureSlotPool implements SlotPool {
 		assertRunningInMainThread();
 		LOG.info("Suspending FutureSlotPool.");
 
+		declarativeSlotPool.printStatus();
+
 		cancelPendingRequests();
 		clearState();
 	}
@@ -175,6 +177,9 @@ public class FutureSlotPool implements SlotPool {
 	@Override
 	public void close() {
 		LOG.info("Closing FutureSlotPool.");
+
+		declarativeSlotPool.printStatus();
+
 		cancelPendingRequests();
 		releaseAllTaskManagers(new FlinkException("Closing FutureSlotPool."));
 		clearState();
@@ -231,6 +236,7 @@ public class FutureSlotPool implements SlotPool {
 	}
 
 	private void internalReleaseTaskManager(ResourceID resourceId, Exception cause) {
+		LOG.debug("Release TaskManager {}.", resourceId, cause);
 		declarativeSlotPool.failSlots(resourceId, cause);
 	}
 

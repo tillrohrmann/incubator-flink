@@ -165,4 +165,6 @@ public interface DeclarativeSlotPoolNg {
 	// TODO: Try to get rid of this method; a prerequisite is probably a non static matching between the resource requirements
 	//  and slots, meaning that a slot can match against different resource requirements at different points in time
 	PhysicalSlot allocateFreeSlotForResource(AllocationID allocationId, ResourceProfile requiredSlotProfile);
+
+	void printStatus();
 }

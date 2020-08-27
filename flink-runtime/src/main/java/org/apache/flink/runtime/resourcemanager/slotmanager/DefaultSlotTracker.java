@@ -124,6 +124,7 @@ public class DefaultSlotTracker {
 	}
 
 	public boolean notifySlotAllocation(SlotID slotId, JobID jobId) {
+		LOG.debug("Notify slot allocation {} for job {}.", slotId, jobId);
 		return internalUpdateSlot(slotId, jobId, false);
 	}
 

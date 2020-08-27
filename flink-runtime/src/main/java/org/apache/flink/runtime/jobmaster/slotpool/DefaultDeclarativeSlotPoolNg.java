@@ -139,7 +139,8 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 			TaskManagerLocation taskManagerLocation,
 			TaskManagerGateway taskManagerGateway,
 			long currentTime) {
-		LOG.debug("Received {} slot offers from TaskExecutor {}.", offers.size(), taskManagerLocation);
+		LOG.debug("Received {} slot offers from TaskExecutor {}: {}", offers.size(), taskManagerLocation, offers);
+		printStatus();
 		final Collection<SlotOffer> acceptedSlotOffers = new ArrayList<>();
 		final Collection<SlotOffer> candidates = new ArrayList<>();
 
@@ -177,6 +178,8 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 			}
 		}
 
+		LOG.debug("Accepted offers: {}", acceptedSlotOffers);
+
 		slotPool.addSlots(acceptedSlots, currentTime);
 		increaseAvailableResources(acceptedResources);
 
@@ -185,6 +188,14 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		}
 
 		return acceptedSlotOffers;
+	}
+
+	public void printStatus() {
+		final StringBuilder result = new StringBuilder();
+		result.append("Resource requirements: ").append(resourceRequirements).append("\n")
+			.append("Available resources: ").append(availableResources);
+
+		LOG.debug(result.toString());
 	}
 
 	private AllocatedSlot createAllocatedSlot(
@@ -382,7 +393,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		for (AllocatedSlot slotToReturn : slotsToReturnToOwner) {
 			Preconditions.checkState(!slotToReturn.isUsed(), "Free slot must not be used.");
 
-			LOG.info("Releasing slot [{}].", slotToReturn.getAllocationId());
+			LOG.info("Return slot [{}] to its owner.", slotToReturn.getAllocationId());
 
 			final ResourceProfile matchingResourceProfile = getMatchingResourceProfile(slotToReturn.getAllocationId());
 			availableResources = availableResources.subtract(matchingResourceProfile, 1);
