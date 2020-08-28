@@ -255,26 +255,45 @@ public class FutureSlotPool implements SlotPool {
 			}
 		}
 
+		final Collection<PendingRequestSlotMatching> matchingsToFulfill = new ArrayList<>();
+
 		for (PhysicalSlot newSlot : slotsToProcess) {
 			final Optional<PendingRequest> matchingPendingRequest = findMatchingPendingRequest(newSlot);
 
 			matchingPendingRequest.ifPresent(pendingRequest -> {
 				Preconditions.checkNotNull(pendingRequests.remove(pendingRequest.getSlotRequestId()), "Cannot fulfill a non existing pending slot request.");
-				fulfillPendingRequest(newSlot, pendingRequest);
+				allocateFreeSlot(pendingRequest.getSlotRequestId(), newSlot.getAllocationId());
+
+				matchingsToFulfill.add(PendingRequestSlotMatching.createFor(pendingRequest, newSlot));
 			});
 
 			newSlotsSet.remove(newSlot.getAllocationId());
 		}
 
+		// we have to first allocate all matching slots before fulfilling the requests
+		// otherwise it can happen that the SchedulerImpl allocates one of the new slots
+		// for a request which has been triggered by fulfilling a pending request
+		for (PendingRequestSlotMatching pendingRequestSlotMatching : matchingsToFulfill) {
+			pendingRequestSlotMatching.fulfillPendingRequest();
+		}
 	}
 
-	private void fulfillPendingRequest(PhysicalSlot newSlot, PendingRequest pendingRequest) {
-		final SlotRequestId slotRequestId = pendingRequest.getSlotRequestId();
-		final AllocationID allocationId = newSlot.getAllocationId();
+	private static final class PendingRequestSlotMatching {
+		private final PendingRequest pendingRequest;
+		private final PhysicalSlot matchedSlot;
 
-		allocateFreeSlot(slotRequestId, allocationId);
+		private PendingRequestSlotMatching(PendingRequest pendingRequest, PhysicalSlot matchedSlot) {
+			this.pendingRequest = pendingRequest;
+			this.matchedSlot = matchedSlot;
+		}
 
-		Preconditions.checkState(pendingRequest.fulfill(newSlot), "Pending requests must be fulfillable.");
+		private static PendingRequestSlotMatching createFor(PendingRequest pendingRequest, PhysicalSlot newSlot) {
+			return new PendingRequestSlotMatching(pendingRequest, newSlot);
+		}
+
+		private void fulfillPendingRequest() {
+			Preconditions.checkState(pendingRequest.fulfill(matchedSlot), "Pending requests must be fulfillable.");
+		}
 	}
 
 	private void allocateFreeSlot(SlotRequestId slotRequestId, AllocationID allocationId) {
