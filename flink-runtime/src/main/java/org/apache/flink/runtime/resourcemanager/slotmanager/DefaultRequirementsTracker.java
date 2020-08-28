@@ -65,13 +65,14 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 			.map(ResourceRequirements::getResourceRequirements)
 			.orElse(Collections.emptyList())
 			.stream()
-			.filter(req -> req.getResourceProfile().equals(resourceProfile))
+			// the comparison order is important; the requirement must not come first since it contains UNKNOWN which doesn't match anything
+			.filter(req -> resourceProfile.isMatching(req.getResourceProfile()))
 			.findAny();
 
 		final int numberOfRequiredSlots = correspondingRequirement.map(ResourceRequirement::getNumberOfRequiredSlots).orElse(0);
 		if (numberOfRequiredSlots > 0) {
 
-			final JobResources jobResources = this.jobResources.get(jobId);
+			final JobResources jobResources = getJobResources(jobId);
 			// TODO: the underlying problem here could be the explicit notion of missing resources
 			// TODO: if they were implicitly defined via requirements-acquiredResources we wouldn't have to deal with this
 			final int numberOfRequestedSlots = jobResources.getNumResources(JobResourceState.MISSING) + jobResources.getNumResources(JobResourceState.ACQUIRED);
@@ -155,7 +156,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 		// to a job without us having a requirement for the corresponding job
 		for (Map.Entry<JobID, ResourceRequirements> jobRequirements : resourceRequirementsByJob.entrySet()) {
 			final JobID jobId = jobRequirements.getKey();
-			final JobResources resources = jobResources.get(jobId);
+			final JobResources resources = getJobResources(jobId);
 			final Collection<ResourceRequirement> missingResources = resources.getMissingResources();
 
 			if (!missingResources.isEmpty()) {
