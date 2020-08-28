@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 
 /**
  * Default {@link RequirementsTracker} implementation.
+ * TODO: add more logging, tests, package-private test method for checking that maps are empty to prevent leaks
  */
 public class DefaultRequirementsTracker implements RequirementsTracker {
 
@@ -92,6 +93,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 			return;
 		}
 
+		// TODO: remove excess missing resources
 		ResourceRequirements previousResourceRequirements = this.resourceRequirementsByJob.put(resourceRequirements.getJobId(), resourceRequirements);
 		if (previousResourceRequirements != null) {
 			Optional<ResourceRequirements> newlyRequiredResources = computeNewlyRequiredResources(previousResourceRequirements, resourceRequirements);

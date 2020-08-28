@@ -35,6 +35,7 @@ import java.util.Optional;
 
 /**
  * Default SlotTracker implementation.
+ * TODO: add interface, tests, package-private test method for checking that maps are empty to prevent leaks
  */
 public class DefaultSlotTracker {
 	private static final Logger LOG = LoggerFactory.getLogger(DefaultSlotTracker.class);
@@ -256,6 +257,7 @@ public class DefaultSlotTracker {
 	}
 
 	@VisibleForTesting
+	// TODO: shouldn't be public
 	public DeclarativeTaskManagerSlot getSlot(SlotID slotId) {
 		return slots.get(slotId);
 	}

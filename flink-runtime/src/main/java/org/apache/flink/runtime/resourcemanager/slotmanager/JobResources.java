@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
  */
 class JobResources {
 
+	// TODO: maybe use org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter
 	private final Map<ResourceProfile, Integer> missingResources = new LinkedHashMap<>();
 	private final Map<ResourceProfile, Integer> acquiredResources = new HashMap<>();
 
@@ -41,6 +42,7 @@ class JobResources {
 		return missingResources.entrySet().stream().map(entry -> ResourceRequirement.create(entry.getKey(), entry.getValue())).collect(Collectors.toList());
 	}
 
+	// TODO: rename
 	public Collection<ResourceRequirement> getPendingAndAllocatedResources() {
 		return acquiredResources
 			.entrySet()

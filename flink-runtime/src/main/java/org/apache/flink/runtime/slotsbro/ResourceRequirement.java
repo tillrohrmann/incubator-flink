@@ -23,7 +23,7 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * TODO: Add javadoc.
+ * TODO: Add javadoc; move to other package.
  */
 public class ResourceRequirement implements Serializable {
 

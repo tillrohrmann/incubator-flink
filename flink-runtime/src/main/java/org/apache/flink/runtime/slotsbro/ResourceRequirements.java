@@ -25,7 +25,7 @@ import java.util.Collections;
 import java.util.Objects;
 
 /**
- * TODO: Add javadoc.
+ * TODO: Add javadoc; move to other package.
  */
 public class ResourceRequirements implements Serializable {
 

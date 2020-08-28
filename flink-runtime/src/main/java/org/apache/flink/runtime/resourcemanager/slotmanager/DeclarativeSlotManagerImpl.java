@@ -130,6 +130,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	private final DefaultRequirementsTracker resourceTracker;
 
+	// TODO: add tracker constructor arguments
 	public DeclarativeSlotManagerImpl(
 			ScheduledExecutor scheduledExecutor,
 			SlotManagerConfiguration slotManagerConfiguration,
@@ -303,6 +304,8 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	private void registerSlotManagerMetrics() {
+		// TODO: are there interesting opportunities for additional metrics?
+		// TODO: job-scoped missing/acquired slots? time-since-requirements-(not-)fulfilled
 		slotManagerMetricGroup.gauge(
 			MetricNames.TASK_SLOTS_AVAILABLE,
 			() -> (long) getNumberFreeSlots());
@@ -482,6 +485,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	}
 
 	@Override
+	// TODO: figure out whether this should just be a no-op
 	public void setFailUnfulfillableRequest(boolean failUnfulfillableRequest) {
 		if (!this.failUnfulfillableRequest && failUnfulfillableRequest) {
 			// TODO: fail unfulfillable pending requests
@@ -563,6 +567,8 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 			if (reservedSlot.isPresent()) {
 				allocateSlot(reservedSlot.get(), jobId, targetAddress, resourceProfile);
 			} else {
+				// TODO: don't return pending slot; instead check total set of required slots against set of pending slots
+				// TODO: simple implementation would copy the pendingSlots collection, and go through a similar loop as for actual slots
 				Optional<PendingTaskManagerSlot> pendingTaskManagerSlot = allocateResource(resourceProfile);
 				if (!pendingTaskManagerSlot.isPresent()) {
 					// this isn't really correct, since we are not reserving the pending slot
@@ -581,10 +587,13 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		}
 
 		if (!allRequirementsMayBeFulfilled) {
+			// TODO: this should only be done once per job; return a boolean here and merge it with the result for
+			// TODO: other Requirements
 			resourceActions.notifyNotEnoughResourcesAvailable(jobId, resourceTracker.getAcquiredResources(jobId));
 		}
 	}
 
+	// TODO: remove; inherently flawed since one _big_ slot can fulfill all requirements
 	private boolean isFulfillableByPendingSlots(ResourceProfile resourceProfile) {
 		for (PendingTaskManagerSlot slot : pendingSlots.values()) {
 			if (slot.getResourceProfile().isMatching(resourceProfile)) {
@@ -623,6 +632,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		return allocatedWorkerNum;
 	}
 
+	// TODO: everything related to allocating a task executor should go into a separate component
 	private Optional<PendingTaskManagerSlot> allocateResource(ResourceProfile requestedSlotResourceProfile) {
 		final int numRegisteredSlots =  getNumberRegisteredSlots();
 		final int numPendingSlots = getNumberPendingTaskManagerSlots();
@@ -835,6 +845,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	// Testing methods
 	// ---------------------------------------------------------------------------------------------
 
+	// TODO: get rid of these methods
 	@VisibleForTesting
 	int getNumResources(JobID jobId, JobResourceState state) {
 		return resourceTracker.getNumResources(jobId, state);
