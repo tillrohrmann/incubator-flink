@@ -68,7 +68,6 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	@Override
 	public void notifyResourceRequirements(ResourceRequirements resourceRequirements) {
 		if (resourceRequirements.getResourceRequirements().isEmpty()) {
-			jobResources.remove(resourceRequirements.getJobId());
 			resourceRequirementsByJob.remove(resourceRequirements.getJobId());
 			return;
 		}
@@ -157,7 +156,12 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	}
 
 	private void findAndRemoveMatchingResource(JobID jobId, ResourceProfile profile, JobResourceState resourceState) {
-		getJobResources(jobId).findAndRemoveMatchingResource(profile, resourceState);
+		JobResources jobResources = getJobResources(jobId);
+		jobResources.findAndRemoveMatchingResource(profile, resourceState);
+		// TODO: add a more convenient way ot checking this, or built this removal again into the iterator?
+		if (jobResources.getNumResources(JobResourceState.MISSING) == 0 && jobResources.getNumResources(JobResourceState.ACQUIRED) == 0) {
+			this.jobResources.remove(jobId);
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
