@@ -38,6 +38,11 @@ import java.util.stream.Collectors;
  */
 public class DefaultRequirementsTracker implements RequirementsTracker {
 
+	// TODO: rework the tracking of requirements/resource
+	// TODO: introduce a bi-directional mapping between requirements <-> missing/acquired resources
+	// TODO: when requirements are decreased this trivially allows to remove excess missing requirements#
+	// TODO: when a slot is lost we can easily figure out which requirement we used it for, and check whether we need a new slot
+
 	private final Map<JobID, JobResources> jobResources = new LinkedHashMap<>();
 
 	private final Map<JobID, ResourceRequirements> resourceRequirementsByJob = new LinkedHashMap<>();
@@ -82,6 +87,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 			final int numberOfRequestedSlots = jobResources.getNumResources(JobResourceState.MISSING) + jobResources.getNumResources(JobResourceState.ACQUIRED);
 
 			if (numberOfRequestedSlots < numberOfRequiredSlots) {
+				// TODO: this MUST use the resource profile of the requirement!
 				addResource(jobId, resourceProfile, JobResourceState.MISSING);
 			}
 		}
