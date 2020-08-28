@@ -60,6 +60,10 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 	public void notifyLostResource(JobID jobId, ResourceProfile resourceProfile) {
 		findAndRemoveMatchingResource(jobId, resourceProfile, JobResourceState.ACQUIRED);
 
+		// TODO: this needs a more sophisticated solution; the current one will not work if different resource profiles are used
+		// TODO: it may be useful if a missing/acquired resource could be traced back to a original requirement, without having to
+		// TODO: do another full matching of all resources to all requirements
+
 		// TODO: a lookup would be useful for this
 		final Optional<ResourceRequirement> correspondingRequirement = Optional.ofNullable(resourceRequirementsByJob.get(jobId))
 			.map(ResourceRequirements::getResourceRequirements)
