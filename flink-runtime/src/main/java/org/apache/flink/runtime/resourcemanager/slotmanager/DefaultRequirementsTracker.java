@@ -58,7 +58,27 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 
 	public void notifyLostResource(JobID jobId, ResourceProfile resourceProfile) {
 		findAndRemoveMatchingResource(jobId, resourceProfile, JobResourceState.ACQUIRED);
-		addResource(jobId, resourceProfile, JobResourceState.MISSING);
+
+		// TODO: a lookup would be useful for this
+		final Optional<ResourceRequirement> correspondingRequirement = Optional.ofNullable(resourceRequirementsByJob.get(jobId))
+			.map(ResourceRequirements::getResourceRequirements)
+			.orElse(Collections.emptyList())
+			.stream()
+			.filter(req -> req.getResourceProfile().equals(resourceProfile))
+			.findAny();
+
+		final int numberOfRequiredSlots = correspondingRequirement.map(ResourceRequirement::getNumberOfRequiredSlots).orElse(0);
+		if (numberOfRequiredSlots > 0) {
+
+			final JobResources jobResources = this.jobResources.get(jobId);
+			// TODO: the underlying problem here could be the explicit notion of missing resources
+			// TODO: if they were implicitly defined via requirements-acquiredResources we wouldn't have to deal with this
+			final int numberOfRequestedSlots = jobResources.getNumResources(JobResourceState.MISSING) + jobResources.getNumResources(JobResourceState.ACQUIRED);
+
+			if (numberOfRequestedSlots < numberOfRequiredSlots) {
+				addResource(jobId, resourceProfile, JobResourceState.MISSING);
+			}
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------
