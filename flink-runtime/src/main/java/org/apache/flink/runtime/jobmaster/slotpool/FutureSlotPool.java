@@ -354,9 +354,14 @@ public class FutureSlotPool implements SlotPool {
 	public Collection<SlotInfo> getAllocatedSlotsInformation() {
 		assertRunningInMainThread();
 
-		@SuppressWarnings("unchecked")
-		final Collection<SlotInfo> result = (Collection<SlotInfo>) declarativeSlotPool.getAllSlotsInformation();
-		return result;
+		final Collection<? extends SlotInfo> allSlotsInformation = declarativeSlotPool.getAllSlotsInformation();
+		final Set<AllocationID> freeSlots = declarativeSlotPool.getFreeSlotsInformation().stream()
+			.map(SlotInfoWithUtilization::getAllocationId)
+			.collect(Collectors.toSet());
+
+		return allSlotsInformation.stream()
+			.filter(slotInfo -> !freeSlots.contains(slotInfo.getAllocationId()))
+			.collect(Collectors.toList());
 	}
 
 	@Override
