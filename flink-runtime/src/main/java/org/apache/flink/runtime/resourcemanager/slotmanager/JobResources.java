@@ -42,8 +42,7 @@ class JobResources {
 		return missingResources.entrySet().stream().map(entry -> ResourceRequirement.create(entry.getKey(), entry.getValue())).collect(Collectors.toList());
 	}
 
-	// TODO: rename
-	public Collection<ResourceRequirement> getPendingAndAllocatedResources() {
+	public Collection<ResourceRequirement> getAcquiredResources() {
 		return acquiredResources
 			.entrySet()
 			.stream()

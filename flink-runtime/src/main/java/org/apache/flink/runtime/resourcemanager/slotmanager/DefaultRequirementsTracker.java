@@ -156,7 +156,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 		if (jobResources == null) {
 			return Collections.emptyList();
 		}
-		return jobResources.getPendingAndAllocatedResources();
+		return jobResources.getAcquiredResources();
 	}
 
 	private Collection<ResourceRequirements> checkWhetherAnyResourceRequirementsAreUnderBudget() {
