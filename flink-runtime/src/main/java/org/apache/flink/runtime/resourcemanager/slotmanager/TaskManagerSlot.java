@@ -62,7 +62,7 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 	/** Assigned slot request if there is currently an ongoing request. */
 	private PendingSlotRequest assignedSlotRequest;
 
-	private State state;
+	private SlotState state;
 
 	private CompletableFuture<Acknowledge> allocationFuture;
 
@@ -76,12 +76,12 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 		this.resourceProfile = checkNotNull(resourceProfile);
 		this.taskManagerConnection = checkNotNull(taskManagerConnection);
 
-		this.state = State.FREE;
+		this.state = SlotState.FREE;
 		this.allocationId = null;
 		this.assignedSlotRequest = null;
 	}
 
-	public State getState() {
+	public SlotState getState() {
 		return state;
 	}
 
@@ -122,32 +122,32 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 	}
 
 	public void freeSlot() {
-		Preconditions.checkState(state == State.ALLOCATED, "Slot must be allocated before freeing it.");
+		Preconditions.checkState(state == SlotState.ALLOCATED, "Slot must be allocated before freeing it.");
 
-		state = State.FREE;
+		state = SlotState.FREE;
 		allocationId = null;
 		jobId = null;
 	}
 
 	public void clearPendingSlotRequest() {
-		Preconditions.checkState(state == State.PENDING, "No slot request to clear.");
+		Preconditions.checkState(state == SlotState.PENDING, "No slot request to clear.");
 
-		state = State.FREE;
+		state = SlotState.FREE;
 		assignedSlotRequest = null;
 	}
 
 	public void assignPendingSlotRequest(PendingSlotRequest pendingSlotRequest) {
-		Preconditions.checkState(state == State.FREE, "Slot must be free to be assigned a slot request.");
+		Preconditions.checkState(state == SlotState.FREE, "Slot must be free to be assigned a slot request.");
 
-		state = State.PENDING;
+		state = SlotState.PENDING;
 		assignedSlotRequest = Preconditions.checkNotNull(pendingSlotRequest);
 	}
 
 	public void setAllocationFuture(JobID jobId, CompletableFuture<Acknowledge> allocationFuture) {
-		Preconditions.checkState(state == State.FREE, "Slot must be free to be assigned a slot request.");
+		Preconditions.checkState(state == SlotState.FREE, "Slot must be free to be assigned a slot request.");
 
 		this.jobId = jobId;
-		state = State.PENDING;
+		state = SlotState.PENDING;
 		assignedSlotRequest = DUMMY_REQUEST;
 		this.allocationStartTimeStamp = System.currentTimeMillis();
 		this.allocationFuture = Preconditions.checkNotNull(allocationFuture);
@@ -160,19 +160,19 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 	public void completeAllocation(AllocationID allocationId, JobID jobId) {
 		Preconditions.checkNotNull(allocationId, "Allocation id must not be null.");
 		Preconditions.checkNotNull(jobId, "Job id must not be null.");
-		Preconditions.checkState(state == State.PENDING, "In order to complete an allocation, the slot has to be allocated.");
+		Preconditions.checkState(state == SlotState.PENDING, "In order to complete an allocation, the slot has to be allocated.");
 		Preconditions.checkState(Objects.equals(allocationId, assignedSlotRequest.getAllocationId()), "Mismatch between allocation id of the pending slot request.");
 
-		state = State.ALLOCATED;
+		state = SlotState.ALLOCATED;
 		this.allocationId = allocationId;
 		this.jobId = jobId;
 		assignedSlotRequest = null;
 	}
 
 	public void updateAllocation(AllocationID allocationId, JobID jobId) {
-		Preconditions.checkState(state == State.FREE, "The slot has to be free in order to set an allocation id.");
+		Preconditions.checkState(state == SlotState.FREE, "The slot has to be free in order to set an allocation id.");
 
-		state = State.ALLOCATED;
+		state = SlotState.ALLOCATED;
 		this.allocationId = Preconditions.checkNotNull(allocationId);
 		this.jobId = Preconditions.checkNotNull(jobId);
 	}
@@ -186,14 +186,5 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 	@Override
 	public boolean isMatchingRequirement(ResourceProfile required) {
 		return resourceProfile.isMatching(required);
-	}
-
-	/**
-	 * State of the {@link TaskManagerSlot}.
-	 */
-	public enum State {
-		FREE,
-		PENDING,
-		ALLOCATED
 	}
 }
