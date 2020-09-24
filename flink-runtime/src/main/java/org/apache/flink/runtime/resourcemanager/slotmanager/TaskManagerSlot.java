@@ -95,6 +95,7 @@ public class TaskManagerSlot implements TaskManagerSlotInformation {
 		return resourceProfile;
 	}
 
+	@Override
 	public TaskExecutorConnection getTaskManagerConnection() {
 		return taskManagerConnection;
 	}
