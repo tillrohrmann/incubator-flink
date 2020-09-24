@@ -22,243 +22,235 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.clusterframework.types.SlotID;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
-import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.SlotStatus;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.Optional;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * Default SlotTracker implementation.
- * TODO: add interface, tests, package-private test method for checking that maps are empty to prevent leaks
  */
-public class DefaultSlotTracker {
+class DefaultSlotTracker implements SlotTracker {
 	private static final Logger LOG = LoggerFactory.getLogger(DefaultSlotTracker.class);
 
 	/**
 	 * Map for all registered slots.
 	 */
-	private final HashMap<SlotID, DeclarativeTaskManagerSlot> slots = new HashMap<>();
+	private final Map<SlotID, DeclarativeTaskManagerSlot> slots = new HashMap<>();
 
 	/**
 	 * Index of all currently free slots.
 	 */
-	private final LinkedHashMap<SlotID, DeclarativeTaskManagerSlot> freeSlots = new LinkedHashMap<>();
-
-	private final TaskManagerAgnosticSlotMatchingStrategy slotMatchingStrategy;
+	private final Map<SlotID, DeclarativeTaskManagerSlot> freeSlots = new LinkedHashMap<>();
 
 	private final SlotStatusUpdateListener slotStatusUpdateListener;
 
-	public DefaultSlotTracker(TaskManagerAgnosticSlotMatchingStrategy slotMatchingStrategy, SlotStatusUpdateListener slotStatusUpdateListener) {
-		this.slotMatchingStrategy = slotMatchingStrategy;
-		this.slotStatusUpdateListener = slotStatusUpdateListener;
+	private final SlotStatusStateReconciler slotStatusStateReconciler = new SlotStatusStateReconciler(this::transitionSlotToFree, this::transitionSlotToPending, this::transitionSlotToAllocated);
+
+	public DefaultSlotTracker(SlotStatusUpdateListener slotStatusUpdateListener) {
+		this.slotStatusUpdateListener = Preconditions.checkNotNull(slotStatusUpdateListener);
 	}
 
+	@Override
 	public void addSlot(
 		SlotID slotId,
-		JobID jobId,
 		ResourceProfile resourceProfile,
-		TaskExecutorConnection taskManagerConnection) {
+		TaskExecutorConnection taskManagerConnection,
+		@Nullable JobID assignedJob) {
+		Preconditions.checkNotNull(slotId);
+		Preconditions.checkNotNull(resourceProfile);
+		Preconditions.checkNotNull(taskManagerConnection);
 
 		if (slots.containsKey(slotId)) {
 			// remove the old slot first
+			LOG.debug("A slot was added with an already tracked slot ID {}. Removing previous entry.", slotId);
 			removeSlot(slotId);
 		}
 
-		createAndRegisterTaskManagerSlot(slotId, resourceProfile, taskManagerConnection);
-		notifySlotAllocation(slotId, jobId);
-	}
-
-	public void notifyAllocationStart(SlotID slotId, JobID jobId) {
-		transitionSlotToPending(slots.get(slotId), jobId);
-	}
-
-	private void createAndRegisterTaskManagerSlot(SlotID slotId, ResourceProfile resourceProfile, TaskExecutorConnection taskManagerConnection) {
-		final DeclarativeTaskManagerSlot slot = new DeclarativeTaskManagerSlot(
-			slotId,
-			resourceProfile,
-			taskManagerConnection);
+		DeclarativeTaskManagerSlot slot = new DeclarativeTaskManagerSlot(slotId, resourceProfile, taskManagerConnection);
 		slots.put(slotId, slot);
+		freeSlots.put(slotId, slot);
+		slotStatusStateReconciler.executeStateTransition(slot, assignedJob);
 	}
 
-	public boolean freeSlot(SlotID slotId) {
-		DeclarativeTaskManagerSlot slot = slots.get(slotId);
-
-		if (null != slot) {
-			transitionSlotToFree(slot, false);
-		} else {
-			LOG.debug("Trying to free a slot {} which has not been registered. Ignoring this message.", slotId);
-		}
-		return false;
-	}
-
-	/**
-	 * Removes the given set of slots from the slot manager.
-	 *
-	 * @param slotsToRemove identifying the slots to remove from the slot manager
-	 */
+	@Override
 	public void removeSlots(Iterable<SlotID> slotsToRemove) {
+		Preconditions.checkNotNull(slotsToRemove);
+
 		for (SlotID slotId : slotsToRemove) {
 			removeSlot(slotId);
 		}
 	}
 
-	/**
-	 * Removes the given slot from the slot manager.
-	 *
-	 * @param slotId identifying the slot to remove
-	 */
 	private void removeSlot(SlotID slotId) {
 		DeclarativeTaskManagerSlot slot = slots.remove(slotId);
 
-		if (null != slot) {
-			transitionSlotToFree(slot, false);
+		if (slot != null) {
+			if (slot.getState() != SlotState.FREE) {
+				transitionSlotToFree(slot);
+			}
 			freeSlots.remove(slotId);
 		} else {
 			LOG.debug("There was no slot registered with slot id {}.", slotId);
 		}
 	}
 
-	public boolean notifySlotAllocation(SlotID slotId, JobID jobId) {
-		return internalUpdateSlot(slotId, jobId, false);
+	// ---------------------------------------------------------------------------------------------
+	// ResourceManager slot status API - optimistically trigger transitions, but they may not represent true state on task executors
+	// ---------------------------------------------------------------------------------------------
+
+	@Override
+	public void notifyFree(SlotID slotId) {
+		Preconditions.checkNotNull(slotId);
+		transitionSlotToFree(slots.get(slotId));
 	}
 
-	public void notifySlotReport(SlotReport slotReport) {
-		for (SlotStatus slotStatus : slotReport) {
-			internalUpdateSlot(slotStatus.getSlotID(), slotStatus.getJobID(), true);
+	@Override
+	public void notifyAllocationStart(SlotID slotId, JobID jobId) {
+		Preconditions.checkNotNull(slotId);
+		Preconditions.checkNotNull(jobId);
+		transitionSlotToPending(slots.get(slotId), jobId);
+	}
+
+	@Override
+	public void notifyAllocationComplete(SlotID slotId, JobID jobId) {
+		Preconditions.checkNotNull(slotId);
+		Preconditions.checkNotNull(jobId);
+		transitionSlotToAllocated(slots.get(slotId), jobId);
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// TaskExecutor slot status API - acts as source of truth
+	// ---------------------------------------------------------------------------------------------
+
+	@Override
+	public void notifySlotStatus(Iterable<SlotStatus> slotStatuses) {
+		Preconditions.checkNotNull(slotStatuses);
+		for (SlotStatus slotStatus : slotStatuses) {
+			slotStatusStateReconciler.executeStateTransition(slots.get(slotStatus.getSlotID()), slotStatus.getJobID());
 		}
 	}
 
-	private boolean internalUpdateSlot(SlotID slotId, JobID jobId, boolean ignoreTransitionFromPending) {
-		final DeclarativeTaskManagerSlot slot = slots.get(slotId);
+	// ---------------------------------------------------------------------------------------------
+	// Core state transitions
+	// ---------------------------------------------------------------------------------------------
 
-		if (slot != null) {
-			if (jobId == null) {
-				transitionSlotToFree(slot, ignoreTransitionFromPending);
-			} else {
-				transitionsSlotToAllocated(slot, jobId);
-			}
+	private void transitionSlotToFree(DeclarativeTaskManagerSlot slot) {
+		Preconditions.checkNotNull(slot);
+		Preconditions.checkState(slot.getState() != SlotState.FREE);
 
-			return true;
-		} else {
-			LOG.debug("Trying to update unknown slot with slot id {}.", slotId);
+		// remember the slots current job and state for the notification, as this information will be cleared from
+		// the slot upon freeing
+		final JobID jobId = slot.getJobId();
+		final SlotState state = slot.getState();
 
-			return false;
-		}
+		slot.freeSlot();
+		freeSlots.put(slot.getSlotId(), slot);
+		slotStatusUpdateListener.notifySlotStatusChange(slot, state, SlotState.FREE, jobId);
 	}
 
 	private void transitionSlotToPending(DeclarativeTaskManagerSlot slot, JobID jobId) {
-		switch (slot.getState()) {
-			case FREE:
-				// the slot is currently free --> it is stored in freeSlots
-				freeSlots.remove(slot.getSlotId());
-				slot.startAllocation(jobId);
-				slotStatusUpdateListener.notifySlotStatusChange(slot, SlotState.FREE, SlotState.PENDING, jobId, slot.getResourceProfile());
-				break;
-			case PENDING:
-				break;
-			case ALLOCATED:
-				transitionSlotToFree(slot, true);
-				transitionSlotToPending(slot, jobId);
-				break;
-		}
+		Preconditions.checkNotNull(slot);
+		Preconditions.checkState(slot.getState() == SlotState.FREE);
+
+		slot.startAllocation(jobId);
+		freeSlots.remove(slot.getSlotId());
+		slotStatusUpdateListener.notifySlotStatusChange(slot, SlotState.FREE, SlotState.PENDING, jobId);
 	}
 
-	private void transitionsSlotToAllocated(DeclarativeTaskManagerSlot slot, JobID jobId) {
-		switch (slot.getState()) {
-			case PENDING:
-				if (!jobId.equals(slot.getJobId())) {
-					transitionSlotToFree(slot, false);
-					transitionSlotToPending(slot, jobId);
-					transitionsSlotToAllocated(slot, jobId);
-				} else {
-					slotStatusUpdateListener.notifySlotStatusChange(slot, SlotState.PENDING, SlotState.ALLOCATED, jobId, slot.getResourceProfile());
-					slot.completeAllocation();
-				}
-				break;
-			case ALLOCATED:
-				break;
-			case FREE:
-				transitionSlotToPending(slot, jobId);
-				transitionsSlotToAllocated(slot, jobId);
-				break;
-		}
+	private void transitionSlotToAllocated(DeclarativeTaskManagerSlot slot, JobID jobId) {
+		Preconditions.checkNotNull(slot);
+		Preconditions.checkState(slot.getState() == SlotState.PENDING);
+		Preconditions.checkState(jobId.equals(slot.getJobId()));
+
+		slotStatusUpdateListener.notifySlotStatusChange(slot, SlotState.PENDING, SlotState.ALLOCATED, jobId);
+		slot.completeAllocation();
 	}
 
-	private void transitionSlotToFree(DeclarativeTaskManagerSlot slot, boolean ignoreTransitionFromPending) {
-		switch (slot.getState()) {
-			case FREE:
-				handleFreeSlot(slot);
-				break;
-			case PENDING:
-				if (!ignoreTransitionFromPending) {
-					internalFreeSlot(slot);
-				}
-				// don't do anything because we expect the slot to be allocated soon
-				break;
-			case ALLOCATED:
-				internalFreeSlot(slot);
-				break;
-		}
-	}
+	// ---------------------------------------------------------------------------------------------
+	// Misc
+	// ---------------------------------------------------------------------------------------------
 
-	private void internalFreeSlot(DeclarativeTaskManagerSlot slot) {
-		slotStatusUpdateListener.notifySlotStatusChange(slot, slot.getState(), SlotState.FREE, slot.getJobId(), slot.getResourceProfile());
-		switch (slot.getState()) {
-			case FREE:
-				break;
-			case PENDING:
-				slot.cancelAllocation();
-				handleFreeSlot(slot);
-				break;
-			case ALLOCATED:
-				slot.freeSlot();
-				handleFreeSlot(slot);
-		}
-	}
-
-	/**
-	 * Handles a free slot. It first tries to find a pending slot request which can be fulfilled.
-	 * If there is no such request, then it will add the slot to the set of free slots.
-	 *
-	 * @param freeSlot to find a new slot request for
-	 */
-	private void handleFreeSlot(DeclarativeTaskManagerSlot freeSlot) {
-		Preconditions.checkState(freeSlot.getState() == SlotState.FREE);
-
-		freeSlots.put(freeSlot.getSlotId(), freeSlot);
-	}
-
-	public Optional<DeclarativeTaskManagerSlot> findAndReserveMatchingSlot(ResourceProfile requestResourceProfile) {
-		final Optional<DeclarativeTaskManagerSlot> optionalMatchingSlot = slotMatchingStrategy.findMatchingSlot(
-			requestResourceProfile,
-			freeSlots.values());
-
-		optionalMatchingSlot.ifPresent(taskManagerSlot -> {
-			// sanity check
-			Preconditions.checkState(
-				taskManagerSlot.getState() == SlotState.FREE,
-				"TaskManagerSlot %s is not in state FREE but %s.",
-				taskManagerSlot.getSlotId(), taskManagerSlot.getState());
-
-			freeSlots.remove(taskManagerSlot.getSlotId());
-		});
-
-		return optionalMatchingSlot;
-	}
-
-	public int getNumberOfFreeSlots() {
-		return freeSlots.size();
+	@Override
+	public Collection<TaskManagerSlotInformation> getFreeSlots() {
+		return Collections.unmodifiableCollection(freeSlots.values());
 	}
 
 	@VisibleForTesting
-	// TODO: shouldn't be public
-	public DeclarativeTaskManagerSlot getSlot(SlotID slotId) {
+	boolean areMapsEmpty() {
+		return slots.isEmpty() && freeSlots.isEmpty();
+	}
+
+	@VisibleForTesting
+	DeclarativeTaskManagerSlot getSlot(SlotID slotId) {
 		return slots.get(slotId);
+	}
+
+	/**
+	 * Slot reports from task executor are the source of truth regarding the state of slots. The reported state
+	 * may not match what is currently being tracked, and if so can contain illegal transitions (e.g., from free to allocated).
+	 * The tracked and reported states are reconciled by simulating state transitions that lead us from our currently
+	 * tracked state to the actual reported state.
+	 *
+	 * <p>One exception to the reported state being the source of truth are slots reported as being free, but tracked as
+	 * being pending. This mismatch is assumed to be due to a slot allocation RPC not yet having been process by the
+	 * task executor. This mismatch is hence ignored; it will be resolved eventually with the allocation either being
+	 * completed or timing out.
+	 */
+	@VisibleForTesting
+	static class SlotStatusStateReconciler {
+		private final Consumer<DeclarativeTaskManagerSlot> toFreeSlot;
+		private final BiConsumer<DeclarativeTaskManagerSlot, JobID> toPendingSlot;
+		private final BiConsumer<DeclarativeTaskManagerSlot, JobID> toAllocatedSlot;
+
+		@VisibleForTesting
+		SlotStatusStateReconciler(Consumer<DeclarativeTaskManagerSlot> toFreeSlot, BiConsumer<DeclarativeTaskManagerSlot, JobID> toPendingSlot, BiConsumer<DeclarativeTaskManagerSlot, JobID> toAllocatedSlot) {
+			this.toFreeSlot = toFreeSlot;
+			this.toPendingSlot = toPendingSlot;
+			this.toAllocatedSlot = toAllocatedSlot;
+		}
+
+		public void executeStateTransition(DeclarativeTaskManagerSlot slot, JobID jobId) {
+			if (jobId == null) { // free slot
+				switch (slot.getState()) {
+					case PENDING:
+						// don't do anything because we expect the slot to be allocated soon
+						break;
+					case ALLOCATED:
+						toFreeSlot.accept(slot);
+				}
+			} else { // allocate slot
+				switch (slot.getState()) {
+					case FREE:
+						toPendingSlot.accept(slot, jobId);
+						toAllocatedSlot.accept(slot, jobId);
+						break;
+					case PENDING:
+						if (!jobId.equals(slot.getJobId())) {
+							toFreeSlot.accept(slot);
+							toPendingSlot.accept(slot, jobId);
+						}
+						toAllocatedSlot.accept(slot, jobId);
+						break;
+					case ALLOCATED:
+						if (!jobId.equals(slot.getJobId())) {
+							toFreeSlot.accept(slot);
+							toPendingSlot.accept(slot, jobId);
+							toAllocatedSlot.accept(slot, jobId);
+						}
+				}
+			}
+		}
 	}
 }

@@ -76,6 +76,7 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 		return resourceProfile;
 	}
 
+	@Override
 	public TaskExecutorConnection getTaskManagerConnection() {
 		return taskManagerConnection;
 	}
@@ -102,14 +103,6 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 		this.allocationStartTimeStamp = System.currentTimeMillis();
 	}
 
-	public void cancelAllocation() {
-		Preconditions.checkState(state == SlotState.PENDING, "In order to cancel an allocation, the slot has to be pending.");
-
-		this.jobId = null;
-		this.state = SlotState.FREE;
-		this.allocationStartTimeStamp = 0;
-	}
-
 	public void completeAllocation() {
 		Preconditions.checkState(state == SlotState.PENDING, "In order to complete an allocation, the slot has to be allocated.");
 
@@ -117,10 +110,22 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 	}
 
 	public void freeSlot() {
-		Preconditions.checkState(state == SlotState.ALLOCATED, "Slot must be allocated before freeing it.");
+		Preconditions.checkState(state == SlotState.PENDING || state == SlotState.ALLOCATED, "Slot must be allocated or pending before freeing it.");
 
 		this.jobId = null;
 		this.state = SlotState.FREE;
 		this.allocationStartTimeStamp = 0;
+	}
+
+	@Override
+	public String toString() {
+		return "DeclarativeTaskManagerSlot{" +
+			"slotId=" + slotId +
+			", resourceProfile=" + resourceProfile +
+			", taskManagerConnection=" + taskManagerConnection +
+			", jobId=" + jobId +
+			", state=" + state +
+			", allocationStartTimeStamp=" + allocationStartTimeStamp +
+			'}';
 	}
 }
