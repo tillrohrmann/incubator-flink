@@ -18,7 +18,7 @@
 
 package org.apache.flink.runtime.jobmaster.slotpool;
 
-import org.apache.flink.runtime.slotsbro.ResourceRequirements;
+import org.apache.flink.runtime.slots.ResourceRequirements;
 
 /**
  * No-op implementation of the {@link ResourceManagerConnectionManager}.

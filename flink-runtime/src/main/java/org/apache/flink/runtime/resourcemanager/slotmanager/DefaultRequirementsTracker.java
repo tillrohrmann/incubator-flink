@@ -21,8 +21,8 @@ package org.apache.flink.runtime.resourcemanager.slotmanager;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
-import org.apache.flink.runtime.slotsbro.ResourceRequirements;
+import org.apache.flink.runtime.slots.ResourceRequirement;
+import org.apache.flink.runtime.slots.ResourceRequirements;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -136,13 +136,13 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 			ResourceRequirement previous = previousByProfile.get(current.getResourceProfile());
 			int numSlotsDifference = current.getNumberOfRequiredSlots() - previous.getNumberOfRequiredSlots();
 			if (numSlotsDifference > 0) {
-				newlyRequiredResources.add(new ResourceRequirement(current.getResourceProfile(), numSlotsDifference));
+				newlyRequiredResources.add(ResourceRequirement.create(current.getResourceProfile(), numSlotsDifference));
 			}
 		}
 
 		return newlyRequiredResources.isEmpty()
 			? Optional.empty()
-			: Optional.of(new ResourceRequirements(currentResourceRequirements.getJobId(), currentResourceRequirements.getTargetAddress(), newlyRequiredResources));
+			: Optional.of(ResourceRequirements.create(currentResourceRequirements.getJobId(), currentResourceRequirements.getTargetAddress(), newlyRequiredResources));
 	}
 
 	@Override
@@ -170,7 +170,7 @@ public class DefaultRequirementsTracker implements RequirementsTracker {
 			final Collection<ResourceRequirement> missingResources = resources.getMissingResources();
 
 			if (!missingResources.isEmpty()) {
-				requiredResources.add(new ResourceRequirements(jobId, jobRequirements.getValue().getTargetAddress(), missingResources));
+				requiredResources.add(ResourceRequirements.create(jobId, jobRequirements.getValue().getTargetAddress(), missingResources));
 			}
 		}
 		return requiredResources;

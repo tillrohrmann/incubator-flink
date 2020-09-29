@@ -32,8 +32,8 @@ import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.jobmaster.SlotRequestId;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
-import org.apache.flink.runtime.slotsbro.ResourceRequirements;
+import org.apache.flink.runtime.slots.ResourceRequirement;
+import org.apache.flink.runtime.slots.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.util.FlinkException;
@@ -201,7 +201,7 @@ public class FutureSlotPool implements SlotPool {
 
 		LOG.debug("Declare new resource requirements for job {}: {}.", jobId, resourceRequirements);
 
-		resourceManagerConnectionManager.declareResourceRequirements(new ResourceRequirements(jobId, jobManagerAddress, resourceRequirements));
+		resourceManagerConnectionManager.declareResourceRequirements(ResourceRequirements.create(jobId, jobManagerAddress, resourceRequirements));
 	}
 
 	@Override

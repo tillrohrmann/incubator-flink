@@ -20,7 +20,7 @@ package org.apache.flink.runtime.jobmaster.slotpool;
 
 import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.messages.Acknowledge;
-import org.apache.flink.runtime.slotsbro.ResourceRequirements;
+import org.apache.flink.runtime.slots.ResourceRequirements;
 
 import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;

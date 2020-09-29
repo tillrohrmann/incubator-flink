@@ -34,8 +34,8 @@ import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
 import org.apache.flink.runtime.resourcemanager.SlotRequest;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
-import org.apache.flink.runtime.slotsbro.ResourceRequirements;
+import org.apache.flink.runtime.slots.ResourceRequirement;
+import org.apache.flink.runtime.slots.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.SlotStatus;
 import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
@@ -255,10 +255,10 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 				taskExecutorConnection,
 				slotReport);
 
-			ResourceRequirements requirements = new ResourceRequirements(
+			ResourceRequirements requirements = ResourceRequirements.create(
 				jobId,
 				targetAddress,
-				Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
+				Collections.singleton(ResourceRequirement.create(resourceProfile, 1)));
 			slotManager.processResourceRequirements(requirements);
 
 			assertThat(requestFuture.get(), is(equalTo(Tuple6.of(slotId, jobId, requestFuture.get().f2, resourceProfile, targetAddress, resourceManagerId))));
@@ -299,7 +299,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			assertSame(DeclarativeTaskManagerSlot.State.PENDING, slot.getState());
 
-			slotManager.processResourceRequirements(new ResourceRequirements(resourceRequirements.getJobId(), "foobar", Collections.emptyList()));
+			slotManager.processResourceRequirements(ResourceRequirements.create(resourceRequirements.getJobId(), "foobar", Collections.emptyList()));
 
 			slot = slotManager.getSlot(slotId);
 
@@ -341,10 +341,10 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 		try (DeclarativeSlotManagerImpl slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 
-			final ResourceRequirements resourceRequirements = new ResourceRequirements(
+			final ResourceRequirements resourceRequirements = ResourceRequirements.create(
 				jobId,
 				targetAddress,
-				Collections.singleton(new ResourceRequirement(resourceProfile, 1)));
+				Collections.singleton(ResourceRequirement.create(resourceProfile, 1)));
 			slotManager.processResourceRequirements(resourceRequirements);
 
 			assertThat(numberAllocateResourceCalls.get(), is(1));
@@ -466,7 +466,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			assertEquals("The slot has not been allocated to the expected job id.", resourceRequirements1.getJobId(), slot.getJobId());
 
 			// clear resource requirements, so that the slot isn't immediately re-assigned
-			slotManager.processResourceRequirements(new ResourceRequirements(resourceRequirements1.getJobId(), resourceRequirements1.getTargetAddress(), Collections.emptyList()));
+			slotManager.processResourceRequirements(ResourceRequirements.create(resourceRequirements1.getJobId(), resourceRequirements1.getTargetAddress(), Collections.emptyList()));
 			slotManager.freeSlot(slotId, allocationId);
 
 			// check that the slot has been freed
@@ -1398,7 +1398,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			Tuple2<JobID, Collection<ResourceRequirement>> jobIDCollectionTuple2 = notEnoughResourceNotification.get();
 			assertThat(jobIDCollectionTuple2.f0, is(jobId));
-			assertThat(jobIDCollectionTuple2.f1, hasItem(new ResourceRequirement(ResourceProfile.ANY, 1)));
+			assertThat(jobIDCollectionTuple2.f1, hasItem(ResourceRequirement.create(ResourceProfile.ANY, 1)));
 		}
 	}
 
@@ -1411,14 +1411,14 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 	}
 
 	private static ResourceRequirements createResourceRequirements(JobID jobId, int numRequiredSlots) {
-		return new ResourceRequirements(
+		return ResourceRequirements.create(
 			jobId,
 			"foobar",
-			Collections.singleton(new ResourceRequirement(ResourceProfile.UNKNOWN, numRequiredSlots)));
+			Collections.singleton(ResourceRequirement.create(ResourceProfile.UNKNOWN, numRequiredSlots)));
 	}
 
 	private static ResourceRequirements createEmptyResourceRequirements(JobID jobId) {
-		return new ResourceRequirements(
+		return ResourceRequirements.create(
 			jobId,
 			"foobar",
 			Collections.emptyList());

@@ -26,7 +26,7 @@ import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.messages.Acknowledge;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
+import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.util.FlinkException;
@@ -127,7 +127,7 @@ public class DefaultDeclarativeSlotPoolNg implements DeclarativeSlotPoolNg {
 		final Collection<ResourceRequirement> currentResourceRequirements = new ArrayList<>();
 
 		for (Map.Entry<ResourceProfile, Integer> resourceRequirement : resourceRequirements.getResourcesWithCount()) {
-			currentResourceRequirements.add(new ResourceRequirement(resourceRequirement.getKey(), resourceRequirement.getValue()));
+			currentResourceRequirements.add(ResourceRequirement.create(resourceRequirement.getKey(), resourceRequirement.getValue()));
 		}
 
 		return currentResourceRequirements;

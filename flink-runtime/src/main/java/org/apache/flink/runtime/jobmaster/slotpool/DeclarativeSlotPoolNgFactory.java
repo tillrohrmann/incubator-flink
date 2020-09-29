@@ -19,7 +19,7 @@
 package org.apache.flink.runtime.jobmaster.slotpool;
 
 import org.apache.flink.api.common.time.Time;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
+import org.apache.flink.runtime.slots.ResourceRequirement;
 
 import java.util.Collection;
 import java.util.function.Consumer;

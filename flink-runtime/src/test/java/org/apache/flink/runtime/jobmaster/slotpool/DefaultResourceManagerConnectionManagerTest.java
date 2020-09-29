@@ -24,8 +24,8 @@ import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.concurrent.ManuallyTriggeredScheduledExecutorService;
 import org.apache.flink.runtime.messages.Acknowledge;
-import org.apache.flink.runtime.slotsbro.ResourceRequirement;
-import org.apache.flink.runtime.slotsbro.ResourceRequirements;
+import org.apache.flink.runtime.slots.ResourceRequirement;
+import org.apache.flink.runtime.slots.ResourceRequirements;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.TestLogger;
 
@@ -182,7 +182,7 @@ public class DefaultResourceManagerConnectionManagerTest extends TestLogger {
 	}
 
 	private ResourceRequirements createResourceRequirements(List<ResourceRequirement> requestedResourceRequirements) {
-		return new ResourceRequirements(
+		return ResourceRequirements.create(
 			jobId,
 			"localhost",
 			requestedResourceRequirements);
