@@ -169,7 +169,9 @@ public class FutureSlotPool implements SlotPool {
 			decreasedResourceRequirements = decreasedResourceRequirements.add(pendingRequest.getResourceProfile(), 1);
 		}
 
-		declarativeSlotPool.decreaseResourceRequirementsBy(decreasedResourceRequirements);
+		if (!decreasedResourceRequirements.isEmpty()) {
+			declarativeSlotPool.decreaseResourceRequirementsBy(decreasedResourceRequirements);
+		}
 	}
 
 	@Override
