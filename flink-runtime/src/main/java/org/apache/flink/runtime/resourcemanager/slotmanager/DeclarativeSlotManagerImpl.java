@@ -129,7 +129,9 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	private final SlotManagerMetricGroup slotManagerMetricGroup;
 
-	private final DefaultRequirementsTracker resourceTracker;
+	private final ResourceTracker resourceTracker;
+
+	private final Map<JobID, String> jobMasterTargetAddresses = new HashMap<>();
 
 	// TODO: add tracker constructor arguments
 	public DeclarativeSlotManagerImpl(
@@ -149,7 +151,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 		this.slotManagerMetricGroup = Preconditions.checkNotNull(slotManagerMetricGroup);
 		this.maxSlotNum = slotManagerConfiguration.getMaxSlotNum();
 		this.redundantTaskManagerNum = slotManagerConfiguration.getRedundantTaskManagerNum();
-		this.resourceTracker = new DefaultRequirementsTracker();
+		this.resourceTracker = new DefaultResourceTracker();
 
 		pendingSlotAllocationFutures = new HashMap<>(16);
 		taskManagerRegistrations = new HashMap<>(4);
@@ -363,7 +365,12 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	@Override
 	public void processResourceRequirements(ResourceRequirements resourceRequirements) {
 		checkInit();
-		resourceTracker.notifyResourceRequirements(resourceRequirements);
+		if (resourceRequirements.getResourceRequirements().isEmpty()) {
+			jobMasterTargetAddresses.remove(resourceRequirements.getJobId());
+		} else {
+			jobMasterTargetAddresses.put(resourceRequirements.getJobId(), resourceRequirements.getTargetAddress());
+		}
+		resourceTracker.notifyResourceRequirements(resourceRequirements.getJobId(), resourceRequirements.getResourceRequirements());
 		checkResourceRequirements();
 	}
 
@@ -496,11 +503,12 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	// ---------------------------------------------------------------------------------------------
 
 	private void checkResourceRequirements() {
-		final Collection<ResourceRequirements> resourceAllocationInfo = resourceTracker.getExceedingOrRequiredResources();
-		for (ResourceRequirements resourceRequirements : resourceAllocationInfo) {
-			for (ResourceRequirement resourceRequirement : resourceRequirements.getResourceRequirements()) {
+		final Map<JobID, Collection<ResourceRequirement>> resourceAllocationInfo = resourceTracker.getRequiredResources();
+		for (Map.Entry<JobID, Collection<ResourceRequirement>> resourceRequirements : resourceAllocationInfo.entrySet()) {
+			JobID jobId = resourceRequirements.getKey();
+			for (ResourceRequirement resourceRequirement : resourceRequirements.getValue()) {
 				if (resourceRequirement.getNumberOfRequiredSlots() > 0) {
-					internalRequestSlots(resourceRequirements.getJobId(), resourceRequirements.getTargetAddress(), resourceRequirement);
+					internalRequestSlots(jobId, jobMasterTargetAddresses.get(jobId), resourceRequirement);
 				}
 			}
 		}
@@ -847,7 +855,14 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	// TODO: get rid of these methods
 	@VisibleForTesting
 	int getNumResources(JobID jobId, JobResourceState state) {
-		return resourceTracker.getNumResources(jobId, state);
+		switch (state) {
+			case ACQUIRED:
+				return resourceTracker.getAcquiredResources(jobId).stream().map(ResourceRequirement::getNumberOfRequiredSlots).reduce(0, Integer::sum);
+			case MISSING:
+				return resourceTracker.getRequiredResources().getOrDefault(jobId, Collections.emptyList()).stream().map(ResourceRequirement::getNumberOfRequiredSlots).reduce(0, Integer::sum);
+			default:
+				throw new IllegalArgumentException("Unknown job resource state " + state);
+		}
 	}
 
 	@VisibleForTesting
