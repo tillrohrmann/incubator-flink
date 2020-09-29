@@ -123,15 +123,4 @@ class DeclarativeTaskManagerSlot implements TaskManagerSlotInformation {
 		this.state = SlotState.FREE;
 		this.allocationStartTimeStamp = 0;
 	}
-
-	/**
-	 * Check whether required resource profile can be matched by this slot.
-	 *
-	 * @param required The required resource profile
-	 * @return true if requirement can be matched
-	 */
-	@Override
-	public boolean isMatchingRequirement(ResourceProfile required) {
-		return resourceProfile.isMatching(required);
-	}
 }
