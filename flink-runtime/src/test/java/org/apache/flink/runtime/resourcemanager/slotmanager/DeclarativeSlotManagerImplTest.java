@@ -166,12 +166,12 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			DeclarativeTaskManagerSlot slot1 = slotManager.getSlot(slotId1);
 			DeclarativeTaskManagerSlot slot2 = slotManager.getSlot(slotId2);
 
-			assertSame(DeclarativeTaskManagerSlot.State.ALLOCATED, slot1.getState());
-			assertSame(DeclarativeTaskManagerSlot.State.FREE, slot2.getState());
+			assertSame(SlotState.ALLOCATED, slot1.getState());
+			assertSame(SlotState.FREE, slot2.getState());
 
 			slotManager.processResourceRequirements(resourceRequirements);
 
-			assertSame(DeclarativeTaskManagerSlot.State.PENDING, slot2.getState());
+			assertSame(SlotState.PENDING, slot2.getState());
 
 			slotManager.unregisterTaskManager(taskManagerConnection.getInstanceID(), TEST_EXCEPTION);
 
@@ -297,13 +297,13 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot();
 			slotManager.processResourceRequirements(resourceRequirements);
 
-			assertSame(DeclarativeTaskManagerSlot.State.PENDING, slot.getState());
+			assertSame(SlotState.PENDING, slot.getState());
 
 			slotManager.processResourceRequirements(ResourceRequirements.create(resourceRequirements.getJobId(), "foobar", Collections.emptyList()));
 
 			slot = slotManager.getSlot(slotId);
 
-			assertSame(DeclarativeTaskManagerSlot.State.FREE, slot.getState());
+			assertSame(SlotState.FREE, slot.getState());
 		}
 	}
 
@@ -387,11 +387,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			DeclarativeTaskManagerSlot slot = slotManager.getSlot(slotId);
 
-			assertSame(DeclarativeTaskManagerSlot.State.ALLOCATED, slot.getState());
+			assertSame(SlotState.ALLOCATED, slot.getState());
 
 			slotManager.freeSlot(slotId, new AllocationID());
 
-			assertSame(DeclarativeTaskManagerSlot.State.FREE, slot.getState());
+			assertSame(SlotState.FREE, slot.getState());
 
 			assertEquals(1, slotManager.getNumberFreeSlots());
 		}
@@ -427,7 +427,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			DeclarativeTaskManagerSlot slot = slotManager.getSlot(slotId);
 
-			assertThat(slot.getState(), is(DeclarativeTaskManagerSlot.State.ALLOCATED));
+			assertThat(slot.getState(), is(SlotState.ALLOCATED));
 
 			slotManager.processResourceRequirements(requirements);
 		}
@@ -470,7 +470,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			slotManager.freeSlot(slotId, allocationId);
 
 			// check that the slot has been freed
-			assertSame(DeclarativeTaskManagerSlot.State.FREE, slot.getState());
+			assertSame(SlotState.FREE, slot.getState());
 
 			slotManager.processResourceRequirements(resourceRequirements2);
 
@@ -541,8 +541,8 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			assertEquals(2, slotManager.getNumberRegisteredSlots());
 
-			assertSame(DeclarativeTaskManagerSlot.State.FREE, slot1.getState());
-			assertSame(DeclarativeTaskManagerSlot.State.FREE, slot2.getState());
+			assertSame(SlotState.FREE, slot1.getState());
+			assertSame(SlotState.FREE, slot2.getState());
 
 			assertTrue(slotManager.reportSlotStatus(taskManagerConnection.getInstanceID(), slotReport2));
 
@@ -650,11 +650,11 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			DeclarativeTaskManagerSlot slot = slotManager.getSlot(secondSlotId);
 
-			assertTrue(slot.getState() == DeclarativeTaskManagerSlot.State.ALLOCATED);
+			assertTrue(slot.getState() == SlotState.ALLOCATED);
 			assertEquals(jobId, slot.getJobId());
 
 			if (!failedSlot.getSlotId().equals(slot.getSlotId())) {
-				assertTrue(failedSlot.getState() == DeclarativeTaskManagerSlot.State.FREE);
+				assertTrue(failedSlot.getState() == SlotState.FREE);
 			}
 		}
 	}
@@ -795,7 +795,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 
 			DeclarativeTaskManagerSlot slot = slotFuture.get();
 
-			assertSame(DeclarativeTaskManagerSlot.State.ALLOCATED, slot.getState());
+			assertSame(SlotState.ALLOCATED, slot.getState());
 			assertEquals(jobId, slot.getJobId());
 
 			CompletableFuture<Boolean> idleFuture2 = CompletableFuture.runAsync(
@@ -952,7 +952,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			secondManualSlotRequestResponse.complete(Acknowledge.get());
 
 			final DeclarativeTaskManagerSlot slot = slotManager.getSlot(secondRequest.f0);
-			assertThat(slot.getState(), equalTo(DeclarativeTaskManagerSlot.State.ALLOCATED));
+			assertThat(slot.getState(), equalTo(SlotState.ALLOCATED));
 			assertThat(slot.getJobId(), equalTo(secondRequest.f1));
 		}
 	}
@@ -1009,7 +1009,7 @@ public class DeclarativeSlotManagerImplTest extends TestLogger {
 			assertThat(secondRequest.f0, equalTo(firstRequest.f0));
 
 			final DeclarativeTaskManagerSlot slot = slotManager.getSlot(secondRequest.f0);
-			assertThat(slot.getState(), equalTo(DeclarativeTaskManagerSlot.State.ALLOCATED));
+			assertThat(slot.getState(), equalTo(SlotState.ALLOCATED));
 			assertThat(slot.getJobId(), equalTo(firstRequest.f1));
 
 			assertThat(slotManager.getNumberRegisteredSlots(), is(1));

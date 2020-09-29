@@ -158,7 +158,7 @@ public class DefaultSlotTracker {
 				// the slot is currently free --> it is stored in freeSlots
 				freeSlots.remove(slot.getSlotId());
 				slot.startAllocation(jobId);
-				slotStatusUpdateListener.notifySlotStatusChange(slot, DeclarativeTaskManagerSlot.State.FREE, DeclarativeTaskManagerSlot.State.PENDING, jobId, slot.getResourceProfile());
+				slotStatusUpdateListener.notifySlotStatusChange(slot, SlotState.FREE, SlotState.PENDING, jobId, slot.getResourceProfile());
 				break;
 			case PENDING:
 				break;
@@ -177,7 +177,7 @@ public class DefaultSlotTracker {
 					transitionSlotToPending(slot, jobId);
 					transitionsSlotToAllocated(slot, jobId);
 				} else {
-					slotStatusUpdateListener.notifySlotStatusChange(slot, DeclarativeTaskManagerSlot.State.PENDING, DeclarativeTaskManagerSlot.State.ALLOCATED, jobId, slot.getResourceProfile());
+					slotStatusUpdateListener.notifySlotStatusChange(slot, SlotState.PENDING, SlotState.ALLOCATED, jobId, slot.getResourceProfile());
 					slot.completeAllocation();
 				}
 				break;
@@ -208,7 +208,7 @@ public class DefaultSlotTracker {
 	}
 
 	private void internalFreeSlot(DeclarativeTaskManagerSlot slot) {
-		slotStatusUpdateListener.notifySlotStatusChange(slot, slot.getState(), DeclarativeTaskManagerSlot.State.FREE, slot.getJobId(), slot.getResourceProfile());
+		slotStatusUpdateListener.notifySlotStatusChange(slot, slot.getState(), SlotState.FREE, slot.getJobId(), slot.getResourceProfile());
 		switch (slot.getState()) {
 			case FREE:
 				break;
@@ -229,7 +229,7 @@ public class DefaultSlotTracker {
 	 * @param freeSlot to find a new slot request for
 	 */
 	private void handleFreeSlot(DeclarativeTaskManagerSlot freeSlot) {
-		Preconditions.checkState(freeSlot.getState() == DeclarativeTaskManagerSlot.State.FREE);
+		Preconditions.checkState(freeSlot.getState() == SlotState.FREE);
 
 		freeSlots.put(freeSlot.getSlotId(), freeSlot);
 	}
@@ -242,7 +242,7 @@ public class DefaultSlotTracker {
 		optionalMatchingSlot.ifPresent(taskManagerSlot -> {
 			// sanity check
 			Preconditions.checkState(
-				taskManagerSlot.getState() == DeclarativeTaskManagerSlot.State.FREE,
+				taskManagerSlot.getState() == SlotState.FREE,
 				"TaskManagerSlot %s is not in state FREE but %s.",
 				taskManagerSlot.getSlotId(), taskManagerSlot.getState());
 

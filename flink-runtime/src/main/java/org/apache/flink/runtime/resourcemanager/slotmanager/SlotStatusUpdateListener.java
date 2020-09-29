@@ -24,5 +24,5 @@ import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
  * Interface for components that want to listen to updates to the status of a slot.
  */
 public interface SlotStatusUpdateListener {
-	void notifySlotStatusChange(DeclarativeTaskManagerSlot taskManagerSlot, DeclarativeTaskManagerSlot.State previous, DeclarativeTaskManagerSlot.State current, JobID jobId, ResourceProfile resourceProfile);
+	void notifySlotStatusChange(DeclarativeTaskManagerSlot taskManagerSlot, SlotState previous, SlotState current, JobID jobId, ResourceProfile resourceProfile);
 }

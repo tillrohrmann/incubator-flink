@@ -171,21 +171,21 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 
 	private SlotStatusUpdateListener createSlotStatusUpdateListener() {
 		return (taskManagerSlot, previous, current, jobId, resourceProfile) -> {
-			if (previous == DeclarativeTaskManagerSlot.State.PENDING) {
+			if (previous == SlotState.PENDING) {
 				cancelAllocationFuture(taskManagerSlot.getSlotId());
 			}
 
-			if (current == DeclarativeTaskManagerSlot.State.PENDING) {
+			if (current == SlotState.PENDING) {
 				resourceTracker.notifyAcquiredResource(jobId, resourceProfile);
 			}
-			if (current == DeclarativeTaskManagerSlot.State.FREE) {
+			if (current == SlotState.FREE) {
 				resourceTracker.notifyLostResource(jobId, resourceProfile);
 			}
 
-			if (current == DeclarativeTaskManagerSlot.State.ALLOCATED) {
+			if (current == SlotState.ALLOCATED) {
 				taskManagerRegistrations.get(taskManagerSlot.getInstanceId()).occupySlot();
 			}
-			if (previous == DeclarativeTaskManagerSlot.State.ALLOCATED && current == DeclarativeTaskManagerSlot.State.FREE) {
+			if (previous == SlotState.ALLOCATED && current == SlotState.FREE) {
 				taskManagerRegistrations.get(taskManagerSlot.getInstanceId()).freeSlot();
 			}
 		};
@@ -673,7 +673,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	 */
 	private void allocateSlot(DeclarativeTaskManagerSlot taskManagerSlot, JobID jobId, String targetAddress, ResourceProfile resourceProfile) {
 		LOG.debug("Allocate slot for job {} with resource profile {}.", jobId, resourceProfile);
-		Preconditions.checkState(taskManagerSlot.getState() == DeclarativeTaskManagerSlot.State.FREE);
+		Preconditions.checkState(taskManagerSlot.getState() == SlotState.FREE);
 
 		TaskExecutorConnection taskExecutorConnection = taskManagerSlot.getTaskManagerConnection();
 		TaskExecutorGateway gateway = taskExecutorConnection.getTaskExecutorGateway();
