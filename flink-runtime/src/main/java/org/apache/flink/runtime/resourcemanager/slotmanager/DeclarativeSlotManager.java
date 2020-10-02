@@ -404,10 +404,15 @@ public class DeclarativeSlotManager implements SlotManager {
 		final Map<JobID, Collection<ResourceRequirement>> resourceAllocationInfo = resourceTracker.getRequiredResources();
 		for (Map.Entry<JobID, Collection<ResourceRequirement>> resourceRequirements : resourceAllocationInfo.entrySet()) {
 			JobID jobId = resourceRequirements.getKey();
+
+			boolean allRequirementsFulfilled = true;
 			for (ResourceRequirement resourceRequirement : resourceRequirements.getValue()) {
-				if (resourceRequirement.getNumberOfRequiredSlots() > 0) {
-					internalRequestSlots(jobId, jobMasterTargetAddresses.get(jobId), resourceRequirement);
-				}
+				boolean requirementWasFulfilled = internalRequestSlots(jobId, jobMasterTargetAddresses.get(jobId), resourceRequirement);
+				allRequirementsFulfilled &= requirementWasFulfilled;
+			}
+
+			if (!allRequirementsFulfilled) {
+				resourceActions.notifyNotEnoughResourcesAvailable(jobId, resourceTracker.getAcquiredResources(jobId));
 			}
 		}
 	}
@@ -423,8 +428,9 @@ public class DeclarativeSlotManager implements SlotManager {
 	 * @param jobId job to allocate slots for
 	 * @param targetAddress address of the jobmaster
 	 * @param resourceRequirement required slots
+	 * @return whether all requirements could be fulfilled
 	 */
-	private void internalRequestSlots(JobID jobId, String targetAddress, ResourceRequirement resourceRequirement) {
+	private boolean internalRequestSlots(JobID jobId, String targetAddress, ResourceRequirement resourceRequirement) {
 		final ResourceProfile resourceProfile = resourceRequirement.getResourceProfile();
 
 		boolean allRequirementsMayBeFulfilled = true;
@@ -450,12 +456,7 @@ public class DeclarativeSlotManager implements SlotManager {
 				// TODO: then only react to slot registrations by task executors.
 			}
 		}
-
-		if (!allRequirementsMayBeFulfilled) {
-			// TODO: this should only be done once per job; return a boolean here and merge it with the result for
-			// TODO: other Requirements
-			resourceActions.notifyNotEnoughResourcesAvailable(jobId, resourceTracker.getAcquiredResources(jobId));
-		}
+		return allRequirementsMayBeFulfilled;
 	}
 
 	// TODO: remove; inherently flawed since one _big_ slot can fulfill all requirements
