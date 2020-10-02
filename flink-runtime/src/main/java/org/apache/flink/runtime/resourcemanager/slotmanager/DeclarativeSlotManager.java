@@ -84,13 +84,6 @@ public class DeclarativeSlotManager implements SlotManager {
 	/** True iff the component has been started. */
 	private boolean started;
 
-	/**
-	 * If true, fail unfulfillable slot requests immediately. Otherwise, allow unfulfillable request to pend.
-	 * A slot request is considered unfulfillable if it cannot be fulfilled by neither a slot that is already registered
-	 * (including allocated ones) nor a pending slot that the {@link ResourceActions} can allocate.
-	 */
-	private boolean failUnfulfillableRequest = true;
-
 	private final SlotManagerMetricGroup slotManagerMetricGroup;
 
 	private final ResourceTracker resourceTracker;
@@ -395,12 +388,9 @@ public class DeclarativeSlotManager implements SlotManager {
 	}
 
 	@Override
-	// TODO: figure out whether this should just be a no-op
 	public void setFailUnfulfillableRequest(boolean failUnfulfillableRequest) {
-		if (!this.failUnfulfillableRequest && failUnfulfillableRequest) {
-			// TODO: fail unfulfillable pending requests
-		}
-		this.failUnfulfillableRequest = failUnfulfillableRequest;
+		// we always send notifications if we cannot fulfill requests, and it is the responsibility of the JobManager
+		// to handle it (e.g., by reducing requirements and failing outright)
 	}
 
 	// ---------------------------------------------------------------------------------------------
