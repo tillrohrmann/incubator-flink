@@ -318,7 +318,6 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 		final JobID jobId = new JobID();
 		final SlotID slotId = new SlotID(resourceID, 0);
 		final String targetAddress = "localhost";
-		final AllocationID allocationId = DeclarativeSlotManager.DUMMY_ALLOCATION_ID;
 		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
 
 		final AtomicInteger numberAllocateResourceCalls = new AtomicInteger(0);
@@ -562,8 +561,6 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	 */
 	@Test
 	public void testSlotAllocationTimeout() throws Exception {
-		final JobID jobId = new JobID();
-
 		final CompletableFuture<Void> secondSlotRequestFuture = new CompletableFuture<>();
 		final AtomicInteger slotRequestsCount = new AtomicInteger();
 		final TaskExecutorConnection taskManagerConnection = createTaskExecutorConnection(new TestingTaskExecutorGatewayBuilder()
@@ -587,7 +584,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			slotManager.start(ResourceManagerId.generate(), mainThreadExecutor, new TestingResourceActionsBuilder().build());
 
 			CompletableFuture.runAsync(() -> slotManager.registerTaskManager(taskManagerConnection, slotReport), mainThreadExecutor)
-				.thenRun(() -> slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot(jobId)))
+				.thenRun(() -> slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot()))
 				.get(5, TimeUnit.SECONDS);
 
 			// a second request is only sent if the first request timed out
@@ -669,8 +666,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
 
-		final JobID jobId = new JobID();
-		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot(jobId);
+		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot();
 		final CompletableFuture<Acknowledge> slotRequestFuture1 = new CompletableFuture<>();
 
 		final Iterator<CompletableFuture<Acknowledge>> slotRequestFutureIterator = Arrays.asList(
@@ -988,11 +984,10 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	}
 
 	private DeclarativeSlotManager createSlotManager(ResourceManagerId resourceManagerId, ResourceActions resourceManagerActions, int numSlotsPerWorker) {
-		DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
+		return createDeclarativeSlotManagerBuilder()
 			.setNumSlotsPerWorker(numSlotsPerWorker)
 			.setRedundantTaskManagerNum(0)
 			.buildAndStartWithDirectExec(resourceManagerId, resourceManagerActions);
-		return slotManager;
 	}
 
 	private DeclarativeSlotManagerBuilder createDeclarativeSlotManagerBuilder() {
