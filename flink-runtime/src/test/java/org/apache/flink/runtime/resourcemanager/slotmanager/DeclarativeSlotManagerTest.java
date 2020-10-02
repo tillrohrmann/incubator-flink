@@ -600,8 +600,6 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	 */
 	@Test
 	public void testTaskManagerSlotAllocationTimeoutHandling() throws Exception {
-		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
-
 		final JobID jobId = new JobID();
 		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot(jobId);
 		final CompletableFuture<Acknowledge> slotRequestFuture1 = new CompletableFuture<>();
@@ -630,7 +628,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 		try (DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
 			.setResourceTracker(resourceTracker)
-			.buildAndStartWithDirectExec(ResourceManagerId.generate(), resourceManagerActions)) {
+			.buildAndStartWithDirectExec()) {
 
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
 
@@ -745,7 +743,6 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	@Test
 	public void testReportAllocatedSlot() throws Exception {
 		final ResourceID taskManagerId = ResourceID.generate();
-		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
 		final TestingTaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 		final TaskExecutorConnection taskExecutorConnection = new TaskExecutorConnection(taskManagerId, taskExecutorGateway);
 
@@ -753,7 +750,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 		try (DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
 			.setResourceTracker(resourceTracker)
-			.buildAndStartWithDirectExec(ResourceManagerId.generate(), resourceManagerActions)) {
+			.buildAndStartWithDirectExec()) {
 
 			// initially report a single slot as free
 			final SlotID slotId = new SlotID(taskManagerId, 0);
@@ -855,7 +852,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 		try (final DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
 			.setResourceTracker(resourceTracker)
-			.buildAndStartWithDirectExec(ResourceManagerId.generate(), new TestingResourceActionsBuilder().build())) {
+			.buildAndStartWithDirectExec()) {
 
 			final JobID jobID = new JobID();
 			slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot(jobID));
@@ -1056,7 +1053,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	public void testSpreadOutSlotAllocationStrategy() throws Exception {
 		try (DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
 			.setSlotMatchingStrategy(LeastUtilizationSlotMatchingStrategy.INSTANCE)
-			.buildAndStartWithDirectExec(ResourceManagerId.generate(), new TestingResourceActionsBuilder().build())) {
+			.buildAndStartWithDirectExec()) {
 
 			final List<CompletableFuture<JobID>> requestSlotFutures = new ArrayList<>();
 
