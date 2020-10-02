@@ -745,7 +745,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	@Test
 	public void testReportAllocatedSlot() throws Exception {
 		final ResourceID taskManagerId = ResourceID.generate();
-		final ResourceActions resourceActions = new TestingResourceActionsBuilder().build();
+		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
 		final TestingTaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 		final TaskExecutorConnection taskExecutorConnection = new TaskExecutorConnection(taskManagerId, taskExecutorGateway);
 
@@ -753,7 +753,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 		try (DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
 			.setResourceTracker(resourceTracker)
-			.buildAndStartWithDirectExec(ResourceManagerId.generate(), resourceActions)) {
+			.buildAndStartWithDirectExec(ResourceManagerId.generate(), resourceManagerActions)) {
 
 			// initially report a single slot as free
 			final SlotID slotId = new SlotID(taskManagerId, 0);
