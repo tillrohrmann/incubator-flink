@@ -233,7 +233,6 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 		final JobID jobId = new JobID();
 		final SlotID slotId = new SlotID(resourceID, 0);
 		final String targetAddress = "localhost";
-		final AllocationID allocationId = DeclarativeSlotManager.DUMMY_ALLOCATION_ID;
 		final ResourceProfile resourceProfile = ResourceProfile.fromResources(42.0, 1337);
 
 		ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
@@ -1134,13 +1133,6 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			jobId,
 			"foobar",
 			Collections.singleton(ResourceRequirement.create(ResourceProfile.UNKNOWN, numRequiredSlots)));
-	}
-
-	private static ResourceRequirements createEmptyResourceRequirements(JobID jobId) {
-		return ResourceRequirements.create(
-			jobId,
-			"foobar",
-			Collections.emptyList());
 	}
 
 	private static int getTotalResourceCount(Collection<ResourceRequirement> resources) {
