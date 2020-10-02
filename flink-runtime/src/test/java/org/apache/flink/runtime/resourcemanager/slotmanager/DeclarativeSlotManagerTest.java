@@ -120,7 +120,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 		try (DeclarativeSlotManager slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
 
-			assertTrue("The number registered slots does not equal the expected number.", 2 == slotManager.getNumberRegisteredSlots());
+			assertThat("The number registered slots does not equal the expected number.", slotManager.getNumberRegisteredSlots(), is(2));
 
 			assertNotNull(slotManager.getSlot(slotId1));
 			assertNotNull(slotManager.getSlot(slotId2));
@@ -496,12 +496,12 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 		try (SlotManager slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
 			// check that we don't have any slots registered
-			assertTrue(0 == slotManager.getNumberRegisteredSlots());
+			assertThat(slotManager.getNumberRegisteredSlots(), is(0));
 
 			// this should not update anything since the instance id is not known to the slot manager
 			assertFalse(slotManager.reportSlotStatus(unknownInstanceID, unknownSlotReport));
 
-			assertTrue(0 == slotManager.getNumberRegisteredSlots());
+			assertThat(slotManager.getNumberRegisteredSlots(), is(0));
 		}
 	}
 
@@ -654,11 +654,11 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 			DeclarativeTaskManagerSlot slot = slotManager.getSlot(secondSlotId);
 
-			assertTrue(slot.getState() == SlotState.ALLOCATED);
+			assertThat(slot.getState(), is(SlotState.ALLOCATED));
 			assertEquals(jobId, slot.getJobId());
 
 			if (!failedSlot.getSlotId().equals(slot.getSlotId())) {
-				assertTrue(failedSlot.getState() == SlotState.FREE);
+				assertThat(failedSlot.getState(), is(SlotState.FREE));
 			}
 		}
 	}
