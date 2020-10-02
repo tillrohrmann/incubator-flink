@@ -88,7 +88,8 @@ public interface SlotTracker {
 	void registerSlotStatusUpdateListener(SlotStatusUpdateListener slotStatusUpdateListener);
 
 	/**
-	 * Returns all free slots. The returned collection is immutable.
+	 * Returns a view over all free slots. The returned collection cannot be modified directly, but does reflect changes
+	 * due to notifications.
 	 *
 	 * @return free slots
 	 */

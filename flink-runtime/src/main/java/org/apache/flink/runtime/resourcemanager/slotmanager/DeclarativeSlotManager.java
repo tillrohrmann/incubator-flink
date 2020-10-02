@@ -439,6 +439,7 @@ public class DeclarativeSlotManager implements SlotManager {
 
 			final Optional<TaskManagerSlotInformation> reservedSlot = slotMatchingStrategy.findMatchingSlot(resourceProfile, freeSlots, this::getNumberRegisteredSlotsOf);
 			if (reservedSlot.isPresent()) {
+				// we do not need to modify freeSlots because it is indirectly modified by the allocation
 				allocateSlot(reservedSlot.get(), jobId, targetAddress, resourceProfile);
 			} else {
 				if (!taskExecutorManager.allocateResource(resourceProfile)) {
