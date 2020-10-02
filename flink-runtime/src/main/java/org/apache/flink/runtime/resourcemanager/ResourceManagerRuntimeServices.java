@@ -21,7 +21,7 @@ package org.apache.flink.runtime.resourcemanager;
 import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.metrics.groups.SlotManagerMetricGroup;
-import org.apache.flink.runtime.resourcemanager.slotmanager.DeclarativeSlotManagerImpl;
+import org.apache.flink.runtime.resourcemanager.slotmanager.DeclarativeSlotManager;
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManager;
 import org.apache.flink.runtime.resourcemanager.slotmanager.SlotManagerImpl;
 import org.apache.flink.util.Preconditions;
@@ -67,7 +67,7 @@ public class ResourceManagerRuntimeServices {
 
 	private static SlotManager createSlotManager(ResourceManagerRuntimeServicesConfiguration configuration, ScheduledExecutor scheduledExecutor, SlotManagerMetricGroup slotManagerMetricGroup) {
 		if (configuration.isDeclarativeResourceManagementEnabled()) {
-			return new DeclarativeSlotManagerImpl(
+			return new DeclarativeSlotManager(
 				scheduledExecutor,
 				configuration.getSlotManagerConfiguration(),
 				slotManagerMetricGroup);

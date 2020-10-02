@@ -57,8 +57,8 @@ import java.util.function.BiFunction;
 /**
  * Implementation of {@link SlotManager}.
  */
-public class DeclarativeSlotManagerImpl implements SlotManager {
-	private static final Logger LOG = LoggerFactory.getLogger(DeclarativeSlotManagerImpl.class);
+public class DeclarativeSlotManager implements SlotManager {
+	private static final Logger LOG = LoggerFactory.getLogger(DeclarativeSlotManager.class);
 
 	static final AllocationID DUMMY_ALLOCATION_ID = new AllocationID();
 
@@ -102,7 +102,7 @@ public class DeclarativeSlotManagerImpl implements SlotManager {
 	private TaskExecutorManager taskExecutorManager;
 
 	// TODO: add tracker constructor arguments
-	public DeclarativeSlotManagerImpl(
+	public DeclarativeSlotManager(
 			ScheduledExecutor scheduledExecutor,
 			SlotManagerConfiguration slotManagerConfiguration,
 			SlotManagerMetricGroup slotManagerMetricGroup) {

@@ -28,7 +28,7 @@ import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.runtime.testingUtils.TestingUtils;
 
-/** Builder for {@link DeclarativeSlotManagerImpl}. */
+/** Builder for {@link DeclarativeSlotManager}. */
 public class DeclarativeSlotManagerBuilder {
 	private SlotMatchingStrategy slotMatchingStrategy;
 	private ScheduledExecutor scheduledExecutor;
@@ -115,7 +115,7 @@ public class DeclarativeSlotManagerBuilder {
 		return this;
 	}
 
-	public DeclarativeSlotManagerImpl build() {
+	public DeclarativeSlotManager build() {
 		final SlotManagerConfiguration slotManagerConfiguration = new SlotManagerConfiguration(
 			taskManagerRequestTimeout,
 			slotRequestTimeout,
@@ -127,14 +127,14 @@ public class DeclarativeSlotManagerBuilder {
 			maxSlotNum,
 			redundantTaskManagerNum);
 
-		return new DeclarativeSlotManagerImpl(
+		return new DeclarativeSlotManager(
 			scheduledExecutor,
 			slotManagerConfiguration,
 			slotManagerMetricGroup);
 	}
 
-	public DeclarativeSlotManagerImpl buildAndStartWithDirectExec(ResourceManagerId resourceManagerId, ResourceActions resourceManagerActions) {
-		final DeclarativeSlotManagerImpl slotManager = build();
+	public DeclarativeSlotManager buildAndStartWithDirectExec(ResourceManagerId resourceManagerId, ResourceActions resourceManagerActions) {
+		final DeclarativeSlotManager slotManager = build();
 		slotManager.start(resourceManagerId, Executors.directExecutor(), resourceManagerActions);
 		return slotManager;
 	}
