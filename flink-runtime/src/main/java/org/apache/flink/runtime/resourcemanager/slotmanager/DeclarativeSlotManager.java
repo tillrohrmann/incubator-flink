@@ -442,10 +442,10 @@ public class DeclarativeSlotManager implements SlotManager {
 				// we do not need to modify freeSlots because it is indirectly modified by the allocation
 				allocateSlot(reservedSlot.get(), jobId, targetAddress, resourceProfile);
 			} else {
-				if (!taskExecutorManager.allocateResource(resourceProfile)) {
-					// this isn't really correct, since we are not reserving the pending slot
-					// thus a single pending slot can "fulfill" any number of requirements, so long as the profiles fit
-					if (!isFulfillableByPendingSlots(resourceProfile)) {
+				// this isn't really correct, since we are not reserving the pending slot
+				// thus a single pending slot can "fulfill" any number of requirements, so long as the profiles fit
+				if (!isFulfillableByPendingSlots(resourceProfile)) {
+					if (!taskExecutorManager.allocateResource(resourceProfile)) {
 						allRequirementsMayBeFulfilled = false;
 					}
 				}
