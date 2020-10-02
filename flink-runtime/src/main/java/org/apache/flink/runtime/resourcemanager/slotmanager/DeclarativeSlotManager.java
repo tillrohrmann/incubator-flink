@@ -98,12 +98,13 @@ public class DeclarativeSlotManager implements SlotManager {
 	public DeclarativeSlotManager(
 			ScheduledExecutor scheduledExecutor,
 			SlotManagerConfiguration slotManagerConfiguration,
-			SlotManagerMetricGroup slotManagerMetricGroup) {
+			SlotManagerMetricGroup slotManagerMetricGroup,
+			ResourceTracker resourceTracker) {
 
 		Preconditions.checkNotNull(slotManagerConfiguration);
 		this.taskManagerRequestTimeout = slotManagerConfiguration.getTaskManagerRequestTimeout();
 		this.slotManagerMetricGroup = Preconditions.checkNotNull(slotManagerMetricGroup);
-		this.resourceTracker = new DefaultResourceTracker();
+		this.resourceTracker = Preconditions.checkNotNull(resourceTracker);
 
 		pendingSlotAllocationFutures = new HashMap<>(16);
 
