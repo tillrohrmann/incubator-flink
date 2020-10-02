@@ -566,19 +566,6 @@ public class DeclarativeSlotManager implements SlotManager {
 	// Testing methods
 	// ---------------------------------------------------------------------------------------------
 
-	// TODO: get rid of these methods
-	@VisibleForTesting
-	int getNumResources(JobID jobId, JobResourceState state) {
-		switch (state) {
-			case ACQUIRED:
-				return resourceTracker.getAcquiredResources(jobId).stream().map(ResourceRequirement::getNumberOfRequiredSlots).reduce(0, Integer::sum);
-			case MISSING:
-				return resourceTracker.getRequiredResources().getOrDefault(jobId, Collections.emptyList()).stream().map(ResourceRequirement::getNumberOfRequiredSlots).reduce(0, Integer::sum);
-			default:
-				throw new IllegalArgumentException("Unknown job resource state " + state);
-		}
-	}
-
 	@VisibleForTesting
 	DeclarativeTaskManagerSlot getSlot(SlotID slotId) {
 		return slotTracker.getSlot(slotId);

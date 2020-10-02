@@ -141,6 +141,10 @@ public class DeclarativeSlotManagerBuilder {
 			resourceTracker);
 	}
 
+	public DeclarativeSlotManager buildAndStartWithDirectExec() {
+		return buildAndStartWithDirectExec(ResourceManagerId.generate(), new TestingResourceActionsBuilder().build());
+	}
+
 	public DeclarativeSlotManager buildAndStartWithDirectExec(ResourceManagerId resourceManagerId, ResourceActions resourceManagerActions) {
 		final DeclarativeSlotManager slotManager = build();
 		slotManager.start(resourceManagerId, Executors.directExecutor(), resourceManagerActions);

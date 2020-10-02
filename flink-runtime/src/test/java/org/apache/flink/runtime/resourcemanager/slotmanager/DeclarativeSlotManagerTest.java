@@ -70,12 +70,12 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.core.IsCollectionContaining.hasItem;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -204,18 +204,22 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	 */
 	@Test
 	public void testResourceDeclarationWithResourceAllocationFailure() throws Exception {
-		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final ResourceRequirements resourceRequirements = createResourceRequirementsForSingleSlot();
 
 		ResourceActions resourceManagerActions = new TestingResourceActionsBuilder()
 			.setAllocateResourceFunction(value -> false)
 			.build();
 
-		try (DeclarativeSlotManager slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
+		final ResourceTracker resourceTracker = new DefaultResourceTracker();
+
+		try (DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
+			.setResourceTracker(resourceTracker)
+			.buildAndStartWithDirectExec(ResourceManagerId.generate(), resourceManagerActions)) {
 
 			slotManager.processResourceRequirements(resourceRequirements);
 
-			assertThat(slotManager.getNumResources(resourceRequirements.getJobId(), JobResourceState.MISSING), is(1));
+			final JobID jobId = resourceRequirements.getJobId();
+			assertThat(getTotalResourceCount(resourceTracker.getRequiredResources().get(jobId)), is(1));
 		}
 	}
 
@@ -597,7 +601,6 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	 */
 	@Test
 	public void testTaskManagerSlotAllocationTimeoutHandling() throws Exception {
-		final ResourceManagerId resourceManagerId = ResourceManagerId.generate();
 		final ResourceActions resourceManagerActions = new TestingResourceActionsBuilder().build();
 
 		final JobID jobId = new JobID();
@@ -624,7 +627,11 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 		final SlotStatus slotStatus2 = new SlotStatus(slotId2, ResourceProfile.ANY);
 		final SlotReport slotReport = new SlotReport(Arrays.asList(slotStatus1, slotStatus2));
 
-		try (DeclarativeSlotManager slotManager = createSlotManager(resourceManagerId, resourceManagerActions)) {
+		final ResourceTracker resourceTracker = new DefaultResourceTracker();
+
+		try (DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
+			.setResourceTracker(resourceTracker)
+			.buildAndStartWithDirectExec(ResourceManagerId.generate(), resourceManagerActions)) {
 
 			slotManager.registerTaskManager(taskManagerConnection, slotReport);
 
@@ -638,7 +645,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			// let the first attempt fail --> this should trigger a second attempt
 			slotRequestFuture1.completeExceptionally(new SlotAllocationException("Test exception."));
 
-			assertThat(slotManager.getNumResources(jobId, JobResourceState.ACQUIRED), is(1));
+			assertThat(getTotalResourceCount(resourceTracker.getAcquiredResources(jobId)), is(1));
 
 			// the second attempt succeeds
 			slotRequestFuture2.complete(Acknowledge.get());
@@ -743,7 +750,11 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 		final TestingTaskExecutorGateway taskExecutorGateway = new TestingTaskExecutorGatewayBuilder().createTestingTaskExecutorGateway();
 		final TaskExecutorConnection taskExecutorConnection = new TaskExecutorConnection(taskManagerId, taskExecutorGateway);
 
-		try (final DeclarativeSlotManager slotManager = createSlotManager(ResourceManagerId.generate(), resourceActions)) {
+		final ResourceTracker resourceTracker = new DefaultResourceTracker();
+
+		try (DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
+			.setResourceTracker(resourceTracker)
+			.buildAndStartWithDirectExec(ResourceManagerId.generate(), resourceActions)) {
 
 			// initially report a single slot as free
 			final SlotID slotId = new SlotID(taskManagerId, 0);
@@ -776,7 +787,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			slotManager.processResourceRequirements(requirements);
 
 			assertThat(slotManager.getSlot(slotId).getJobId(), is(slotStatus.getJobID()));
-			assertThat(slotManager.getNumResources(jobId, JobResourceState.MISSING), is(1));
+			assertThat(getTotalResourceCount(resourceTracker.getRequiredResources().get(jobId)), is(1));
 		}
 	}
 
@@ -841,8 +852,11 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	 */
 	@Test
 	public void testSlotRequestRemovedIfTMReportAllocation() throws Exception {
-		try (final DeclarativeSlotManager slotManager = createSlotManager(ResourceManagerId.generate(),
-				new TestingResourceActionsBuilder().build())) {
+		final ResourceTracker resourceTracker = new DefaultResourceTracker();
+
+		try (final DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
+			.setResourceTracker(resourceTracker)
+			.buildAndStartWithDirectExec(ResourceManagerId.generate(), new TestingResourceActionsBuilder().build())) {
 
 			final JobID jobID = new JobID();
 			slotManager.processResourceRequirements(createResourceRequirementsForSingleSlot(jobID));
@@ -892,7 +906,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			assertThat(slot.getJobId(), equalTo(firstRequest.f1));
 
 			assertThat(slotManager.getNumberRegisteredSlots(), is(1));
-			assertThat(slotManager.getNumResources(jobID, JobResourceState.ACQUIRED), is(1));
+			assertThat(getTotalResourceCount(resourceTracker.getAcquiredResources(jobID)), is(1));
 		}
 	}
 
@@ -901,10 +915,11 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 	 */
 	@Test
 	public void testNotifyFailedAllocationWhenTaskManagerTerminated() throws Exception {
+		final ResourceTracker resourceTracker = new DefaultResourceTracker();
 
-		try (final DeclarativeSlotManager slotManager = createSlotManager(
-			ResourceManagerId.generate(),
-			new TestingResourceActionsBuilder().build())) {
+		try (final DeclarativeSlotManager slotManager = createDeclarativeSlotManagerBuilder()
+			.setResourceTracker(resourceTracker)
+			.buildAndStartWithDirectExec()) {
 
 			// register slot request for job1.
 			JobID jobId1 = new JobID();
@@ -939,13 +954,13 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			// validate for job1.
 			slotManager.unregisterTaskManager(taskExecutionConnection1.getInstanceID(), TEST_EXCEPTION);
 
-			assertThat(slotManager.getNumResources(jobId1, JobResourceState.MISSING), is(2));
+			assertThat(getTotalResourceCount(resourceTracker.getRequiredResources().get(jobId1)), is(2));
 
 			// validate the result for job2 and job3.
 			slotManager.unregisterTaskManager(taskExecutionConnection2.getInstanceID(), TEST_EXCEPTION);
 
-			assertThat(slotManager.getNumResources(jobId2, JobResourceState.MISSING), is(2));
-			assertThat(slotManager.getNumResources(jobId3, JobResourceState.MISSING), is(1));
+			assertThat(getTotalResourceCount(resourceTracker.getRequiredResources().get(jobId2)), is(2));
+			assertThat(getTotalResourceCount(resourceTracker.getRequiredResources().get(jobId3)), is(1));
 		}
 	}
 
@@ -1126,5 +1141,12 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			jobId,
 			"foobar",
 			Collections.emptyList());
+	}
+
+	private static int getTotalResourceCount(Collection<ResourceRequirement> resources) {
+		if (resources == null) {
+			return 0;
+		}
+		return resources.stream().map(ResourceRequirement::getNumberOfRequiredSlots).reduce(0, Integer::sum);
 	}
 }
