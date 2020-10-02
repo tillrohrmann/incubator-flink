@@ -51,8 +51,6 @@ import akka.pattern.AskTimeoutException;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import javax.annotation.Nonnull;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -68,7 +66,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -828,7 +825,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 			final ResourceID taskExecutorResourceId = ResourceID.generate();
 			final TaskExecutorConnection taskExecutionConnection = new TaskExecutorConnection(taskExecutorResourceId, testingTaskExecutorGateway);
-			final SlotReport slotReport = new SlotReport(createEmptySlotStatus(new SlotID(taskExecutorResourceId, 0), ResourceProfile.ANY));
+			final SlotReport slotReport = new SlotReport(createEmptySlotStatus(new SlotID(taskExecutorResourceId, 0)));
 
 			final CompletableFuture<Acknowledge> firstManualSlotRequestResponse = new CompletableFuture<>();
 			responseQueue.offer(firstManualSlotRequestResponse);
@@ -888,7 +885,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 			final ResourceID taskExecutorResourceId = ResourceID.generate();
 			final TaskExecutorConnection taskExecutionConnection = new TaskExecutorConnection(taskExecutorResourceId, testingTaskExecutorGateway);
-			final SlotReport slotReport = new SlotReport(createEmptySlotStatus(new SlotID(taskExecutorResourceId, 0), ResourceProfile.ANY));
+			final SlotReport slotReport = new SlotReport(createEmptySlotStatus(new SlotID(taskExecutorResourceId, 0)));
 
 			final CompletableFuture<Acknowledge> firstManualSlotRequestResponse = new CompletableFuture<>();
 			responseQueue.offer(firstManualSlotRequestResponse);
@@ -973,44 +970,6 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			assertThat(getTotalResourceCount(resourceTracker.getRequiredResources().get(jobId2)), is(2));
 			assertThat(getTotalResourceCount(resourceTracker.getRequiredResources().get(jobId3)), is(1));
 		}
-	}
-
-	@Nonnull
-	private SlotReport createSlotReport(ResourceID taskExecutorResourceId, int numberSlots) {
-		return createSlotReport(taskExecutorResourceId, numberSlots, ResourceProfile.ANY, DeclarativeSlotManagerTest::createEmptySlotStatus);
-	}
-
-	@Nonnull
-	private SlotReport createSlotReport(
-			ResourceID taskExecutorResourceId,
-			int numberSlots,
-			ResourceProfile resourceProfile,
-			BiFunction<SlotID, ResourceProfile, SlotStatus> slotStatusFactory) {
-		final Set<SlotStatus> slotStatusSet = new HashSet<>(numberSlots);
-		for (int i = 0; i < numberSlots; i++) {
-			slotStatusSet.add(slotStatusFactory.apply(new SlotID(taskExecutorResourceId, i), resourceProfile));
-		}
-
-		return new SlotReport(slotStatusSet);
-	}
-
-	private static SlotStatus createEmptySlotStatus(SlotID slotId, ResourceProfile resourceProfile) {
-		return new SlotStatus(slotId, resourceProfile);
-	}
-
-	private DeclarativeSlotManager createSlotManager(ResourceManagerId resourceManagerId, ResourceActions resourceManagerActions) {
-		return createSlotManager(resourceManagerId, resourceManagerActions, 1);
-	}
-
-	private DeclarativeSlotManager createSlotManager(ResourceManagerId resourceManagerId, ResourceActions resourceManagerActions, int numSlotsPerWorker) {
-		return createDeclarativeSlotManagerBuilder()
-			.setNumSlotsPerWorker(numSlotsPerWorker)
-			.setRedundantTaskManagerNum(0)
-			.buildAndStartWithDirectExec(resourceManagerId, resourceManagerActions);
-	}
-
-	private DeclarativeSlotManagerBuilder createDeclarativeSlotManagerBuilder() {
-		return DeclarativeSlotManagerBuilder.newBuilder().setDefaultWorkerResourceSpec(WORKER_RESOURCE_SPEC);
 	}
 
 	/**
@@ -1129,6 +1088,34 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			assertThat(jobIDCollectionTuple2.f0, is(jobId));
 			assertThat(jobIDCollectionTuple2.f1, hasItem(ResourceRequirement.create(ResourceProfile.ANY, 1)));
 		}
+	}
+
+	private SlotReport createSlotReport(ResourceID taskExecutorResourceId, int numberSlots) {
+		final Set<SlotStatus> slotStatusSet = new HashSet<>(numberSlots);
+		for (int i = 0; i < numberSlots; i++) {
+			slotStatusSet.add(createEmptySlotStatus(new SlotID(taskExecutorResourceId, i)));
+		}
+
+		return new SlotReport(slotStatusSet);
+	}
+
+	private static SlotStatus createEmptySlotStatus(SlotID slotId) {
+		return new SlotStatus(slotId, ResourceProfile.ANY);
+	}
+
+	private DeclarativeSlotManager createSlotManager(ResourceManagerId resourceManagerId, ResourceActions resourceManagerActions) {
+		return createSlotManager(resourceManagerId, resourceManagerActions, 1);
+	}
+
+	private DeclarativeSlotManager createSlotManager(ResourceManagerId resourceManagerId, ResourceActions resourceManagerActions, int numSlotsPerWorker) {
+		return createDeclarativeSlotManagerBuilder()
+			.setNumSlotsPerWorker(numSlotsPerWorker)
+			.setRedundantTaskManagerNum(0)
+			.buildAndStartWithDirectExec(resourceManagerId, resourceManagerActions);
+	}
+
+	private DeclarativeSlotManagerBuilder createDeclarativeSlotManagerBuilder() {
+		return DeclarativeSlotManagerBuilder.newBuilder().setDefaultWorkerResourceSpec(WORKER_RESOURCE_SPEC);
 	}
 
 	private static ResourceRequirements createResourceRequirementsForSingleSlot() {
