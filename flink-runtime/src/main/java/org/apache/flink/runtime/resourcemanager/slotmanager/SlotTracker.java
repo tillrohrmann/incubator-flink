@@ -30,7 +30,7 @@ import java.util.Collection;
 /**
  * Tracks slots and their {@link SlotState}.
  */
-interface SlotTracker {
+public interface SlotTracker {
 
 	/**
 	 * Adds the given slot to this tracker. The given slot may already be allocated for a job.
@@ -84,6 +84,8 @@ interface SlotTracker {
 	 * @param slotStatuses slot statues
 	 */
 	void notifySlotStatus(Iterable<SlotStatus> slotStatuses);
+
+	void registerSlotStatusUpdateListener(SlotStatusUpdateListener slotStatusUpdateListener);
 
 	/**
 	 * Returns all free slots. The returned collection is immutable.

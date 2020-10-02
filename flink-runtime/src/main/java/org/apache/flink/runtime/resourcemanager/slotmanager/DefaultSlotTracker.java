@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -41,7 +42,7 @@ import java.util.function.Consumer;
 /**
  * Default SlotTracker implementation.
  */
-class DefaultSlotTracker implements SlotTracker {
+public class DefaultSlotTracker implements SlotTracker {
 	private static final Logger LOG = LoggerFactory.getLogger(DefaultSlotTracker.class);
 
 	/**
@@ -54,12 +55,13 @@ class DefaultSlotTracker implements SlotTracker {
 	 */
 	private final Map<SlotID, DeclarativeTaskManagerSlot> freeSlots = new LinkedHashMap<>();
 
-	private final SlotStatusUpdateListener slotStatusUpdateListener;
+	private final MultiSlotStatusUpdateListener slotStatusUpdateListeners = new MultiSlotStatusUpdateListener();
 
 	private final SlotStatusStateReconciler slotStatusStateReconciler = new SlotStatusStateReconciler(this::transitionSlotToFree, this::transitionSlotToPending, this::transitionSlotToAllocated);
 
-	public DefaultSlotTracker(SlotStatusUpdateListener slotStatusUpdateListener) {
-		this.slotStatusUpdateListener = Preconditions.checkNotNull(slotStatusUpdateListener);
+	@Override
+	public void registerSlotStatusUpdateListener(SlotStatusUpdateListener slotStatusUpdateListener) {
+		this.slotStatusUpdateListeners.registerSlotStatusUpdateListener(slotStatusUpdateListener);
 	}
 
 	@Override
@@ -157,7 +159,7 @@ class DefaultSlotTracker implements SlotTracker {
 
 		slot.freeSlot();
 		freeSlots.put(slot.getSlotId(), slot);
-		slotStatusUpdateListener.notifySlotStatusChange(slot, state, SlotState.FREE, jobId);
+		slotStatusUpdateListeners.notifySlotStatusChange(slot, state, SlotState.FREE, jobId);
 	}
 
 	private void transitionSlotToPending(DeclarativeTaskManagerSlot slot, JobID jobId) {
@@ -166,7 +168,7 @@ class DefaultSlotTracker implements SlotTracker {
 
 		slot.startAllocation(jobId);
 		freeSlots.remove(slot.getSlotId());
-		slotStatusUpdateListener.notifySlotStatusChange(slot, SlotState.FREE, SlotState.PENDING, jobId);
+		slotStatusUpdateListeners.notifySlotStatusChange(slot, SlotState.FREE, SlotState.PENDING, jobId);
 	}
 
 	private void transitionSlotToAllocated(DeclarativeTaskManagerSlot slot, JobID jobId) {
@@ -174,7 +176,7 @@ class DefaultSlotTracker implements SlotTracker {
 		Preconditions.checkState(slot.getState() == SlotState.PENDING);
 		Preconditions.checkState(jobId.equals(slot.getJobId()));
 
-		slotStatusUpdateListener.notifySlotStatusChange(slot, SlotState.PENDING, SlotState.ALLOCATED, jobId);
+		slotStatusUpdateListeners.notifySlotStatusChange(slot, SlotState.PENDING, SlotState.ALLOCATED, jobId);
 		slot.completeAllocation();
 	}
 
@@ -251,6 +253,20 @@ class DefaultSlotTracker implements SlotTracker {
 						}
 				}
 			}
+		}
+	}
+
+	private static class MultiSlotStatusUpdateListener implements SlotStatusUpdateListener {
+
+		private final Collection<SlotStatusUpdateListener> listeners = new ArrayList<>();
+
+		public void registerSlotStatusUpdateListener(SlotStatusUpdateListener slotStatusUpdateListener) {
+			listeners.add(slotStatusUpdateListener);
+		}
+
+		@Override
+		public void notifySlotStatusChange(TaskManagerSlotInformation slot, SlotState previous, SlotState current, JobID jobId) {
+			listeners.forEach(listeners -> listeners.notifySlotStatusChange(slot, previous, current, jobId));
 		}
 	}
 }

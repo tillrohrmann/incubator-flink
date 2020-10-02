@@ -42,6 +42,7 @@ public class DeclarativeSlotManagerBuilder {
 	private int maxSlotNum;
 	private int redundantTaskManagerNum;
 	private ResourceTracker resourceTracker;
+	private SlotTracker slotTracker;
 
 	private DeclarativeSlotManagerBuilder() {
 		this.slotMatchingStrategy = AnyMatchingSlotMatchingStrategy.INSTANCE;
@@ -56,6 +57,7 @@ public class DeclarativeSlotManagerBuilder {
 		this.maxSlotNum = ResourceManagerOptions.MAX_SLOT_NUM.defaultValue();
 		this.redundantTaskManagerNum = ResourceManagerOptions.REDUNDANT_TASK_MANAGER_NUM.defaultValue();
 		this.resourceTracker = new DefaultResourceTracker();
+		this.slotTracker = new DefaultSlotTracker();
 	}
 
 	public static DeclarativeSlotManagerBuilder newBuilder() {
@@ -122,6 +124,11 @@ public class DeclarativeSlotManagerBuilder {
 		return this;
 	}
 
+	public DeclarativeSlotManagerBuilder setSlotTracker(SlotTracker slotTracker) {
+		this.slotTracker = slotTracker;
+		return this;
+	}
+
 	public DeclarativeSlotManager build() {
 		final SlotManagerConfiguration slotManagerConfiguration = new SlotManagerConfiguration(
 			taskManagerRequestTimeout,
@@ -138,7 +145,8 @@ public class DeclarativeSlotManagerBuilder {
 			scheduledExecutor,
 			slotManagerConfiguration,
 			slotManagerMetricGroup,
-			resourceTracker);
+			resourceTracker,
+			slotTracker);
 	}
 
 	public DeclarativeSlotManager buildAndStartWithDirectExec() {

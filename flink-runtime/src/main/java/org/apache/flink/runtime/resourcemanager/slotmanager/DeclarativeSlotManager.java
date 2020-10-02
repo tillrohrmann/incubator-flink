@@ -67,7 +67,7 @@ public class DeclarativeSlotManager implements SlotManager {
 
 	private final HashMap<SlotID, CompletableFuture<Acknowledge>> pendingSlotAllocationFutures;
 
-	private final DefaultSlotTracker slotTracker;
+	private final SlotTracker slotTracker;
 	private final SlotMatchingStrategy slotMatchingStrategy;
 
 	/** ResourceManager's id. */
@@ -94,12 +94,12 @@ public class DeclarativeSlotManager implements SlotManager {
 
 	private TaskExecutorManager taskExecutorManager;
 
-	// TODO: add tracker constructor arguments
 	public DeclarativeSlotManager(
 			ScheduledExecutor scheduledExecutor,
 			SlotManagerConfiguration slotManagerConfiguration,
 			SlotManagerMetricGroup slotManagerMetricGroup,
-			ResourceTracker resourceTracker) {
+			ResourceTracker resourceTracker,
+			SlotTracker slotTracker) {
 
 		Preconditions.checkNotNull(slotManagerConfiguration);
 		this.taskManagerRequestTimeout = slotManagerConfiguration.getTaskManagerRequestTimeout();
@@ -108,7 +108,9 @@ public class DeclarativeSlotManager implements SlotManager {
 
 		pendingSlotAllocationFutures = new HashMap<>(16);
 
-		this.slotTracker = new DefaultSlotTracker(createSlotStatusUpdateListener());
+		this.slotTracker = Preconditions.checkNotNull(slotTracker);
+		slotTracker.registerSlotStatusUpdateListener(createSlotStatusUpdateListener());
+
 		slotMatchingStrategy = slotManagerConfiguration.getSlotMatchingStrategy();
 
 		taskExecutorTrackerFactory = (executor, resourceActions) -> new TaskExecutorManager(
@@ -565,11 +567,6 @@ public class DeclarativeSlotManager implements SlotManager {
 	// ---------------------------------------------------------------------------------------------
 	// Testing methods
 	// ---------------------------------------------------------------------------------------------
-
-	@VisibleForTesting
-	DeclarativeTaskManagerSlot getSlot(SlotID slotId) {
-		return slotTracker.getSlot(slotId);
-	}
 
 	@Override
 	@VisibleForTesting

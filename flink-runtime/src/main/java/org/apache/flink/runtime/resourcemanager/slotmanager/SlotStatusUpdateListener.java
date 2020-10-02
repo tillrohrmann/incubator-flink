@@ -26,7 +26,7 @@ import org.apache.flink.api.common.JobID;
  * event that caused the state transition may also have triggered a series of transitions, which new allocations would
  * interfere with.
  */
-interface SlotStatusUpdateListener {
+public  interface SlotStatusUpdateListener {
 
 	/**
 	 * Notification for the status of a slot having changed.

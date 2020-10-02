@@ -59,14 +59,14 @@ public class DefaultSlotTrackerTest extends TestLogger {
 
 	@Test
 	public void testInitialBehavior() {
-		SlotTracker tracker = new DefaultSlotTracker((slot, previous, current, jobId) -> {});
+		SlotTracker tracker = new DefaultSlotTracker();
 
 		assertThat(tracker.getFreeSlots(), empty());
 	}
 
 	@Test
 	public void testSlotAddition() {
-		SlotTracker tracker = new DefaultSlotTracker((slot, previous, current, jobId) -> {});
+		SlotTracker tracker = new DefaultSlotTracker();
 
 		SlotID slotId1 = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 0);
 		SlotID slotId2 = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 1);
@@ -80,7 +80,8 @@ public class DefaultSlotTrackerTest extends TestLogger {
 	@Test
 	public void testSlotRemoval() {
 		Queue<SlotStateTransition> stateTransitions = new ArrayDeque<>();
-		DefaultSlotTracker tracker = new DefaultSlotTracker((slot, previous, current, jobId) ->
+		DefaultSlotTracker tracker = new DefaultSlotTracker();
+		tracker.registerSlotStatusUpdateListener((slot, previous, current, jobId) ->
 			stateTransitions.add(new SlotStateTransition(slot.getSlotId(), previous, current, jobId)));
 
 		SlotID slotId1 = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 0);
@@ -113,7 +114,8 @@ public class DefaultSlotTrackerTest extends TestLogger {
 	@Test
 	public void testAllocationCompletion() {
 		Queue<SlotStateTransition> stateTransitions = new ArrayDeque<>();
-		SlotTracker tracker = new DefaultSlotTracker((slot, previous, current, jobId) ->
+		SlotTracker tracker = new DefaultSlotTracker();
+		tracker.registerSlotStatusUpdateListener((slot, previous, current, jobId) ->
 			stateTransitions.add(new SlotStateTransition(slot.getSlotId(), previous, current, jobId)));
 
 		SlotID slotId = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 0);
@@ -136,7 +138,7 @@ public class DefaultSlotTrackerTest extends TestLogger {
 
 	@Test
 	public void testAllocationCompletionForDifferentJobThrowsIllegalStateException() {
-		SlotTracker tracker = new DefaultSlotTracker((slot, previous, current, jobId) -> {});
+		SlotTracker tracker = new DefaultSlotTracker();
 
 		SlotID slotId = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 0);
 
@@ -153,7 +155,8 @@ public class DefaultSlotTrackerTest extends TestLogger {
 	@Test
 	public void testAllocationCancellation() {
 		Queue<SlotStateTransition> stateTransitions = new ArrayDeque<>();
-		SlotTracker tracker = new DefaultSlotTracker((slot, previous, current, jobId) ->
+		SlotTracker tracker = new DefaultSlotTracker();
+		tracker.registerSlotStatusUpdateListener((slot, previous, current, jobId) ->
 			stateTransitions.add(new SlotStateTransition(slot.getSlotId(), previous, current, jobId)));
 
 		SlotID slotId = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 0);
@@ -171,7 +174,7 @@ public class DefaultSlotTrackerTest extends TestLogger {
 
 	@Test
 	public void testSlotStatusProcessing() {
-		SlotTracker tracker = new DefaultSlotTracker((slot, previous, current, jobId) -> {});
+		SlotTracker tracker = new DefaultSlotTracker();
 		SlotID slotId1 = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 0);
 		SlotID slotId2 = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 1);
 		SlotID slotId3 = new SlotID(TASK_EXECUTOR_CONNECTION.getResourceID(), 2);
