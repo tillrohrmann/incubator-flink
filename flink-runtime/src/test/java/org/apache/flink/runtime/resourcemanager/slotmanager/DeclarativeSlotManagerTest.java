@@ -995,9 +995,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 
 			final JobID jobId = new JobID();
 
-			// we take pending slots into account for matching resource requirements, so we
-			// only request new resources for first missing resource and wait for the pending slots to be assigned
-
+			// the first 2 requirements should be fulfillable with the pending slots of the first allocation (2 slots per worker)
 			slotManager.processResourceRequirements(createResourceRequirements(jobId, 1));
 			assertThat(resourceRequests.get(), is(1));
 
@@ -1005,7 +1003,7 @@ public class DeclarativeSlotManagerTest extends TestLogger {
 			assertThat(resourceRequests.get(), is(1));
 
 			slotManager.processResourceRequirements(createResourceRequirements(jobId, 3));
-			assertThat(resourceRequests.get(), is(1));
+			assertThat(resourceRequests.get(), is(2));
 		}
 	}
 

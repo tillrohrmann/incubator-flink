@@ -32,6 +32,7 @@ import org.apache.flink.runtime.metrics.groups.SlotManagerMetricGroup;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerId;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
+import org.apache.flink.runtime.slots.ResourceCounter;
 import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.runtime.slots.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
@@ -46,13 +47,16 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledFuture;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of {@link SlotManager}.
@@ -402,19 +406,73 @@ public class DeclarativeSlotManager implements SlotManager {
 
 	private void checkResourceRequirements() {
 		final Map<JobID, Collection<ResourceRequirement>> resourceAllocationInfo = resourceTracker.getRequiredResources();
+
+		final Map<JobID, ResourceCounter> outstandingRequirements = new LinkedHashMap<>();
 		for (Map.Entry<JobID, Collection<ResourceRequirement>> resourceRequirements : resourceAllocationInfo.entrySet()) {
 			JobID jobId = resourceRequirements.getKey();
 
-			boolean allRequirementsFulfilled = true;
 			for (ResourceRequirement resourceRequirement : resourceRequirements.getValue()) {
-				boolean requirementWasFulfilled = internalRequestSlots(jobId, jobMasterTargetAddresses.get(jobId), resourceRequirement);
-				allRequirementsFulfilled &= requirementWasFulfilled;
-			}
-
-			if (!allRequirementsFulfilled) {
-				resourceActions.notifyNotEnoughResourcesAvailable(jobId, resourceTracker.getAcquiredResources(jobId));
+				int numMissingSlots = internalRequestSlots(jobId, jobMasterTargetAddresses.get(jobId), resourceRequirement);
+				if (numMissingSlots > 0) {
+					outstandingRequirements
+						.computeIfAbsent(jobId, ignored -> new ResourceCounter())
+						.incrementCount(resourceRequirement.getResourceProfile(), numMissingSlots);
+				}
 			}
 		}
+
+		final ResourceCounter pendingSlots = new ResourceCounter(taskExecutorManager.getPendingTaskManagerSlots().stream().collect(
+			Collectors.groupingBy(
+				PendingTaskManagerSlot::getResourceProfile,
+				Collectors.summingInt(x -> 1))));
+
+		for (Map.Entry<JobID, ResourceCounter> unfulfilledRequirement : outstandingRequirements.entrySet()) {
+			tryFulfillRequirementsWithPendingOrNewSlots(
+				unfulfilledRequirement.getKey(),
+				unfulfilledRequirement.getValue().getResourceProfilesWithCount(),
+				pendingSlots);
+		}
+	}
+
+	private void tryFulfillRequirementsWithPendingOrNewSlots(JobID jobId, Map<ResourceProfile, Integer> requiredResource, ResourceCounter pendingSlots) {
+		for (Map.Entry<ResourceProfile, Integer> requiredProfileWithCount : requiredResource.entrySet()) {
+			ResourceProfile profile = requiredProfileWithCount.getKey();
+			for (int i = 0; i < requiredProfileWithCount.getValue(); i++) {
+				if (!fulfillWithPendingSlot(profile, pendingSlots)) {
+					Optional<ResourceRequirement> newlyFulfillableRequirements = taskExecutorManager.allocateResource(profile);
+					if (newlyFulfillableRequirements.isPresent()) {
+						ResourceRequirement newSlots = newlyFulfillableRequirements.get();
+						// reserve one of the new slots
+						if (newSlots.getNumberOfRequiredSlots() > 1) {
+							pendingSlots.incrementCount(newSlots.getResourceProfile(), newSlots.getNumberOfRequiredSlots() - 1);
+						}
+					} else {
+						// TODO: include pending slots in response?
+						resourceActions.notifyNotEnoughResourcesAvailable(jobId, resourceTracker.getAcquiredResources(jobId));
+						return;
+					}
+				}
+			}
+		}
+	}
+
+	private boolean fulfillWithPendingSlot(ResourceProfile resourceProfile, ResourceCounter pendingSlots) {
+		Set<ResourceProfile> pendingSlotProfiles = pendingSlots.getResourceProfiles();
+
+		// short-cut, pretty much only applicable to fine-grained resource management
+		if (pendingSlotProfiles.contains(resourceProfile)) {
+			pendingSlots.decrementCount(resourceProfile, 1);
+			return true;
+		}
+
+		for (ResourceProfile pendingSlotProfile : pendingSlotProfiles) {
+			if (pendingSlotProfile.isMatching(resourceProfile)) {
+				pendingSlots.decrementCount(pendingSlotProfile, 1);
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -428,12 +486,12 @@ public class DeclarativeSlotManager implements SlotManager {
 	 * @param jobId job to allocate slots for
 	 * @param targetAddress address of the jobmaster
 	 * @param resourceRequirement required slots
-	 * @return whether all requirements could be fulfilled
+	 * @return the number of unfulfilled requirements
 	 */
-	private boolean internalRequestSlots(JobID jobId, String targetAddress, ResourceRequirement resourceRequirement) {
+	private int internalRequestSlots(JobID jobId, String targetAddress, ResourceRequirement resourceRequirement) {
 		final ResourceProfile resourceProfile = resourceRequirement.getResourceProfile();
 
-		boolean allRequirementsMayBeFulfilled = true;
+		int numUnfulfilled = 0;
 		for (int x = 0; x < resourceRequirement.getNumberOfRequiredSlots(); x++) {
 			Collection<TaskManagerSlotInformation> freeSlots = slotTracker.getFreeSlots();
 
@@ -442,33 +500,10 @@ public class DeclarativeSlotManager implements SlotManager {
 				// we do not need to modify freeSlots because it is indirectly modified by the allocation
 				allocateSlot(reservedSlot.get(), jobId, targetAddress, resourceProfile);
 			} else {
-				// this isn't really correct, since we are not reserving the pending slot
-				// thus a single pending slot can "fulfill" any number of requirements, so long as the profiles fit
-				if (!isFulfillableByPendingSlots(resourceProfile)) {
-					if (!taskExecutorManager.allocateResource(resourceProfile)) {
-						allRequirementsMayBeFulfilled = false;
-					}
-				}
-				// TODO: Rework how pending slots are handled; currently we repeatedly ask for pending slots until enough
-				// TODO: were allocated to fulfill the current requirements, but we'll generally request
-				// TODO: more than we actually need because we don't mark the soon(TM) fulfilled requirements as pending.
-				// TODO: Basically, separate the request for new task executors from this method, and introduce another
-				// TODO: component that uses _some_ heuristic to request new task executors. For matching resources, we
-				// TODO: then only react to slot registrations by task executors.
+				numUnfulfilled++;
 			}
 		}
-		return allRequirementsMayBeFulfilled;
-	}
-
-	// TODO: remove; inherently flawed since one _big_ slot can fulfill all requirements
-	private boolean isFulfillableByPendingSlots(ResourceProfile resourceProfile) {
-		for (PendingTaskManagerSlot slot : taskExecutorManager.getPendingTaskManagerSlots()) {
-			if (slot.getResourceProfile().isMatching(resourceProfile)) {
-				return true;
-			}
-		}
-
-		return false;
+		return numUnfulfilled;
 	}
 
 	/**

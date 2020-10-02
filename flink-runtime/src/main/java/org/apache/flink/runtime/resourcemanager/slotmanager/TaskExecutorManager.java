@@ -25,6 +25,7 @@ import org.apache.flink.runtime.concurrent.ScheduledExecutor;
 import org.apache.flink.runtime.instance.InstanceID;
 import org.apache.flink.runtime.resourcemanager.WorkerResourceSpec;
 import org.apache.flink.runtime.resourcemanager.registration.TaskExecutorConnection;
+import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.runtime.taskexecutor.SlotReport;
 import org.apache.flink.runtime.taskexecutor.SlotStatus;
 import org.apache.flink.util.FlinkException;
@@ -40,6 +41,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledFuture;
@@ -216,23 +218,23 @@ class TaskExecutorManager implements AutoCloseable {
 	// TaskExecutor allocation
 	// ---------------------------------------------------------------------------------------------
 
-	public boolean allocateResource(ResourceProfile requestedSlotResourceProfile) {
+	public Optional<ResourceRequirement> allocateResource(ResourceProfile requestedSlotResourceProfile) {
 		final int numRegisteredSlots = getNumberRegisteredSlots();
 		final int numPendingSlots = getNumberPendingTaskManagerSlots();
 		if (isMaxSlotNumExceededAfterAdding(numSlotsPerWorker)) {
 			LOG.warn("Could not allocate {} more slots. The number of registered and pending slots is {}, while the maximum is {}.",
 				numSlotsPerWorker, numPendingSlots + numRegisteredSlots, maxSlotNum);
-			return false;
+			return Optional.empty();
 		}
 
 		if (!defaultSlotResourceProfile.isMatching(requestedSlotResourceProfile)) {
 			// requested resource profile is unfulfillable
-			return false;
+			return Optional.empty();
 		}
 
 		if (!resourceActions.allocateResource(defaultWorkerResourceSpec)) {
 			// resource cannot be allocated
-			return false;
+			return Optional.empty();
 		}
 
 		for (int i = 0; i < numSlotsPerWorker; ++i) {
@@ -240,7 +242,7 @@ class TaskExecutorManager implements AutoCloseable {
 			pendingSlots.put(pendingTaskManagerSlot.getTaskManagerSlotId(), pendingTaskManagerSlot);
 		}
 
-		return true;
+		return Optional.of(ResourceRequirement.create(defaultSlotResourceProfile, numSlotsPerWorker));
 	}
 
 	private boolean isMaxSlotNumExceededAfterAdding(int numNewSlot) {
@@ -307,7 +309,7 @@ class TaskExecutorManager implements AutoCloseable {
 	private int allocateResources(int workerNum) {
 		int allocatedWorkerNum = 0;
 		for (int i = 0; i < workerNum; ++i) {
-			if (allocateResource(defaultSlotResourceProfile)) {
+			if (allocateResource(defaultSlotResourceProfile).isPresent()) {
 				++allocatedWorkerNum;
 			} else {
 				break;
