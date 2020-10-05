@@ -447,7 +447,6 @@ public class DeclarativeSlotManager implements SlotManager {
 							pendingSlots.incrementCount(newSlots.getResourceProfile(), newSlots.getNumberOfRequiredSlots() - 1);
 						}
 					} else {
-						// TODO: include pending slots in response?
 						resourceActions.notifyNotEnoughResourcesAvailable(jobId, resourceTracker.getAcquiredResources(jobId));
 						return;
 					}
