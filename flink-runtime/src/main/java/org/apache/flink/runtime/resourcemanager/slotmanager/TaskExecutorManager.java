@@ -144,10 +144,8 @@ class TaskExecutorManager implements AutoCloseable {
 	}
 
 	public boolean registerTaskManager(final TaskExecutorConnection taskExecutorConnection, SlotReport initialSlotReport) {
-		LOG.debug("Registering TaskManager {} under {} at the SlotManager.", taskExecutorConnection.getResourceID(), taskExecutorConnection.getInstanceID());
-
 		if (isMaxSlotNumExceededAfterRegistration(initialSlotReport)) {
-			LOG.info("The total number of slots exceeds the max limitation {}, release the excess resource.", maxSlotNum);
+			LOG.info("The total number of slots exceeds the max limitation {}, releasing the excess task executor.", maxSlotNum);
 			resourceActions.releaseResource(taskExecutorConnection.getInstanceID(), new FlinkException("The total number of slots exceeds the max limitation."));
 			return false;
 		}
