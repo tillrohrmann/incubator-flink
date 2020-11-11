@@ -916,17 +916,17 @@ public abstract class SchedulerBase implements SchedulerNG {
 				return jobstatus;
 			});
 
-		return savepointFuture.thenCompose((path) ->
-			terminationFuture.thenApply((jobStatus -> path)))
-			.handleAsync((path, throwable) -> {
-				if (throwable != null) {
-					// restart the checkpoint coordinator if stopWithSavepoint failed.
-					startCheckpointScheduler(checkpointCoordinator);
-					throw new CompletionException(throwable);
-				}
+		final CompletableFuture<String> savepointPathFuture = savepointFuture.thenCompose((path) ->
+			terminationFuture.thenApply((jobStatus -> path)));
 
-				return path;
-			}, mainThreadExecutor);
+		savepointPathFuture.whenCompleteAsync((s, throwable) -> {
+			if (throwable != null) {
+				// restart the checkpoint coordinator if stopWithSavepoint failed.
+				startCheckpointScheduler(checkpointCoordinator);
+			}
+		}, mainThreadExecutor);
+
+		return savepointPathFuture;
 	}
 
 	private String retrieveTaskManagerLocation(ExecutionAttemptID executionAttemptID) {
