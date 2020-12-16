@@ -28,6 +28,7 @@ import org.apache.flink.runtime.scheduler.SchedulerNGFactory;
 public final class SchedulerNGFactoryFactory {
 
     public static final String SCHEDULER_TYPE_NG = "ng";
+    public static final String DECLARATIVE_SCHEDULER = "declarative";
 
     private SchedulerNGFactoryFactory() {}
 
