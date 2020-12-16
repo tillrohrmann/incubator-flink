@@ -24,7 +24,7 @@ import org.apache.flink.runtime.blob.BlobWriter;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
 import org.apache.flink.runtime.jobgraph.JobGraph;
-import org.apache.flink.runtime.jobmaster.slotpool.SlotPool;
+import org.apache.flink.runtime.jobmaster.slotpool.SlotPoolService;
 import org.apache.flink.runtime.jobmaster.utils.JobMasterBuilder;
 import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
@@ -90,7 +90,7 @@ public class JobMasterSchedulerTest extends TestLogger {
                 BackPressureStatsTracker backPressureStatsTracker,
                 Executor ioExecutor,
                 Configuration jobMasterConfiguration,
-                SlotPool slotPool,
+                SlotPoolService slotPoolService,
                 ScheduledExecutorService futureExecutor,
                 ClassLoader userCodeLoader,
                 CheckpointRecoveryFactory checkpointRecoveryFactory,
