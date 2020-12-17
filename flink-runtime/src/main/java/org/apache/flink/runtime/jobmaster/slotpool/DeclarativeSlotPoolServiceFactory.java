@@ -20,6 +20,7 @@ package org.apache.flink.runtime.jobmaster.slotpool;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.runtime.slots.ResourceRequirements;
 
 import javax.annotation.Nonnull;
 
@@ -37,13 +38,24 @@ public class DeclarativeSlotPoolServiceFactory implements SlotPoolServiceFactory
     @Nonnull
     @Override
     public SlotPoolService createSlotPoolService(@Nonnull JobID jobId) {
+        final DeclareResourceRequirementServiceConnectionManager
+                resourceRequirementServiceConnectionManager =
+                        DefaultDeclareResourceRequirementServiceConnectionManager.create(null);
+
         final DeclarativeSlotPool declarativeSlotPool =
                 new DefaultDeclarativeSlotPool(
                         jobId,
                         new DefaultAllocatedSlotPool(),
-                        ignored -> {},
+                        requiredResources -> {
+                            final ResourceRequirements resourceRequirements =
+                                    ResourceRequirements.create(jobId, null, requiredResources);
+                            resourceRequirementServiceConnectionManager.declareResourceRequirements(
+                                    resourceRequirements);
+                        },
                         idleSlotTimeout,
                         rpcTimeout);
-        return new DeclarativeSlotPoolService(jobId, declarativeSlotPool);
+
+        return new DeclarativeSlotPoolService(
+                jobId, declarativeSlotPool, resourceRequirementServiceConnectionManager);
     }
 }
