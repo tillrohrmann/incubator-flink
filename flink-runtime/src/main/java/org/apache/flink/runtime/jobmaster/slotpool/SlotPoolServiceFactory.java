@@ -44,10 +44,13 @@ public interface SlotPoolServiceFactory {
         final boolean isDeclarativeSchedulerEnabled = isDeclarativeSchedulerEnabled(configuration);
 
         if (ClusterOptions.isDeclarativeResourceManagementEnabled(configuration)) {
+            if (isDeclarativeSchedulerEnabled) {
+                return new DeclarativeSlotPoolServiceFactory(slotIdleTimeout, rpcTimeout);
+            }
+
             return new DeclarativeSlotPoolBridgeServiceFactory(
                     SystemClock.getInstance(), rpcTimeout, slotIdleTimeout, batchSlotTimeout);
-        } else if (isDeclarativeSchedulerEnabled) {
-            return new DeclarativeSlotPoolServiceFactory(slotIdleTimeout, rpcTimeout);
+
         } else {
             return new DefaultSlotPoolServiceFactory(
                     SystemClock.getInstance(), rpcTimeout, slotIdleTimeout, batchSlotTimeout);

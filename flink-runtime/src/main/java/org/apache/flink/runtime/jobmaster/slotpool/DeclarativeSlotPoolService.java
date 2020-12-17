@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.jobmaster.slotpool;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
@@ -42,9 +43,18 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
 
     private final DeclarativeSlotPool declarativeSlotPool;
 
-    public DeclarativeSlotPoolService(JobID jobId, DeclarativeSlotPool declarativeSlotPool) {
+    private final DeclareResourceRequirementServiceConnectionManager
+            resourceRequirementServiceConnectionManager;
+
+    public DeclarativeSlotPoolService(
+            JobID jobId,
+            DeclarativeSlotPool declarativeSlotPool,
+            DeclareResourceRequirementServiceConnectionManager
+                    resourceRequirementServiceConnectionManager) {
         this.jobId = jobId;
         this.declarativeSlotPool = declarativeSlotPool;
+        this.resourceRequirementServiceConnectionManager =
+                resourceRequirementServiceConnectionManager;
     }
 
     @Override
@@ -58,16 +68,16 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
 
     @Override
     public void start(
-            JobMasterId fencingToken,
-            String address,
-            ComponentMainThreadExecutor mainThreadExecutor)
+            JobMasterId jobMasterId, String address, ComponentMainThreadExecutor mainThreadExecutor)
             throws Exception {}
 
     @Override
     public void suspend() {}
 
     @Override
-    public void close() {}
+    public void close() {
+        resourceRequirementServiceConnectionManager.close();
+    }
 
     @Override
     public Collection<SlotOffer> offerSlots(
@@ -101,10 +111,17 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
     }
 
     @Override
-    public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {}
+    public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {
+        resourceRequirementServiceConnectionManager.connect(
+                resourceRequirements ->
+                        resourceManagerGateway.declareRequiredResources(
+                                JobMasterId.generate(), resourceRequirements, Time.seconds(10L)));
+    }
 
     @Override
-    public void disconnectResourceManager() {}
+    public void disconnectResourceManager() {
+        resourceRequirementServiceConnectionManager.disconnect();
+    }
 
     @Override
     public AllocatedSlotReport createAllocatedSlotReport(ResourceID resourceID) {
