@@ -27,13 +27,18 @@ import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
 import org.apache.flink.runtime.jobmaster.AllocatedSlotReport;
 import org.apache.flink.runtime.jobmaster.JobMasterId;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
+import org.apache.flink.runtime.slots.ResourceRequirement;
+import org.apache.flink.runtime.slots.ResourceRequirements;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 
 /** {@link SlotPoolService} implementation for the {@link DeclarativeSlotPool}. */
@@ -41,20 +46,37 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
 
     private final JobID jobId;
 
+    private final Time idleSlotTimeout;
+
+    private final Time rpcTimeout;
+
     private final DeclarativeSlotPool declarativeSlotPool;
 
-    private final DeclareResourceRequirementServiceConnectionManager
-            resourceRequirementServiceConnectionManager;
+    private final HashSet<ResourceID> registeredTaskManagers;
 
-    public DeclarativeSlotPoolService(
-            JobID jobId,
-            DeclarativeSlotPool declarativeSlotPool,
-            DeclareResourceRequirementServiceConnectionManager
-                    resourceRequirementServiceConnectionManager) {
+    private DeclareResourceRequirementServiceConnectionManager
+            resourceRequirementServiceConnectionManager =
+                    NoOpDeclareResourceRequirementServiceConnectionManager.INSTANCE;
+
+    @Nullable private JobMasterId jobMasterId;
+
+    @Nullable private String jobManagerAddress;
+
+    private State state = State.CREATED;
+
+    public DeclarativeSlotPoolService(JobID jobId, Time idleSlotTimeout, Time rpcTimeout) {
         this.jobId = jobId;
-        this.declarativeSlotPool = declarativeSlotPool;
-        this.resourceRequirementServiceConnectionManager =
-                resourceRequirementServiceConnectionManager;
+        this.idleSlotTimeout = idleSlotTimeout;
+        this.rpcTimeout = rpcTimeout;
+        this.registeredTaskManagers = new HashSet<>();
+
+        this.declarativeSlotPool =
+                new DefaultDeclarativeSlotPool(
+                        jobId,
+                        new DefaultAllocatedSlotPool(),
+                        this::declareResourceRequirements,
+                        idleSlotTimeout,
+                        rpcTimeout);
     }
 
     @Override
@@ -68,15 +90,46 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
 
     @Override
     public void start(
-            JobMasterId jobMasterId, String address, ComponentMainThreadExecutor mainThreadExecutor)
-            throws Exception {}
+            JobMasterId jobMasterId,
+            String jobManagerAddress,
+            ComponentMainThreadExecutor mainThreadExecutor)
+            throws Exception {
+        Preconditions.checkState(
+                state == State.CREATED, "The DeclarativeSlotPoolService can only be started once.");
+
+        this.jobMasterId = Preconditions.checkNotNull(jobMasterId);
+        this.jobManagerAddress = Preconditions.checkNotNull(jobManagerAddress);
+
+        this.resourceRequirementServiceConnectionManager =
+                DefaultDeclareResourceRequirementServiceConnectionManager.create(
+                        mainThreadExecutor);
+
+        state = State.STARTED;
+    }
+
+    private void assertHasBeenStarted() {
+        Preconditions.checkState(
+                state == State.STARTED, "The DeclarativeSlotPoolService has to be started.");
+    }
 
     @Override
-    public void suspend() {}
+    public void suspend() {
+        throw new UnsupportedOperationException("This method should not be needed.");
+    }
 
     @Override
     public void close() {
-        resourceRequirementServiceConnectionManager.close();
+        if (state != State.CLOSED) {
+
+            if (resourceRequirementServiceConnectionManager != null) {
+                resourceRequirementServiceConnectionManager.close();
+            }
+
+            releaseAllTaskManagers(
+                    new FlinkException("The DeclarativeSlotPoolService is being closed."));
+
+            state = State.CLOSED;
+        }
     }
 
     @Override
@@ -84,6 +137,7 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
             TaskManagerLocation taskManagerLocation,
             TaskManagerGateway taskManagerGateway,
             Collection<SlotOffer> offers) {
+        assertHasBeenStarted();
         return declarativeSlotPool.offerSlots(
                 offers, taskManagerLocation, taskManagerGateway, System.nanoTime());
     }
@@ -91,6 +145,9 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
     @Override
     public Optional<ResourceID> failAllocation(
             @Nullable ResourceID resourceID, AllocationID allocationId, Exception cause) {
+        assertHasBeenStarted();
+        Preconditions.checkNotNull(resourceID);
+
         declarativeSlotPool.releaseSlot(allocationId, cause);
 
         if (declarativeSlotPool.containsSlots(resourceID)) {
@@ -102,29 +159,72 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
 
     @Override
     public boolean registerTaskManager(ResourceID taskManagerId) {
-        return false;
+        assertHasBeenStarted();
+
+        return registeredTaskManagers.add(taskManagerId);
     }
 
     @Override
     public boolean releaseTaskManager(ResourceID resourceID, Exception cause) {
+        assertHasBeenStarted();
+
+        if (registeredTaskManagers.remove(resourceID)) {
+            internalReleaseTaskManager(resourceID, cause);
+            return true;
+        }
+
         return false;
+    }
+
+    private void releaseAllTaskManagers(Exception cause) {
+        for (ResourceID registeredTaskManager : registeredTaskManagers) {
+            internalReleaseTaskManager(registeredTaskManager, cause);
+        }
+
+        registeredTaskManagers.clear();
+    }
+
+    private void internalReleaseTaskManager(ResourceID taskManagerId, Exception cause) {
+        assertHasBeenStarted();
+
+        declarativeSlotPool.releaseSlots(taskManagerId, cause);
     }
 
     @Override
     public void connectToResourceManager(ResourceManagerGateway resourceManagerGateway) {
+        assertHasBeenStarted();
+
         resourceRequirementServiceConnectionManager.connect(
                 resourceRequirements ->
                         resourceManagerGateway.declareRequiredResources(
-                                JobMasterId.generate(), resourceRequirements, Time.seconds(10L)));
+                                jobMasterId, resourceRequirements, rpcTimeout));
+
+        declareResourceRequirements(declarativeSlotPool.getResourceRequirements());
+    }
+
+    private void declareResourceRequirements(Collection<ResourceRequirement> resourceRequirements) {
+        assertHasBeenStarted();
+
+        resourceRequirementServiceConnectionManager.declareResourceRequirements(
+                ResourceRequirements.create(jobId, jobManagerAddress, resourceRequirements));
     }
 
     @Override
     public void disconnectResourceManager() {
+        assertHasBeenStarted();
+
         resourceRequirementServiceConnectionManager.disconnect();
     }
 
     @Override
     public AllocatedSlotReport createAllocatedSlotReport(ResourceID resourceID) {
+        assertHasBeenStarted();
         return new AllocatedSlotReport(jobId, Collections.emptyList());
+    }
+
+    private enum State {
+        CREATED,
+        STARTED,
+        CLOSED,
     }
 }

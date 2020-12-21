@@ -23,6 +23,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.scheduler.DefaultSchedulerFactory;
 import org.apache.flink.runtime.scheduler.SchedulerNGFactory;
+import org.apache.flink.runtime.scheduler.declarative.DeclarativeSchedulerFactory;
 
 /** Factory for {@link SchedulerNGFactory}. */
 public final class SchedulerNGFactoryFactory {
@@ -37,6 +38,8 @@ public final class SchedulerNGFactoryFactory {
         switch (schedulerName) {
             case SCHEDULER_TYPE_NG:
                 return new DefaultSchedulerFactory();
+            case DECLARATIVE_SCHEDULER:
+                return new DeclarativeSchedulerFactory();
 
             default:
                 throw new IllegalArgumentException(
