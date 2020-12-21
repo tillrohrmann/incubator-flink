@@ -125,7 +125,7 @@ public class DeclarativeScheduler implements SchedulerNG {
             counter += vertex.getParallelism();
         }
 
-        return ResourceCounter.withResource(ResourceProfile.ANY, counter);
+        return ResourceCounter.withResource(ResourceProfile.UNKNOWN, counter);
     }
 
     @Override
