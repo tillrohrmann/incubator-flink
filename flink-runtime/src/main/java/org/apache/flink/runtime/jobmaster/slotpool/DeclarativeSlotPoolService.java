@@ -24,8 +24,10 @@ import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.jobmanager.slots.TaskManagerGateway;
+import org.apache.flink.runtime.jobmaster.AllocatedSlotInfo;
 import org.apache.flink.runtime.jobmaster.AllocatedSlotReport;
 import org.apache.flink.runtime.jobmaster.JobMasterId;
+import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.resourcemanager.ResourceManagerGateway;
 import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.runtime.slots.ResourceRequirements;
@@ -36,8 +38,8 @@ import org.apache.flink.util.Preconditions;
 
 import javax.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 
@@ -219,7 +221,17 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
     @Override
     public AllocatedSlotReport createAllocatedSlotReport(ResourceID resourceID) {
         assertHasBeenStarted();
-        return new AllocatedSlotReport(jobId, Collections.emptyList());
+
+        final Collection<AllocatedSlotInfo> allocatedSlotInfos = new ArrayList<>();
+
+        for (SlotInfo slotInfo : declarativeSlotPool.getAllSlotsInformation()) {
+            if (slotInfo.getTaskManagerLocation().getResourceID().equals(resourceID)) {
+                allocatedSlotInfos.add(
+                        new AllocatedSlotInfo(
+                                slotInfo.getPhysicalSlotNumber(), slotInfo.getAllocationId()));
+            }
+        }
+        return new AllocatedSlotReport(jobId, allocatedSlotInfos);
     }
 
     private enum State {
