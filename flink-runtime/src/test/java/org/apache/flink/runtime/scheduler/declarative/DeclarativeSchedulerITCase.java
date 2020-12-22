@@ -35,7 +35,6 @@ import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -65,7 +64,6 @@ public class DeclarativeSchedulerITCase extends TestLogger {
                             .setNumberSlotsPerTaskManager(NUMBER_SLOTS_PER_TASK_MANAGER)
                             .build());
 
-	@Ignore
     @Test
     public void testSchedulingOfSimpleJob() throws Exception {
         final MiniCluster miniCluster = MINI_CLUSTER_RESOURCE.getMiniCluster();
