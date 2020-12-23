@@ -167,6 +167,8 @@ public class DeclarativeScheduler implements SchedulerNG {
         this.partitionTracker = partitionTracker;
         this.executionDeploymentTracker = executionDeploymentTracker;
         this.initializationTimestamp = initializationTimestamp;
+
+        this.declarativeSlotPool.registerNewSlotsListener(ignored -> newResourcesAvailable());
     }
 
     @Override
@@ -179,7 +181,6 @@ public class DeclarativeScheduler implements SchedulerNG {
         Preconditions.checkState(
                 this.jobStatusListener == null,
                 "DeclarativeScheduler does not support multiple JobStatusListeners.");
-
         this.jobStatusListener = jobStatusListener;
     }
 
@@ -204,6 +205,17 @@ public class DeclarativeScheduler implements SchedulerNG {
         }
     }
 
+    private void newResourcesAvailable() {
+        if (state == SchedulerState.WAITING_FOR_RESOURCES) {
+            try {
+                scheduleIfEnoughResources();
+            } catch (Exception e) {
+                handleFatalFailure(
+                        new FlinkException("Failed to react to new resources available."));
+            }
+        }
+    }
+
     private boolean scheduleIfEnoughResources() throws Exception {
         if (hasEnoughResources()) {
             scheduleExecutionGraphWithExistingResources();
@@ -221,8 +233,14 @@ public class DeclarativeScheduler implements SchedulerNG {
         final Iterator<? extends SlotInfo> slotIterator = allSlots.iterator();
 
         while (!outstandingResources.isEmpty() && slotIterator.hasNext()) {
-            outstandingResources =
-                    outstandingResources.subtract(slotIterator.next().getResourceProfile(), 1);
+            final SlotInfo slotInfo = slotIterator.next();
+            final ResourceProfile resourceProfile = slotInfo.getResourceProfile();
+
+            if (outstandingResources.containsResource(resourceProfile)) {
+                outstandingResources = outstandingResources.subtract(resourceProfile, 1);
+            } else {
+                outstandingResources = outstandingResources.subtract(ResourceProfile.UNKNOWN, 1);
+            }
         }
 
         return outstandingResources.isEmpty();
@@ -245,6 +263,7 @@ public class DeclarativeScheduler implements SchedulerNG {
                 state == SchedulerState.WAITING_FOR_RESOURCES,
                 "Can only schedule the ExecutionGraph after having waited for resources.");
         state = SchedulerState.EXECUTING;
+        schedulingAttempt++;
 
         createExecutionGraphAndAssignResources();
         deployExecutionGraph();
@@ -290,6 +309,11 @@ public class DeclarativeScheduler implements SchedulerNG {
                         executionStateUpdateListener,
                         initializationTimestamp);
         executionGraph.start(mainThreadExecutor);
+        executionGraph.transitionToRunning();
+
+        if (jobStatusListener != null) {
+            executionGraph.registerJobStatusListener(jobStatusListener);
+        }
         //		executionGraph.setInternalTaskFailuresListener(null);
 
         for (ExecutionVertex executionVertex : executionGraph.getAllExecutionVertices()) {
@@ -409,7 +433,9 @@ public class DeclarativeScheduler implements SchedulerNG {
 
     @Override
     public void suspend(Throwable cause) {
-        throw new UnsupportedOperationException("Not supported by the declarative scheduler.");
+        schedulingAttempt++;
+        executionGraph.suspend(cause);
+        declarativeSlotPool.decreaseResourceRequirementsBy(desiredResources);
     }
 
     @Override
@@ -456,12 +482,25 @@ public class DeclarativeScheduler implements SchedulerNG {
 
     @Override
     public ArchivedExecutionGraph requestJob() {
-        throw new UnsupportedOperationException("Not supported by the declarative scheduler.");
+        if (executionGraph != null) {
+            return ArchivedExecutionGraph.createFrom(executionGraph);
+        } else {
+            return ArchivedExecutionGraph.createFromInitializingJob(
+                    jobGraph.getJobID(),
+                    jobGraph.getName(),
+                    jobStatus,
+                    null,
+                    initializationTimestamp);
+        }
     }
 
     @Override
     public JobStatus requestJobStatus() {
-        return jobStatus;
+        if (executionGraph != null) {
+            return executionGraph.getState();
+        } else {
+            return jobStatus;
+        }
     }
 
     @Override

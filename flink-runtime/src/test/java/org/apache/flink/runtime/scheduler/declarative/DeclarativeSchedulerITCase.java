@@ -44,6 +44,7 @@ public class DeclarativeSchedulerITCase extends TestLogger {
 
     private static final int NUMBER_TASK_MANAGERS = 2;
     private static final int NUMBER_SLOTS_PER_TASK_MANAGER = 2;
+    private static final int PARALLELISM = 10;
 
     private static Configuration getConfiguration() {
         final Configuration configuration = new Configuration();
@@ -82,11 +83,11 @@ public class DeclarativeSchedulerITCase extends TestLogger {
     private JobGraph createJobGraph() {
         final JobVertex source = new JobVertex("Source");
         source.setInvokableClass(NoOpInvokable.class);
-        source.setParallelism(NUMBER_SLOTS_PER_TASK_MANAGER);
+        source.setParallelism(PARALLELISM);
 
         final JobVertex sink = new JobVertex("sink");
         sink.setInvokableClass(NoOpInvokable.class);
-        sink.setParallelism(NUMBER_SLOTS_PER_TASK_MANAGER);
+        sink.setParallelism(PARALLELISM);
 
         sink.connectNewDataSetAsInput(
                 source, DistributionPattern.POINTWISE, ResultPartitionType.PIPELINED);
