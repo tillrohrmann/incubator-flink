@@ -18,36 +18,52 @@
 
 package org.apache.flink.runtime.testtasks;
 
-import org.apache.flink.core.testutils.OneShotLatch;
 import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Simple {@link AbstractInvokable} which blocks until the user calls {@link #unblock()}. Moreover,
- * one can wait until n instances of this invokable are running by calling {@link
- * #waitUntilOpsAreRunning()}.
+ * Simple {@link AbstractInvokable} which blocks the first time it is run. Moreover, one can wait
+ * until n instances of this invokable are running by calling {@link #waitUntilOpsAreRunning()}.
  *
  * <p>Before using this class it is important to call {@link #resetFor}.
  */
-public class UnblockNoOpInvokable extends AbstractInvokable {
+public class OnceBlockingNoOpInvokable extends AbstractInvokable {
 
-    private static volatile OneShotLatch blockingLatch = new OneShotLatch();
+    private static final Object lock = new Object();
+
     private static volatile CountDownLatch numOpsRunning = new CountDownLatch(1);
 
-    public UnblockNoOpInvokable(Environment environment) {
+    private static volatile boolean isBlocking = true;
+
+    private volatile boolean running = true;
+
+    public OnceBlockingNoOpInvokable(Environment environment) {
         super(environment);
     }
 
     @Override
     public void invoke() throws Exception {
+
         numOpsRunning.countDown();
-        blockingLatch.await();
+
+        synchronized (lock) {
+            while (isBlocking && running) {
+                lock.wait();
+            }
+        }
+
+        isBlocking = false;
     }
 
-    public static void unblock() {
-        blockingLatch.trigger();
+    @Override
+    public void cancel() throws Exception {
+        running = false;
+
+        synchronized (lock) {
+            lock.notifyAll();
+        }
     }
 
     public static void waitUntilOpsAreRunning() throws InterruptedException {
@@ -56,6 +72,6 @@ public class UnblockNoOpInvokable extends AbstractInvokable {
 
     public static void resetFor(int parallelism) {
         numOpsRunning = new CountDownLatch(parallelism);
-        blockingLatch = new OneShotLatch();
+        isBlocking = true;
     }
 }
