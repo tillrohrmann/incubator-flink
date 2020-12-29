@@ -116,7 +116,7 @@ public class DeclarativeSchedulerITCase extends TestLogger {
         OnceFailingInvokable.reset();
         onceFailingOperator.setInvokableClass(OnceFailingInvokable.class);
 
-        onceFailingOperator.setParallelism(2);
+        onceFailingOperator.setParallelism(1);
         final JobGraph jobGraph = new JobGraph("Once failing job", onceFailingOperator);
         return jobGraph;
     }
