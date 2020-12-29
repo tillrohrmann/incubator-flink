@@ -32,6 +32,7 @@ import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
+import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
@@ -130,7 +131,7 @@ public class DeclarativeScheduler implements SchedulerNG {
 
     private SchedulerState state = SchedulerState.CREATED;
 
-    private long schedulingAttempt = 0;
+    private long stateVersioner = 0;
 
     private ResourceCounter desiredResources = ResourceCounter.empty();
 
@@ -188,6 +189,10 @@ public class DeclarativeScheduler implements SchedulerNG {
     public void startScheduling() {
         declareResources();
 
+        waitForResourcesSafely();
+    }
+
+    private void waitForResourcesSafely() {
         try {
             waitForResources();
         } catch (Exception e) {
@@ -197,11 +202,11 @@ public class DeclarativeScheduler implements SchedulerNG {
 
     private void waitForResources() throws Exception {
         state = SchedulerState.WAITING_FOR_RESOURCES;
-        schedulingAttempt++;
+        stateVersioner++;
 
         if (!scheduleIfEnoughResources()) {
             mainThreadExecutor.schedule(
-                    () -> resourceTimeout(schedulingAttempt), 10L, TimeUnit.SECONDS);
+                    () -> resourceTimeout(stateVersioner), 10L, TimeUnit.SECONDS);
         }
     }
 
@@ -247,7 +252,7 @@ public class DeclarativeScheduler implements SchedulerNG {
     }
 
     private void resourceTimeout(long timeoutForSchedulingAttempt) {
-        if (timeoutForSchedulingAttempt == schedulingAttempt) {
+        if (timeoutForSchedulingAttempt == stateVersioner) {
             try {
                 scheduleExecutionGraphWithExistingResources();
             } catch (Exception e) {
@@ -263,7 +268,7 @@ public class DeclarativeScheduler implements SchedulerNG {
                 state == SchedulerState.WAITING_FOR_RESOURCES,
                 "Can only schedule the ExecutionGraph after having waited for resources.");
         state = SchedulerState.EXECUTING;
-        schedulingAttempt++;
+        stateVersioner++;
 
         createExecutionGraphAndAssignResources();
         deployExecutionGraph();
@@ -311,15 +316,36 @@ public class DeclarativeScheduler implements SchedulerNG {
         executionGraph.start(mainThreadExecutor);
         executionGraph.transitionToRunning();
 
-        if (jobStatusListener != null) {
-            executionGraph.registerJobStatusListener(jobStatusListener);
-        }
+        final long currentStateVersion = stateVersioner;
+
+        FutureUtils.assertNoException(
+                executionGraph
+                        .getTerminationFuture()
+                        .thenAccept(
+                                terminalState -> {
+                                    if (currentStateVersion == stateVersioner) {
+                                        handleTerminalState(terminalState);
+                                    }
+                                }));
         //		executionGraph.setInternalTaskFailuresListener(null);
 
         for (ExecutionVertex executionVertex : executionGraph.getAllExecutionVertices()) {
             final LogicalSlot assignedSlot =
                     parallelismAndResourceAssignments.getAssignedSlot(executionVertex.getID());
             executionVertex.tryAssignResource(assignedSlot);
+        }
+    }
+
+    private void handleTerminalState(JobStatus terminalState) {
+        Preconditions.checkState(state == SchedulerState.EXECUTING, "Scheduler must be executing.");
+        Preconditions.checkArgument(terminalState.isTerminalState());
+
+        if (jobStatusListener != null) {
+            jobStatusListener.jobStatusChanges(
+                    jobGraph.getJobID(),
+                    terminalState,
+                    executionGraph.getStatusTimestamp(terminalState),
+                    executionGraph.getFailureCause());
         }
     }
 
@@ -433,7 +459,7 @@ public class DeclarativeScheduler implements SchedulerNG {
 
     @Override
     public void suspend(Throwable cause) {
-        schedulingAttempt++;
+        stateVersioner++;
         executionGraph.suspend(cause);
         declarativeSlotPool.decreaseResourceRequirementsBy(desiredResources);
     }
@@ -450,16 +476,63 @@ public class DeclarativeScheduler implements SchedulerNG {
 
     @Override
     public void handleGlobalFailure(Throwable cause) {
-        throw new UnsupportedOperationException("Not supported by the declarative scheduler.");
+        Preconditions.checkState(
+                state == SchedulerState.EXECUTING,
+                "The scheduler should only handle failures when it is running.");
+
+        if (canRestart(cause)) {
+            state = SchedulerState.GLOBALLY_RESTARTING;
+            stateVersioner++;
+
+            executionGraph.cancel();
+            final CompletableFuture<JobStatus> terminationFuture =
+                    executionGraph.getTerminationFuture();
+
+            final long currentStateVersion = stateVersioner;
+            FutureUtils.assertNoException(
+                    terminationFuture.thenRun(
+                            () -> {
+                                if (currentStateVersion == stateVersioner) {
+                                    restartScheduling();
+                                }
+                            }));
+        } else {
+            executionGraph.failJob(cause);
+        }
+    }
+
+    private void restartScheduling() {
+        executionGraph = null;
+        waitForResourcesSafely();
+    }
+
+    private boolean canRestart(Throwable cause) {
+        return true;
     }
 
     @Override
     public boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
         if (state == SchedulerState.EXECUTING && executionGraph != null) {
-            return executionGraph.updateState(taskExecutionState);
+            final boolean updateStateSuccess = executionGraph.updateState(taskExecutionState);
+
+            if (updateStateSuccess) {
+                if (taskExecutionState.getExecutionState() == ExecutionState.FAILED) {
+                    handleTaskFailure(
+                            taskExecutionState.getID(),
+                            taskExecutionState.getError(userCodeClassLoader));
+                }
+
+                return true;
+            } else {
+                return false;
+            }
         } else {
             return false;
         }
+    }
+
+    private void handleTaskFailure(ExecutionAttemptID executionAttemptId, Throwable cause) {
+        handleGlobalFailure(cause);
     }
 
     @Override
@@ -593,5 +666,7 @@ public class DeclarativeScheduler implements SchedulerNG {
         CREATED,
         WAITING_FOR_RESOURCES,
         EXECUTING,
+        GLOBALLY_RESTARTING,
+        FINISHED,
     }
 }

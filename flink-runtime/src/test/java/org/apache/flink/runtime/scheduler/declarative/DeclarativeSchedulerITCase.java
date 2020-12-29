@@ -23,15 +23,18 @@ import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.dispatcher.SchedulerNGFactoryFactory;
+import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 import org.apache.flink.runtime.jobmaster.JobResult;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.runtime.testutils.MiniClusterResource;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
+import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.ClassRule;
@@ -93,5 +96,54 @@ public class DeclarativeSchedulerITCase extends TestLogger {
                 source, DistributionPattern.POINTWISE, ResultPartitionType.PIPELINED);
 
         return new JobGraph("Simple job", source, sink);
+    }
+
+    @Test
+    public void testGlobalFailoverIfTaskFails() {
+        final MiniCluster miniCluster = MINI_CLUSTER_RESOURCE.getMiniCluster();
+        final JobGraph jobGraph = createOnceFailingJobGraph();
+
+        miniCluster.submitJob(jobGraph).join();
+
+        final JobResult jobResult = miniCluster.requestJobResult(jobGraph.getJobID()).join();
+
+        assertTrue(jobResult.isSuccess());
+    }
+
+    private JobGraph createOnceFailingJobGraph() {
+        final JobVertex onceFailingOperator = new JobVertex("Once failing operator");
+
+        OnceFailingInvokable.reset();
+        onceFailingOperator.setInvokableClass(OnceFailingInvokable.class);
+
+        onceFailingOperator.setParallelism(2);
+        final JobGraph jobGraph = new JobGraph("Once failing job", onceFailingOperator);
+        return jobGraph;
+    }
+
+    /** Once failing {@link AbstractInvokable}. */
+    public static final class OnceFailingInvokable extends AbstractInvokable {
+        private static volatile boolean hasFailed = false;
+
+        /**
+         * Create an Invokable task and set its environment.
+         *
+         * @param environment The environment assigned to this invokable.
+         */
+        public OnceFailingInvokable(Environment environment) {
+            super(environment);
+        }
+
+        @Override
+        public void invoke() throws Exception {
+            if (!hasFailed && getIndexInSubtaskGroup() == 0) {
+                hasFailed = true;
+                throw new FlinkRuntimeException("Test failure.");
+            }
+        }
+
+        private static void reset() {
+            hasFailed = false;
+        }
     }
 }
