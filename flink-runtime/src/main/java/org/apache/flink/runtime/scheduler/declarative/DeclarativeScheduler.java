@@ -27,6 +27,7 @@ import org.apache.flink.queryablestate.KvStateID;
 import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 import org.apache.flink.runtime.blob.BlobWriter;
+import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
@@ -35,6 +36,7 @@ import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
+import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionDeploymentListener;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
@@ -65,6 +67,7 @@ import org.apache.flink.runtime.jobmaster.slotpool.SingleLogicalSlot;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 import org.apache.flink.runtime.jobmaster.slotpool.ThrowingSlotProvider;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
+import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
@@ -79,6 +82,7 @@ import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresLis
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
+import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 
@@ -653,12 +657,96 @@ public class DeclarativeScheduler implements SchedulerNG {
             long checkpointId,
             CheckpointMetrics checkpointMetrics,
             TaskStateSnapshot checkpointState) {
-        throw new UnsupportedOperationException("Not supported by the declarative scheduler.");
+
+        if (executionGraph != null) {
+            final CheckpointCoordinator checkpointCoordinator =
+                    executionGraph.getCheckpointCoordinator();
+            final AcknowledgeCheckpoint ackMessage =
+                    new AcknowledgeCheckpoint(
+                            jobID,
+                            executionAttemptID,
+                            checkpointId,
+                            checkpointMetrics,
+                            checkpointState);
+
+            final String taskManagerLocationInfo =
+                    retrieveTaskManagerLocation(executionGraph, executionAttemptID);
+
+            if (checkpointCoordinator != null) {
+                ioExecutor.execute(
+                        () -> {
+                            try {
+                                checkpointCoordinator.receiveAcknowledgeMessage(
+                                        ackMessage, taskManagerLocationInfo);
+                            } catch (Throwable t) {
+                                logger.warn(
+                                        "Error while processing checkpoint acknowledgement message",
+                                        t);
+                            }
+                        });
+            } else {
+                String errorMessage =
+                        "Received AcknowledgeCheckpoint message for job {} with no CheckpointCoordinator";
+                if (executionGraph.getState() == JobStatus.RUNNING) {
+                    logger.error(errorMessage, jobGraph.getJobID());
+                } else {
+                    logger.debug(errorMessage, jobGraph.getJobID());
+                }
+            }
+        } else {
+            logger.warn(
+                    "Received AcknowledgeCheckpoint message for job {} while the ExecutionGraph is null.",
+                    jobGraph.getJobID());
+        }
+    }
+
+    private String retrieveTaskManagerLocation(
+            ExecutionGraph executionGraph, ExecutionAttemptID executionAttemptID) {
+        final Optional<Execution> currentExecution =
+                Optional.ofNullable(
+                        executionGraph.getRegisteredExecutions().get(executionAttemptID));
+
+        return currentExecution
+                .map(Execution::getAssignedResourceLocation)
+                .map(TaskManagerLocation::toString)
+                .orElse("Unknown location");
     }
 
     @Override
     public void declineCheckpoint(DeclineCheckpoint decline) {
-        throw new UnsupportedOperationException("Not supported by the declarative scheduler.");
+        if (executionGraph != null) {
+            final CheckpointCoordinator checkpointCoordinator =
+                    executionGraph.getCheckpointCoordinator();
+            final String taskManagerLocationInfo =
+                    retrieveTaskManagerLocation(executionGraph, decline.getTaskExecutionId());
+
+            if (checkpointCoordinator != null) {
+                ioExecutor.execute(
+                        () -> {
+                            try {
+                                checkpointCoordinator.receiveDeclineMessage(
+                                        decline, taskManagerLocationInfo);
+                            } catch (Exception e) {
+                                logger.error(
+                                        "Error in CheckpointCoordinator while processing {}",
+                                        decline,
+                                        e);
+                            }
+                        });
+            } else {
+                String errorMessage =
+                        "Received DeclineCheckpoint message for job {} with no CheckpointCoordinator";
+                if (executionGraph.getState() == JobStatus.RUNNING) {
+                    logger.error(errorMessage, jobGraph.getJobID());
+                } else {
+                    logger.debug(errorMessage, jobGraph.getJobID());
+                }
+            }
+        } else {
+            logger.warn(
+                    "Received DeclineCheckpoint message for job {} while the ExecutionGraph is null.",
+                    jobGraph.getJobID());
+        }
     }
 
     @Override

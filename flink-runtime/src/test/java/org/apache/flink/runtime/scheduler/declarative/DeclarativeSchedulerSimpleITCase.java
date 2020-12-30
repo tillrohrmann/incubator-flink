@@ -43,7 +43,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
 /** Integration tests for the {@link DeclarativeScheduler}. */
-public class DeclarativeSchedulerITCase extends TestLogger {
+public class DeclarativeSchedulerSimpleITCase extends TestLogger {
 
     private static final int NUMBER_TASK_MANAGERS = 2;
     private static final int NUMBER_SLOTS_PER_TASK_MANAGER = 2;
