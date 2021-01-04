@@ -41,7 +41,6 @@ import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.annotation.Nullable;
@@ -73,7 +72,6 @@ public class DeclarativeSchedulerITCase extends TestLogger {
                             .build());
 
     /** Tests that the declarative scheduler can recover stateful operators. */
-    @Ignore
     @Test
     public void testGlobalFailoverCanRecoverState() throws Exception {
 

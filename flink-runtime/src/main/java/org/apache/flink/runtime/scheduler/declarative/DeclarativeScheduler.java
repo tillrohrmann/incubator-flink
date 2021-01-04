@@ -28,8 +28,11 @@ import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 import org.apache.flink.runtime.blob.BlobWriter;
 import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
+import org.apache.flink.runtime.checkpoint.CheckpointIDCounter;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
+import org.apache.flink.runtime.checkpoint.CheckpointsCleaner;
+import org.apache.flink.runtime.checkpoint.CompletedCheckpointStore;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
@@ -52,6 +55,7 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
 import org.apache.flink.runtime.jobmanager.scheduler.Locality;
 import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTracker;
@@ -78,11 +82,13 @@ import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
+import org.apache.flink.runtime.scheduler.SchedulerUtils;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
+import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
 
@@ -95,6 +101,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
@@ -124,8 +131,11 @@ public class DeclarativeScheduler implements SchedulerNG {
     private final JobMasterPartitionTracker partitionTracker;
     private final ExecutionDeploymentTracker executionDeploymentTracker;
     private final long initializationTimestamp;
-    private final CheckpointRecoveryFactory checkpointRecoveryFactory;
     private final JobManagerJobMetricGroup jobManagerJobMetricGroup;
+
+    private final CompletedCheckpointStore completedCheckpointStore;
+    private final CheckpointIDCounter checkpointIdCounter;
+    private final CheckpointsCleaner checkpointsCleaner;
 
     private JobStatus jobStatus = JobStatus.CREATED;
 
@@ -158,7 +168,8 @@ public class DeclarativeScheduler implements SchedulerNG {
             ShuffleMaster<?> shuffleMaster,
             JobMasterPartitionTracker partitionTracker,
             ExecutionDeploymentTracker executionDeploymentTracker,
-            long initializationTimestamp) {
+            long initializationTimestamp)
+            throws Exception {
         this.jobGraph = jobGraph;
         this.configuration = configuration;
         this.logger = LoggerFactory.getLogger(DeclarativeScheduler.class);
@@ -166,7 +177,6 @@ public class DeclarativeScheduler implements SchedulerNG {
         this.futureExecutor = futureExecutor;
         this.ioExecutor = ioExecutor;
         this.userCodeClassLoader = userCodeClassLoader;
-        this.checkpointRecoveryFactory = checkpointRecoveryFactory;
         this.rpcTimeout = rpcTimeout;
         this.blobWriter = blobWriter;
         this.jobManagerJobMetricGroup = jobManagerJobMetricGroup;
@@ -174,6 +184,18 @@ public class DeclarativeScheduler implements SchedulerNG {
         this.partitionTracker = partitionTracker;
         this.executionDeploymentTracker = executionDeploymentTracker;
         this.initializationTimestamp = initializationTimestamp;
+
+        this.completedCheckpointStore =
+                SchedulerUtils.createCompletedCheckpointStoreIfCheckpointingIsEnabled(
+                        jobGraph,
+                        configuration,
+                        userCodeClassLoader,
+                        checkpointRecoveryFactory,
+                        logger);
+        this.checkpointIdCounter =
+                SchedulerUtils.createCheckpointIDCounterIfCheckpointingIsEnabled(
+                        jobGraph, checkpointRecoveryFactory);
+        this.checkpointsCleaner = new CheckpointsCleaner();
 
         this.declarativeSlotPool.registerNewSlotsListener(ignored -> newResourcesAvailable());
     }
@@ -295,35 +317,8 @@ public class DeclarativeScheduler implements SchedulerNG {
             vertex.setParallelism(parallelismAndResourceAssignments.getParallelism(vertex.getID()));
         }
 
-        ExecutionDeploymentListener executionDeploymentListener =
-                new ExecutionDeploymentTrackerDeploymentListenerAdapter(executionDeploymentTracker);
-        ExecutionStateUpdateListener executionStateUpdateListener =
-                (execution, newState) -> {
-                    if (newState.isTerminal()) {
-                        executionDeploymentTracker.stopTrackingDeploymentOf(execution);
-                    }
-                };
+        executionGraph = createExecutionGraphAndRestoreState();
 
-        executionGraph =
-                ExecutionGraphBuilder.buildGraph(
-                        null,
-                        jobGraph,
-                        configuration,
-                        futureExecutor,
-                        ioExecutor,
-                        new ThrowingSlotProvider(),
-                        userCodeClassLoader,
-                        checkpointRecoveryFactory,
-                        rpcTimeout,
-                        jobManagerJobMetricGroup,
-                        blobWriter,
-                        Time.milliseconds(0L),
-                        logger,
-                        shuffleMaster,
-                        partitionTracker,
-                        executionDeploymentListener,
-                        executionStateUpdateListener,
-                        initializationTimestamp);
         executionGraph.start(mainThreadExecutor);
         executionGraph.transitionToRunning();
 
@@ -349,11 +344,89 @@ public class DeclarativeScheduler implements SchedulerNG {
         }
     }
 
+    private ExecutionGraph createExecutionGraphAndRestoreState() throws Exception {
+        ExecutionDeploymentListener executionDeploymentListener =
+                new ExecutionDeploymentTrackerDeploymentListenerAdapter(executionDeploymentTracker);
+        ExecutionStateUpdateListener executionStateUpdateListener =
+                (execution, newState) -> {
+                    if (newState.isTerminal()) {
+                        executionDeploymentTracker.stopTrackingDeploymentOf(execution);
+                    }
+                };
+
+        final ExecutionGraph newExecutionGraph =
+                ExecutionGraphBuilder.buildGraph(
+                        jobGraph,
+                        configuration,
+                        futureExecutor,
+                        ioExecutor,
+                        new ThrowingSlotProvider(),
+                        userCodeClassLoader,
+                        completedCheckpointStore,
+                        checkpointsCleaner,
+                        checkpointIdCounter,
+                        rpcTimeout,
+                        jobManagerJobMetricGroup,
+                        blobWriter,
+                        Time.milliseconds(0L),
+                        logger,
+                        shuffleMaster,
+                        partitionTracker,
+                        executionDeploymentListener,
+                        executionStateUpdateListener,
+                        initializationTimestamp);
+
+        final CheckpointCoordinator checkpointCoordinator =
+                newExecutionGraph.getCheckpointCoordinator();
+
+        if (checkpointCoordinator != null) {
+            // check whether we find a valid checkpoint
+            if (!checkpointCoordinator.restoreInitialCheckpointIfPresent(
+                    new HashSet<>(newExecutionGraph.getAllVertices().values()))) {
+
+                // check whether we can restore from a savepoint
+                tryRestoreExecutionGraphFromSavepoint(
+                        newExecutionGraph, jobGraph.getSavepointRestoreSettings());
+            }
+        }
+
+        return newExecutionGraph;
+    }
+
+    /**
+     * Tries to restore the given {@link ExecutionGraph} from the provided {@link
+     * SavepointRestoreSettings}.
+     *
+     * @param executionGraphToRestore {@link ExecutionGraph} which is supposed to be restored
+     * @param savepointRestoreSettings {@link SavepointRestoreSettings} containing information about
+     *     the savepoint to restore from
+     * @throws Exception if the {@link ExecutionGraph} could not be restored
+     */
+    private void tryRestoreExecutionGraphFromSavepoint(
+            ExecutionGraph executionGraphToRestore,
+            SavepointRestoreSettings savepointRestoreSettings)
+            throws Exception {
+        if (savepointRestoreSettings.restoreSavepoint()) {
+            final CheckpointCoordinator checkpointCoordinator =
+                    executionGraphToRestore.getCheckpointCoordinator();
+            if (checkpointCoordinator != null) {
+                checkpointCoordinator.restoreSavepoint(
+                        savepointRestoreSettings.getRestorePath(),
+                        savepointRestoreSettings.allowNonRestoredState(),
+                        executionGraphToRestore.getAllVertices(),
+                        userCodeClassLoader);
+            }
+        }
+    }
+
     private void handleTerminalState(JobStatus terminalState) {
         Preconditions.checkState(state == SchedulerState.EXECUTING, "Scheduler must be executing.");
         Preconditions.checkArgument(terminalState.isTerminalState());
+        state = SchedulerState.FINISHED;
 
         logger.debug("Job {} reached a terminal state {}.", jobGraph.getJobID(), terminalState);
+
+        stopCheckpointServicesSafely(terminalState);
 
         if (jobStatusListener != null) {
             jobStatusListener.jobStatusChanges(
@@ -361,6 +434,26 @@ public class DeclarativeScheduler implements SchedulerNG {
                     terminalState,
                     executionGraph.getStatusTimestamp(terminalState),
                     executionGraph.getFailureCause());
+        }
+    }
+
+    private void stopCheckpointServicesSafely(JobStatus terminalState) {
+        Exception exception = null;
+
+        try {
+            completedCheckpointStore.shutdown(terminalState, checkpointsCleaner, () -> {});
+        } catch (Exception e) {
+            exception = e;
+        }
+
+        try {
+            checkpointIdCounter.shutdown(terminalState);
+        } catch (Exception e) {
+            exception = ExceptionUtils.firstOrSuppressed(e, exception);
+        }
+
+        if (exception != null) {
+            logger.warn("Failed to stop checkpoint services.", exception);
         }
     }
 
