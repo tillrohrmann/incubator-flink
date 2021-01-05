@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
  * {@link SlotSharingExecutionSlotAllocator} to remove it from the allocator and cancel its
  * underlying physical slot request if the request is not fulfilled yet.
  */
-class SharedSlot implements SlotOwner, PhysicalSlot.Payload {
+public class SharedSlot implements SlotOwner, PhysicalSlot.Payload {
     private static final Logger LOG = LoggerFactory.getLogger(SharedSlot.class);
 
     private final SlotRequestId physicalSlotRequestId;
@@ -83,7 +83,7 @@ class SharedSlot implements SlotOwner, PhysicalSlot.Payload {
 
     private State state;
 
-    SharedSlot(
+    public SharedSlot(
             SlotRequestId physicalSlotRequestId,
             ResourceProfile physicalSlotResourceProfile,
             ExecutionSlotSharingGroup executionSlotSharingGroup,
@@ -134,7 +134,7 @@ class SharedSlot implements SlotOwner, PhysicalSlot.Payload {
      *     logical slot
      * @return the logical slot future
      */
-    CompletableFuture<LogicalSlot> allocateLogicalSlot(ExecutionVertexID executionVertexId) {
+    public CompletableFuture<LogicalSlot> allocateLogicalSlot(ExecutionVertexID executionVertexId) {
         Preconditions.checkArgument(
                 executionSlotSharingGroup.getExecutionVertexIds().contains(executionVertexId),
                 "Trying to allocate a logical slot for execution %s which is not in the ExecutionSlotSharingGroup",
