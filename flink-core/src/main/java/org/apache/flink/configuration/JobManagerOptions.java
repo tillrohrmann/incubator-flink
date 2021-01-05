@@ -358,6 +358,19 @@ public class JobManagerOptions {
                                     .list(text("'ng': new generation scheduler"))
                                     .build());
 
+    /** Config parameter determining the declarative scheduler implementation. */
+    @Documentation.ExcludeFromDocumentation("Declarative scheduler is still in development.")
+    public static final ConfigOption<DeclarativeSchedulerType> DECLARATIVE_SCHEDULER_TYPE =
+            key("jobmanager.scheduler.declarative-scheduler-type")
+                    .enumType(DeclarativeSchedulerType.class)
+                    .defaultValue(DeclarativeSchedulerType.StateMachine);
+
+    /** Type of declarative scheduler implementation. */
+    public enum DeclarativeSchedulerType {
+        Old,
+        StateMachine,
+    }
+
     /**
      * Config parameter controlling whether partitions should already be released during the job
      * execution.

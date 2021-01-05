@@ -20,6 +20,7 @@ package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.blob.BlobWriter;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
@@ -67,23 +68,44 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
                                 () ->
                                         new IllegalStateException(
                                                 "The DeclarativeScheduler requires a DeclarativeSlotPool."));
-
-        return new DeclarativeSchedulerNG(
-                jobGraph,
-                jobMasterConfiguration,
-                log,
-                declarativeSlotPool,
-                futureExecutor,
-                ioExecutor,
-                userCodeLoader,
-                checkpointRecoveryFactory,
-                rpcTimeout,
-                blobWriter,
-                jobManagerJobMetricGroup,
-                shuffleMaster,
-                partitionTracker,
-                executionDeploymentTracker,
-                backPressureStatsTracker,
-                initializationTimestamp);
+        switch (jobMasterConfiguration.get(JobManagerOptions.DECLARATIVE_SCHEDULER_TYPE)) {
+            case StateMachine:
+                return new DeclarativeSchedulerNG(
+                        jobGraph,
+                        jobMasterConfiguration,
+                        log,
+                        declarativeSlotPool,
+                        futureExecutor,
+                        ioExecutor,
+                        userCodeLoader,
+                        checkpointRecoveryFactory,
+                        rpcTimeout,
+                        blobWriter,
+                        jobManagerJobMetricGroup,
+                        shuffleMaster,
+                        partitionTracker,
+                        executionDeploymentTracker,
+                        backPressureStatsTracker,
+                        initializationTimestamp);
+            case Old:
+                return new DeclarativeScheduler(
+                        jobGraph,
+                        jobMasterConfiguration,
+                        log,
+                        declarativeSlotPool,
+                        futureExecutor,
+                        ioExecutor,
+                        userCodeLoader,
+                        checkpointRecoveryFactory,
+                        rpcTimeout,
+                        blobWriter,
+                        jobManagerJobMetricGroup,
+                        shuffleMaster,
+                        partitionTracker,
+                        executionDeploymentTracker,
+                        initializationTimestamp);
+            default:
+                throw new IllegalStateException("Unknown scheduler type");
+        }
     }
 }

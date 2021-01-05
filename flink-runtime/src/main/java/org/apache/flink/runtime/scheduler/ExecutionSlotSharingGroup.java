@@ -25,7 +25,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /** Represents execution vertices that will run the same shared slot. */
-class ExecutionSlotSharingGroup {
+public class ExecutionSlotSharingGroup {
 
     private final Set<ExecutionVertexID> executionVertexIds;
 
@@ -39,5 +39,14 @@ class ExecutionSlotSharingGroup {
 
     Set<ExecutionVertexID> getExecutionVertexIds() {
         return Collections.unmodifiableSet(executionVertexIds);
+    }
+
+    public static ExecutionSlotSharingGroup forVertexIds(
+            Set<ExecutionVertexID> executionVertexIds) {
+        final ExecutionSlotSharingGroup executionSlotSharingGroup = new ExecutionSlotSharingGroup();
+        for (ExecutionVertexID executionVertexId : executionVertexIds) {
+            executionSlotSharingGroup.addVertex(executionVertexId);
+        }
+        return executionSlotSharingGroup;
     }
 }
