@@ -24,7 +24,6 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.MemorySize;
-import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.queryablestate.KvStateID;
 import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
@@ -53,7 +52,6 @@ import org.apache.flink.runtime.executiongraph.ExecutionGraphBuilder;
 import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.ExecutionStateUpdateListener;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
-import org.apache.flink.runtime.executiongraph.IntermediateResult;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
 import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
@@ -79,7 +77,6 @@ import org.apache.flink.runtime.jobmaster.slotpool.SingleLogicalSlot;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 import org.apache.flink.runtime.jobmaster.slotpool.ThrowingSlotProvider;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
-import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
@@ -94,6 +91,7 @@ import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
+import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.KvStateHandler;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
@@ -104,7 +102,6 @@ import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
-import org.apache.flink.util.InstantiationUtil;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.FunctionWithException;
 import org.apache.flink.util.function.ThrowingConsumer;
@@ -1054,11 +1051,16 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
         private final KvStateHandler kvStateHandler;
 
+        private final ExecutionGraphHandler executionGraphHandler;
+
         private final Map<OperatorID, OperatorCoordinatorHolder> coordinatorMap;
 
         protected StateWithExecutionGraph(ExecutionGraph executionGraph) {
             this.executionGraph = executionGraph;
             this.kvStateHandler = new KvStateHandler(executionGraph);
+            this.executionGraphHandler =
+                    new ExecutionGraphHandler(
+                            executionGraph, backPressureStatsTracker, LOG, ioExecutor);
 
             this.coordinatorMap = createCoordinatorMap(executionGraph);
 
@@ -1107,85 +1109,14 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
         SerializedInputSplit requestNextInputSplit(
                 JobVertexID vertexID, ExecutionAttemptID executionAttempt) throws IOException {
-            final Execution execution =
-                    executionGraph.getRegisteredExecutions().get(executionAttempt);
-            if (execution == null) {
-                // can happen when JobManager had already unregistered this execution upon on task
-                // failure,
-                // but TaskManager get some delay to aware of that situation
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Can not find Execution for attempt {}.", executionAttempt);
-                }
-                // but we should TaskManager be aware of this
-                throw new IllegalArgumentException(
-                        "Can not find Execution for attempt " + executionAttempt);
-            }
-
-            final ExecutionJobVertex vertex = executionGraph.getJobVertex(vertexID);
-            if (vertex == null) {
-                throw new IllegalArgumentException(
-                        "Cannot find execution vertex for vertex ID " + vertexID);
-            }
-
-            if (vertex.getSplitAssigner() == null) {
-                throw new IllegalStateException("No InputSplitAssigner for vertex ID " + vertexID);
-            }
-
-            final InputSplit nextInputSplit = execution.getNextInputSplit();
-
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Send next input split {}.", nextInputSplit);
-            }
-
-            try {
-                final byte[] serializedInputSplit =
-                        InstantiationUtil.serializeObject(nextInputSplit);
-                return new SerializedInputSplit(serializedInputSplit);
-            } catch (Exception ex) {
-                IOException reason =
-                        new IOException(
-                                "Could not serialize the next input split of class "
-                                        + nextInputSplit.getClass()
-                                        + ".",
-                                ex);
-                vertex.fail(reason);
-                throw reason;
-            }
+            return executionGraphHandler.requestNextInputSplit(vertexID, executionAttempt);
         }
 
         private ExecutionState requestPartitionState(
                 IntermediateDataSetID intermediateResultId, ResultPartitionID resultPartitionId)
                 throws PartitionProducerDisposedException {
-            final Execution execution =
-                    executionGraph.getRegisteredExecutions().get(resultPartitionId.getProducerId());
-            if (execution != null) {
-                return execution.getState();
-            } else {
-                final IntermediateResult intermediateResult =
-                        executionGraph.getAllIntermediateResults().get(intermediateResultId);
-
-                if (intermediateResult != null) {
-                    // Try to find the producing execution
-                    Execution producerExecution =
-                            intermediateResult
-                                    .getPartitionById(resultPartitionId.getPartitionId())
-                                    .getProducer()
-                                    .getCurrentExecutionAttempt();
-
-                    if (producerExecution
-                            .getAttemptId()
-                            .equals(resultPartitionId.getProducerId())) {
-                        return producerExecution.getState();
-                    } else {
-                        throw new PartitionProducerDisposedException(resultPartitionId);
-                    }
-                } else {
-                    throw new IllegalArgumentException(
-                            "Intermediate data set with ID "
-                                    + intermediateResultId
-                                    + " not found.");
-                }
-            }
+            return executionGraphHandler.requestPartitionState(
+                    intermediateResultId, resultPartitionId);
         }
 
         private void acknowledgeCheckpoint(
@@ -1195,70 +1126,12 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
                 CheckpointMetrics checkpointMetrics,
                 TaskStateSnapshot checkpointState) {
 
-            final CheckpointCoordinator checkpointCoordinator =
-                    executionGraph.getCheckpointCoordinator();
-            final AcknowledgeCheckpoint ackMessage =
-                    new AcknowledgeCheckpoint(
-                            jobID,
-                            executionAttemptID,
-                            checkpointId,
-                            checkpointMetrics,
-                            checkpointState);
-
-            final String taskManagerLocationInfo =
-                    retrieveTaskManagerLocation(executionGraph, executionAttemptID);
-
-            if (checkpointCoordinator != null) {
-                ioExecutor.execute(
-                        () -> {
-                            try {
-                                checkpointCoordinator.receiveAcknowledgeMessage(
-                                        ackMessage, taskManagerLocationInfo);
-                            } catch (Throwable t) {
-                                LOG.warn(
-                                        "Error while processing checkpoint acknowledgement message",
-                                        t);
-                            }
-                        });
-            } else {
-                String errorMessage =
-                        "Received AcknowledgeCheckpoint message for job {} with no CheckpointCoordinator";
-                if (executionGraph.getState() == JobStatus.RUNNING) {
-                    LOG.error(errorMessage, jobGraph.getJobID());
-                } else {
-                    LOG.debug(errorMessage, jobGraph.getJobID());
-                }
-            }
+            executionGraphHandler.acknowledgeCheckpoint(
+                    jobID, executionAttemptID, checkpointId, checkpointMetrics, checkpointState);
         }
 
         private void declineCheckpoint(DeclineCheckpoint decline) {
-            final CheckpointCoordinator checkpointCoordinator =
-                    executionGraph.getCheckpointCoordinator();
-            final String taskManagerLocationInfo =
-                    retrieveTaskManagerLocation(executionGraph, decline.getTaskExecutionId());
-
-            if (checkpointCoordinator != null) {
-                ioExecutor.execute(
-                        () -> {
-                            try {
-                                checkpointCoordinator.receiveDeclineMessage(
-                                        decline, taskManagerLocationInfo);
-                            } catch (Exception e) {
-                                LOG.error(
-                                        "Error in CheckpointCoordinator while processing {}",
-                                        decline,
-                                        e);
-                            }
-                        });
-            } else {
-                String errorMessage =
-                        "Received DeclineCheckpoint message for job {} with no CheckpointCoordinator";
-                if (executionGraph.getState() == JobStatus.RUNNING) {
-                    LOG.error(errorMessage, jobGraph.getJobID());
-                } else {
-                    LOG.debug(errorMessage, jobGraph.getJobID());
-                }
-            }
+            executionGraphHandler.declineCheckpoint(decline);
         }
 
         private void updateAccumulators(AccumulatorSnapshot accumulatorSnapshot) {
@@ -1299,13 +1172,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
         private Optional<OperatorBackPressureStats> requestOperatorBackPressureStats(
                 JobVertexID jobVertexId) throws FlinkException {
-            final ExecutionJobVertex jobVertex = executionGraph.getJobVertex(jobVertexId);
-
-            if (jobVertex == null) {
-                throw new FlinkException("JobVertexID not found " + jobVertexId);
-            }
-
-            return backPressureStatsTracker.getOperatorBackPressureStats(jobVertex);
+            return executionGraphHandler.requestOperatorBackPressureStats(jobVertexId);
         }
 
         private CompletableFuture<String> triggerSavepoint(
