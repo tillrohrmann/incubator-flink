@@ -1070,7 +1070,7 @@ public abstract class SchedulerBase implements SchedulerNG {
 
     private void initializeOperatorCoordinators(ComponentMainThreadExecutor mainThreadExecutor) {
         for (OperatorCoordinatorHolder coordinatorHolder : getAllCoordinators()) {
-            coordinatorHolder.lazyInitialize(this, mainThreadExecutor);
+            coordinatorHolder.lazyInitialize(this::handleGlobalFailure, mainThreadExecutor);
         }
     }
 
