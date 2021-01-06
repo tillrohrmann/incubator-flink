@@ -82,10 +82,8 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
-import org.apache.flink.runtime.scheduler.ExecutionSlotSharingGroup;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
-import org.apache.flink.runtime.scheduler.SharedSlot;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
@@ -111,7 +109,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -501,16 +498,10 @@ public class DeclarativeScheduler implements SchedulerNG {
                 final Set<ExecutionVertexID> containedExecutionVertices =
                         sharedSlotToVertexAssignment.get(i);
 
-                final SharedSlot sharedSlot =
-                        reserveSharedSlot(slotInfo, containedExecutionVertices);
+                final SharedSlot sharedSlot = reserveSharedSlot(slotInfo);
 
                 for (ExecutionVertexID executionVertexId : containedExecutionVertices) {
-                    final LogicalSlot logicalSlot;
-                    try {
-                        logicalSlot = sharedSlot.allocateLogicalSlot(executionVertexId).get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new RuntimeException("Should not have failed.");
-                    }
+                    final LogicalSlot logicalSlot = sharedSlot.allocateLogicalSlot();
                     assignedSlots.put(executionVertexId, logicalSlot);
                 }
             }
@@ -539,8 +530,7 @@ public class DeclarativeScheduler implements SchedulerNG {
         return sharedSlotToVertexAssignment;
     }
 
-    private SharedSlot reserveSharedSlot(
-            SlotInfo slotInfo, Set<ExecutionVertexID> containedExecutionVertices) {
+    private SharedSlot reserveSharedSlot(SlotInfo slotInfo) {
         final PhysicalSlot physicalSlot =
                 declarativeSlotPool.reserveFreeSlot(
                         slotInfo.getAllocationId(),
@@ -549,11 +539,9 @@ public class DeclarativeScheduler implements SchedulerNG {
         final SharedSlot sharedSlot =
                 new SharedSlot(
                         new SlotRequestId(),
-                        slotInfo.getResourceProfile(),
-                        ExecutionSlotSharingGroup.forVertexIds(containedExecutionVertices),
-                        CompletableFuture.completedFuture(physicalSlot),
+                        physicalSlot,
                         slotInfo.willBeOccupiedIndefinitely(),
-                        ignored ->
+                        () ->
                                 declarativeSlotPool.freeReservedSlot(
                                         slotInfo.getAllocationId(),
                                         null,
