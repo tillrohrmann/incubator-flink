@@ -370,7 +370,9 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
     }
 
     @Override
-    public void handleGlobalFailure(Throwable cause) {}
+    public void handleGlobalFailure(Throwable cause) {
+        transitionToState(state.handleGlobalFailure(cause));
+    }
 
     @Override
     public boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
@@ -383,8 +385,10 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
                         "updateTaskExecutionState");
 
         if (optionalResult.isPresent()) {
-            transitionToState(optionalResult.get().getState());
-            return optionalResult.get().getResult();
+            final StateAndBoolean stateAndBoolean = optionalResult.get();
+
+            transitionToState(stateAndBoolean.getState());
+            return stateAndBoolean.getResult();
         } else {
             return false;
         }
@@ -585,6 +589,11 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
             return createArchivedExecutionGraph(getJobStatus(), null);
         }
 
+        @Override
+        public State handleGlobalFailure(Throwable cause) {
+            return new Finished(createArchivedExecutionGraph(JobStatus.INITIALIZING, cause));
+        }
+
         WaitingForResources startScheduling() {
             final ResourceCounter desiredResources = calculateDesiredResources();
             declarativeSlotPool.increaseResourceRequirementsBy(desiredResources);
@@ -624,6 +633,11 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         @Override
         public ArchivedExecutionGraph getJob() {
             return createArchivedExecutionGraph(JobStatus.INITIALIZING, null);
+        }
+
+        @Override
+        public State handleGlobalFailure(Throwable cause) {
+            return new Finished(createArchivedExecutionGraph(JobStatus.INITIALIZING, cause));
         }
 
         @Override
@@ -758,6 +772,12 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         }
 
         @Override
+        public State handleGlobalFailure(Throwable cause) {
+            executionGraph.initFailureCause(cause);
+            return new Restarting(executionGraph);
+        }
+
+        @Override
         StateAndBoolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
             final boolean successfulUpdate = executionGraph.updateState(taskExecutionState);
 
@@ -809,14 +829,15 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         }
 
         @Override
+        public State handleGlobalFailure(Throwable cause) {
+            return this;
+        }
+
+        @Override
         StateAndBoolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
             final boolean successfulUpdate = executionGraph.updateState(taskExecutionState);
 
-            if (successfulUpdate) {
-                return StateAndBoolean.create(this, true);
-            } else {
-                return StateAndBoolean.create(this, false);
-            }
+            return StateAndBoolean.create(this, successfulUpdate);
         }
 
         @Override
@@ -840,14 +861,15 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         }
 
         @Override
+        public State handleGlobalFailure(Throwable cause) {
+            return this;
+        }
+
+        @Override
         StateAndBoolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
             final boolean successfulUpdate = executionGraph.updateState(taskExecutionState);
 
-            if (successfulUpdate) {
-                return StateAndBoolean.create(this, true);
-            } else {
-                return StateAndBoolean.create(this, false);
-            }
+            return StateAndBoolean.create(this, successfulUpdate);
         }
 
         @Override
@@ -907,9 +929,14 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         public ArchivedExecutionGraph getJob() {
             return archivedExecutionGraph;
         }
+
+        @Override
+        public State handleGlobalFailure(Throwable cause) {
+            return this;
+        }
     }
 
-    private static class StateAndBoolean {
+    private static final class StateAndBoolean {
         private final State state;
         private final boolean result;
 
@@ -1017,12 +1044,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
             }
         }
 
-        abstract StateAndBoolean updateTaskExecutionState(
-                TaskExecutionStateTransition taskExecutionState);
-
-        abstract void onTerminalState(JobStatus jobStatus);
-
-        public ExecutionState requestPartitionState(
+        private ExecutionState requestPartitionState(
                 IntermediateDataSetID intermediateResultId, ResultPartitionID resultPartitionId)
                 throws PartitionProducerDisposedException {
             final Execution execution =
@@ -1133,6 +1155,11 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         public void updateAccumulators(AccumulatorSnapshot accumulatorSnapshot) {
             executionGraph.updateAccumulators(accumulatorSnapshot);
         }
+
+        abstract StateAndBoolean updateTaskExecutionState(
+                TaskExecutionStateTransition taskExecutionState);
+
+        abstract void onTerminalState(JobStatus jobStatus);
     }
 
     // ----------------------------------------------------------------
@@ -1149,6 +1176,8 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         JobStatus getJobStatus();
 
         ArchivedExecutionGraph getJob();
+
+        State handleGlobalFailure(Throwable cause);
 
         default <T> Optional<T> as(Class<? extends T> clazz) {
             if (clazz.isAssignableFrom(this.getClass())) {
