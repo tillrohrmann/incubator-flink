@@ -25,6 +25,7 @@ import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.dispatcher.SchedulerNGFactoryFactory;
+import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.runtime.testutils.MiniClusterResource;
@@ -44,6 +45,7 @@ import org.junit.Test;
 
 import javax.annotation.Nullable;
 
+/** Integration tests for the {@link DeclarativeScheduler}. */
 public class DeclarativeSchedulerITCase extends TestLogger {
 
     private static final int NUMBER_TASK_MANAGERS = 2;
@@ -84,6 +86,10 @@ public class DeclarativeSchedulerITCase extends TestLogger {
         env.execute();
     }
 
+    /**
+     * Simple source which fails once after a successful checkpoint has been taken. Upon recovery
+     * the source will immediately terminate.
+     */
     public static final class SimpleSource extends RichParallelSourceFunction<Integer>
             implements CheckpointListener, CheckpointedFunction {
 
