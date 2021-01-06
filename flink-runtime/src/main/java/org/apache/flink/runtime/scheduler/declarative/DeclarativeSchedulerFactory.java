@@ -83,6 +83,7 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
                 shuffleMaster,
                 partitionTracker,
                 executionDeploymentTracker,
+                backPressureStatsTracker,
                 initializationTimestamp);
     }
 }
