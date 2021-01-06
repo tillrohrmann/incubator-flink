@@ -509,12 +509,12 @@ public class DeclarativeScheduler implements SchedulerNG {
         return new ParallelismAndResourceAssignments(assignedSlots, parallelismPerJobVertex);
     }
 
-    private static final class ParallelismAndResourceAssignments {
+    static final class ParallelismAndResourceAssignments {
         private final Map<ExecutionVertexID, ? extends LogicalSlot> assignedSlots;
 
         private final Map<JobVertexID, Integer> parallelismPerJobVertex;
 
-        private ParallelismAndResourceAssignments(
+        ParallelismAndResourceAssignments(
                 Map<ExecutionVertexID, ? extends LogicalSlot> assignedSlots,
                 Map<JobVertexID, Integer> parallelismPerJobVertex) {
             this.assignedSlots = assignedSlots;

@@ -68,7 +68,7 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
                                         new IllegalStateException(
                                                 "The DeclarativeScheduler requires a DeclarativeSlotPool."));
 
-        return new DeclarativeScheduler(
+        return new DeclarativeSchedulerNG(
                 jobGraph,
                 jobMasterConfiguration,
                 log,
