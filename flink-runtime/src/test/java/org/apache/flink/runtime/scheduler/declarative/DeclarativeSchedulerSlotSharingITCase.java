@@ -53,7 +53,7 @@ public class DeclarativeSchedulerSlotSharingITCase extends TestLogger {
                 JobManagerOptions.SCHEDULER, SchedulerNGFactoryFactory.DECLARATIVE_SCHEDULER);
         configuration.set(
                 JobManagerOptions.DECLARATIVE_SCHEDULER_TYPE,
-                JobManagerOptions.DeclarativeSchedulerType.Old);
+                JobManagerOptions.DeclarativeSchedulerType.StateMachine);
         configuration.set(ClusterOptions.ENABLE_DECLARATIVE_RESOURCE_MANAGEMENT, true);
 
         return configuration;
