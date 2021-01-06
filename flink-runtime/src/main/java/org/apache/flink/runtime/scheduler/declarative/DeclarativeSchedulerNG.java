@@ -91,10 +91,10 @@ import org.apache.flink.runtime.operators.coordination.OperatorCoordinatorHolder
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.apache.flink.runtime.query.KvStateLocation;
-import org.apache.flink.runtime.query.KvStateLocationRegistry;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
+import org.apache.flink.runtime.scheduler.KvStateHandler;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
@@ -1052,10 +1052,13 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
     private abstract class StateWithExecutionGraph implements State {
         protected final ExecutionGraph executionGraph;
 
+        private final KvStateHandler kvStateHandler;
+
         private final Map<OperatorID, OperatorCoordinatorHolder> coordinatorMap;
 
         protected StateWithExecutionGraph(ExecutionGraph executionGraph) {
             this.executionGraph = executionGraph;
+            this.kvStateHandler = new KvStateHandler(executionGraph);
 
             this.coordinatorMap = createCoordinatorMap(executionGraph);
 
@@ -1264,30 +1267,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
         private KvStateLocation requestKvStateLocation(JobID jobId, String registrationName)
                 throws FlinkJobNotFoundException, UnknownKvStateLocation {
-            if (jobGraph.getJobID().equals(jobId)) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(
-                            "Lookup key-value state for job {} with registration " + "name {}.",
-                            jobGraph.getJobID(),
-                            registrationName);
-                }
-
-                final KvStateLocationRegistry registry =
-                        executionGraph.getKvStateLocationRegistry();
-                final KvStateLocation location = registry.getKvStateLocation(registrationName);
-                if (location != null) {
-                    return location;
-                } else {
-                    throw new UnknownKvStateLocation(registrationName);
-                }
-            } else {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(
-                            "Request of key-value state location for unknown job {} received.",
-                            jobId);
-                }
-                throw new FlinkJobNotFoundException(jobId);
-            }
+            return kvStateHandler.requestKvStateLocation(jobId, registrationName);
         }
 
         private void notifyKvStateRegistered(
@@ -1298,29 +1278,13 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
                 KvStateID kvStateId,
                 InetSocketAddress kvStateServerAddress)
                 throws FlinkJobNotFoundException {
-            if (jobGraph.getJobID().equals(jobId)) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(
-                            "Key value state registered for job {} under name {}.",
-                            jobGraph.getJobID(),
-                            registrationName);
-                }
-
-                try {
-                    executionGraph
-                            .getKvStateLocationRegistry()
-                            .notifyKvStateRegistered(
-                                    jobVertexId,
-                                    keyGroupRange,
-                                    registrationName,
-                                    kvStateId,
-                                    kvStateServerAddress);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            } else {
-                throw new FlinkJobNotFoundException(jobId);
-            }
+            kvStateHandler.notifyKvStateRegistered(
+                    jobId,
+                    jobVertexId,
+                    keyGroupRange,
+                    registrationName,
+                    kvStateId,
+                    kvStateServerAddress);
         }
 
         private void notifyKvStateUnregistered(
@@ -1329,25 +1293,8 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
                 KeyGroupRange keyGroupRange,
                 String registrationName)
                 throws FlinkJobNotFoundException {
-            if (jobGraph.getJobID().equals(jobId)) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(
-                            "Key value state unregistered for job {} under name {}.",
-                            jobGraph.getJobID(),
-                            registrationName);
-                }
-
-                try {
-                    executionGraph
-                            .getKvStateLocationRegistry()
-                            .notifyKvStateUnregistered(
-                                    jobVertexId, keyGroupRange, registrationName);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            } else {
-                throw new FlinkJobNotFoundException(jobId);
-            }
+            kvStateHandler.notifyKvStateUnregistered(
+                    jobId, jobVertexId, keyGroupRange, registrationName);
         }
 
         private Optional<OperatorBackPressureStats> requestOperatorBackPressureStats(
