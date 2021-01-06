@@ -35,6 +35,7 @@ import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
 import org.apache.flink.runtime.checkpoint.CheckpointsCleaner;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpointStore;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
+import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.concurrent.FutureUtils;
@@ -49,7 +50,6 @@ import org.apache.flink.runtime.executiongraph.ExecutionStateUpdateListener;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
 import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
-import org.apache.flink.runtime.instance.SlotSharingGroupId;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
@@ -59,7 +59,6 @@ import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
-import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTracker;
 import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTrackerDeploymentListenerAdapter;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
@@ -69,7 +68,6 @@ import org.apache.flink.runtime.jobmaster.SlotRequestId;
 import org.apache.flink.runtime.jobmaster.slotpool.DeclarativeSlotPool;
 import org.apache.flink.runtime.jobmaster.slotpool.PhysicalSlot;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
-import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 import org.apache.flink.runtime.jobmaster.slotpool.ThrowingSlotProvider;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
 import org.apache.flink.runtime.messages.checkpoint.AcknowledgeCheckpoint;
@@ -104,15 +102,12 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
  * Declarative {@link SchedulerNG} implementation which first declares the required resources and
@@ -154,6 +149,9 @@ public class DeclarativeScheduler implements SchedulerNG {
     private long stateVersioner = 0;
 
     private ResourceCounter desiredResources = ResourceCounter.empty();
+
+    private final RequirementsCalculator requirementsCalculator;
+    private final MappingCalculator mappingCalculator;
 
     @Nullable private ExecutionGraph executionGraph = null;
 
@@ -202,6 +200,8 @@ public class DeclarativeScheduler implements SchedulerNG {
         this.checkpointsCleaner = new CheckpointsCleaner();
 
         this.declarativeSlotPool.registerNewSlotsListener(ignored -> newResourcesAvailable());
+        this.requirementsCalculator = new SlotSharingRequirementsCalculator();
+        this.mappingCalculator = new SlotSharingMappingCalculator();
     }
 
     @Override
@@ -469,65 +469,40 @@ public class DeclarativeScheduler implements SchedulerNG {
     }
 
     private ParallelismAndResourceAssignments determineParallelismAndAssignResources(
-            JobGraph jobGraph) {
+            JobGraph jobGraph) throws JobExecutionException {
         final HashMap<ExecutionVertexID, LogicalSlot> assignedSlots = new HashMap<>();
-        final HashMap<JobVertexID, Integer> parallelismPerJobVertex = new HashMap<>();
 
-        final Collection<SlotInfoWithUtilization> freeSlots =
-                declarativeSlotPool.getFreeSlotsInformation();
-        // TODO: This can waste slots if the max parallelism for slot sharing groups is not equal
-        final int slotsPerSlotSharingGroup =
-                freeSlots.size() / jobGraph.getSlotSharingGroups().size();
-        final Iterator<SlotInfoWithUtilization> slotIterator = freeSlots.iterator();
+        final Optional<SlotSharingAssignments> slotSharingSlotAssignmentsOptional =
+                mappingCalculator.determineParallelismAndAssignResources(
+                        new JobGraphJobInformation(jobGraph),
+                        declarativeSlotPool.getFreeSlotsInformation());
 
-        for (SlotSharingGroup slotSharingGroup : jobGraph.getSlotSharingGroups()) {
-            final List<JobVertex> containedJobVertices =
-                    slotSharingGroup.getJobVertexIds().stream()
-                            .map(jobGraph::findVertexByID)
-                            .collect(Collectors.toList());
+        if (!slotSharingSlotAssignmentsOptional.isPresent()) {
+            throw new JobExecutionException(
+                    jobGraph.getJobID(), "Not enough resources available for scheduling.");
+        }
 
-            final Map<Integer, Set<ExecutionVertexID>> sharedSlotToVertexAssignment =
-                    determineParallelismAndAssignToFutureSlotIndex(
-                            containedJobVertices,
-                            slotsPerSlotSharingGroup,
-                            parallelismPerJobVertex);
+        final SlotSharingAssignments slotSharingSlotAssignments =
+                slotSharingSlotAssignmentsOptional.get();
 
-            for (int i = 0; i < slotsPerSlotSharingGroup; i++) {
-                final SlotInfoWithUtilization slotInfo = slotIterator.next();
+        for (ExecutionSlotSharingGroupAndSlot executionSlotSharingGroup :
+                slotSharingSlotAssignments.getAssignments()) {
+            final SharedSlot sharedSlot =
+                    reserveSharedSlot(executionSlotSharingGroup.getSlotInfo());
 
-                final Set<ExecutionVertexID> containedExecutionVertices =
-                        sharedSlotToVertexAssignment.get(i);
-
-                final SharedSlot sharedSlot = reserveSharedSlot(slotInfo);
-
-                for (ExecutionVertexID executionVertexId : containedExecutionVertices) {
-                    final LogicalSlot logicalSlot = sharedSlot.allocateLogicalSlot();
-                    assignedSlots.put(executionVertexId, logicalSlot);
-                }
+            for (ExecutionVertexID executionVertexId :
+                    executionSlotSharingGroup
+                            .getExecutionSlotSharingGroup()
+                            .getContainedExecutionVertices()) {
+                final LogicalSlot logicalSlot = sharedSlot.allocateLogicalSlot();
+                assignedSlots.put(executionVertexId, logicalSlot);
             }
         }
+
+        final Map<JobVertexID, Integer> parallelismPerJobVertex =
+                slotSharingSlotAssignments.getMaxParallelismForVertices();
 
         return new ParallelismAndResourceAssignments(assignedSlots, parallelismPerJobVertex);
-    }
-
-    private Map<Integer, Set<ExecutionVertexID>> determineParallelismAndAssignToFutureSlotIndex(
-            Collection<JobVertex> containedJobVertices,
-            int availableSlots,
-            // TODO: get rid of this parameter
-            Map<JobVertexID, Integer> parallelismPerJobVertex) {
-        final Map<Integer, Set<ExecutionVertexID>> sharedSlotToVertexAssignment = new HashMap<>();
-        for (JobVertex jobVertex : containedJobVertices) {
-            final int parallelism = Math.min(jobVertex.getParallelism(), availableSlots);
-            jobVertex.setParallelism(parallelism);
-
-            parallelismPerJobVertex.put(jobVertex.getID(), parallelism);
-            for (int i = 0; i < parallelism; i++) {
-                sharedSlotToVertexAssignment
-                        .computeIfAbsent(i, ignored -> new HashSet<>())
-                        .add(new ExecutionVertexID(jobVertex.getID(), i));
-            }
-        }
-        return sharedSlotToVertexAssignment;
     }
 
     private SharedSlot reserveSharedSlot(SlotInfo slotInfo) {
@@ -597,30 +572,8 @@ public class DeclarativeScheduler implements SchedulerNG {
     }
 
     private void declareResources() {
-        desiredResources = calculateDesiredResources();
+        desiredResources = requirementsCalculator.calculateRequiredSlots(jobGraph.getVertices());
         declarativeSlotPool.increaseResourceRequirementsBy(desiredResources);
-    }
-
-    private ResourceCounter calculateDesiredResources() {
-        int numTotalRequiredSlots = 0;
-        for (Integer requiredSlots : getMaxParallelismForSlotSharingGroups(jobGraph).values()) {
-            numTotalRequiredSlots += requiredSlots;
-        }
-        return ResourceCounter.withResource(ResourceProfile.UNKNOWN, numTotalRequiredSlots);
-    }
-
-    private static Map<SlotSharingGroupId, Integer> getMaxParallelismForSlotSharingGroups(
-            JobGraph jobGraph) {
-        final Map<SlotSharingGroupId, Integer> maxParallelismForSlotSharingGroups = new HashMap<>();
-        for (JobVertex vertex : jobGraph.getVertices()) {
-            maxParallelismForSlotSharingGroups.compute(
-                    vertex.getSlotSharingGroup().getSlotSharingGroupId(),
-                    (slotSharingGroupId, currentMaxParallelism) ->
-                            currentMaxParallelism == null
-                                    ? vertex.getParallelism()
-                                    : Math.max(currentMaxParallelism, vertex.getParallelism()));
-        }
-        return maxParallelismForSlotSharingGroups;
     }
 
     @Override

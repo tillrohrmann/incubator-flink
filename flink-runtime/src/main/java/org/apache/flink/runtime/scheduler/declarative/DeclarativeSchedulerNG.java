@@ -20,6 +20,7 @@ package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
+import org.apache.flink.api.common.operators.ResourceSpec;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
@@ -62,7 +63,6 @@ import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
-import org.apache.flink.runtime.jobmanager.scheduler.Locality;
 import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTracker;
 import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTrackerDeploymentListenerAdapter;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
@@ -72,8 +72,6 @@ import org.apache.flink.runtime.jobmaster.SlotRequestId;
 import org.apache.flink.runtime.jobmaster.slotpool.DeclarativeSlotPool;
 import org.apache.flink.runtime.jobmaster.slotpool.PhysicalSlot;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
-import org.apache.flink.runtime.jobmaster.slotpool.SingleLogicalSlot;
-import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 import org.apache.flink.runtime.jobmaster.slotpool.ThrowingSlotProvider;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
@@ -115,6 +113,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -156,6 +155,10 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
             new ComponentMainThreadExecutor.DummyComponentMainThreadExecutor("foobar");
 
     @Nullable private JobStatusListener jobStatusListener;
+
+    private final RequirementsCalculator requirementsCalculator =
+            new SlotSharingRequirementsCalculator();
+    private final MappingCalculator mappingCalculator = new SlotSharingMappingCalculator();
 
     private State state = new Created();
 
@@ -246,13 +249,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
     }
 
     private ResourceCounter calculateDesiredResources() {
-        int counter = 0;
-
-        for (JobVertex vertex : jobGraph.getVertices()) {
-            counter += vertex.getParallelism();
-        }
-
-        return ResourceCounter.withResource(ResourceProfile.UNKNOWN, counter);
+        return requirementsCalculator.calculateRequiredSlots(jobGraph.getVertices());
     }
 
     private ExecutionGraph createExecutionGraphAndRestoreState() throws Exception {
@@ -768,49 +765,64 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         }
 
         private DeclarativeScheduler.ParallelismAndResourceAssignments
-                determineParallelismAndAssignResources(JobGraph jobGraph) {
+                determineParallelismAndAssignResources(JobGraph jobGraph)
+                        throws JobExecutionException {
             final HashMap<ExecutionVertexID, LogicalSlot> assignedSlots = new HashMap<>();
-            final HashMap<JobVertexID, Integer> parallelismPerJobVertex = new HashMap<>();
 
-            final Collection<SlotInfoWithUtilization> freeSlots =
-                    declarativeSlotPool.getFreeSlotsInformation();
-            final int slotsPerVertex = freeSlots.size() / jobGraph.getNumberOfVertices();
-            final Iterator<SlotInfoWithUtilization> slotIterator = freeSlots.iterator();
+            final Optional<SlotSharingAssignments> slotSharingSlotAssignmentsOptional =
+                    mappingCalculator.determineParallelismAndAssignResources(
+                            new JobGraphJobInformation(jobGraph),
+                            declarativeSlotPool.getFreeSlotsInformation());
 
-            for (JobVertex jobVertex : jobGraph.getVerticesSortedTopologicallyFromSources()) {
-                final int parallelism = Math.min(jobVertex.getParallelism(), slotsPerVertex);
-                jobVertex.setParallelism(parallelism);
+            if (!slotSharingSlotAssignmentsOptional.isPresent()) {
+                throw new JobExecutionException(
+                        jobGraph.getJobID(), "Not enough resources available for scheduling.");
+            }
 
-                parallelismPerJobVertex.put(jobVertex.getID(), parallelism);
+            final SlotSharingAssignments slotSharingSlotAssignments =
+                    slotSharingSlotAssignmentsOptional.get();
 
-                for (int i = 0; i < slotsPerVertex; i++) {
-                    final SlotInfoWithUtilization slotInfo = slotIterator.next();
+            for (ExecutionSlotSharingGroupAndSlot executionSlotSharingGroup :
+                    slotSharingSlotAssignments.getAssignments()) {
+                final SharedSlot sharedSlot =
+                        reserveSharedSlot(executionSlotSharingGroup.getSlotInfo());
 
-                    final PhysicalSlot physicalSlot =
-                            declarativeSlotPool.reserveFreeSlot(
-                                    slotInfo.getAllocationId(),
-                                    ResourceProfile.fromResourceSpec(
-                                            jobVertex.getMinResources(), MemorySize.ZERO));
-
-                    final SingleLogicalSlot logicalSlot =
-                            new SingleLogicalSlot(
-                                    new SlotRequestId(),
-                                    physicalSlot,
-                                    null,
-                                    Locality.UNKNOWN,
-                                    slot ->
-                                            declarativeSlotPool.freeReservedSlot(
-                                                    physicalSlot.getAllocationId(),
-                                                    null,
-                                                    System.currentTimeMillis()));
-                    physicalSlot.tryAssignPayload(logicalSlot);
-
-                    assignedSlots.put(new ExecutionVertexID(jobVertex.getID(), i), logicalSlot);
+                for (ExecutionVertexID executionVertexId :
+                        executionSlotSharingGroup
+                                .getExecutionSlotSharingGroup()
+                                .getContainedExecutionVertices()) {
+                    final LogicalSlot logicalSlot = sharedSlot.allocateLogicalSlot();
+                    assignedSlots.put(executionVertexId, logicalSlot);
                 }
             }
 
+            final Map<JobVertexID, Integer> parallelismPerJobVertex =
+                    slotSharingSlotAssignments.getMaxParallelismForVertices();
+
             return new DeclarativeScheduler.ParallelismAndResourceAssignments(
                     assignedSlots, parallelismPerJobVertex);
+        }
+
+        private SharedSlot reserveSharedSlot(SlotInfo slotInfo) {
+            final PhysicalSlot physicalSlot =
+                    declarativeSlotPool.reserveFreeSlot(
+                            slotInfo.getAllocationId(),
+                            ResourceProfile.fromResourceSpec(
+                                    ResourceSpec.DEFAULT, MemorySize.ZERO));
+
+            final SharedSlot sharedSlot =
+                    new SharedSlot(
+                            new SlotRequestId(),
+                            physicalSlot,
+                            slotInfo.willBeOccupiedIndefinitely(),
+                            () ->
+                                    declarativeSlotPool.freeReservedSlot(
+                                            slotInfo.getAllocationId(),
+                                            null,
+                                            System.currentTimeMillis()));
+            physicalSlot.tryAssignPayload(sharedSlot);
+
+            return sharedSlot;
         }
 
         @Nonnull
