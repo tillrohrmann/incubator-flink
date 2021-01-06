@@ -75,12 +75,10 @@ import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.metrics.MetricNames;
 import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
-import org.apache.flink.runtime.operators.coordination.CoordinationRequestHandler;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinatorHolder;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
@@ -93,8 +91,6 @@ import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.util.IntArrayList;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
-import org.apache.flink.util.FlinkRuntimeException;
-import org.apache.flink.util.IOUtils;
 import org.apache.flink.util.IterableUtils;
 import org.apache.flink.util.function.FunctionUtils;
 
@@ -170,7 +166,7 @@ public abstract class SchedulerBase implements SchedulerNG {
 
     private final ExecutionGraphHandler executionGraphHandler;
 
-    private final Map<OperatorID, OperatorCoordinatorHolder> coordinatorMap;
+    private final OperatorCoordinatorHandler operatorCoordinatorHandler;
 
     private ComponentMainThreadExecutor mainThreadExecutor =
             new ComponentMainThreadExecutor.DummyComponentMainThreadExecutor(
@@ -251,8 +247,8 @@ public abstract class SchedulerBase implements SchedulerNG {
         this.executionGraphHandler =
                 new ExecutionGraphHandler(
                         executionGraph, backPressureStatsTracker, log, ioExecutor);
-
-        this.coordinatorMap = createCoordinatorMap();
+        this.operatorCoordinatorHandler =
+                new OperatorCoordinatorHandler(executionGraph, this::handleGlobalFailure);
     }
 
     private void registerShutDownCheckpointServicesOnExecutionGraphTermination(
@@ -631,7 +627,7 @@ public abstract class SchedulerBase implements SchedulerNG {
     @Override
     public void initialize(final ComponentMainThreadExecutor mainThreadExecutor) {
         this.mainThreadExecutor = checkNotNull(mainThreadExecutor);
-        initializeOperatorCoordinators(mainThreadExecutor);
+        operatorCoordinatorHandler.initializeOperatorCoordinators(mainThreadExecutor);
         executionGraph.setInternalTaskFailuresListener(
                 new UpdateSchedulerNgOnInternalFailuresListener(this, jobGraph.getJobID()));
         executionGraph.start(mainThreadExecutor);
@@ -646,7 +642,7 @@ public abstract class SchedulerBase implements SchedulerNG {
     public final void startScheduling() {
         mainThreadExecutor.assertRunningInMainThread();
         registerJobMetrics();
-        startAllOperatorCoordinators();
+        operatorCoordinatorHandler.startAllOperatorCoordinators();
         startSchedulingInternal();
     }
 
@@ -663,7 +659,7 @@ public abstract class SchedulerBase implements SchedulerNG {
 
         incrementVersionsOfAllVertices();
         executionGraph.suspend(cause);
-        disposeAllOperatorCoordinators();
+        operatorCoordinatorHandler.disposeAllOperatorCoordinators();
     }
 
     @Override
@@ -1021,88 +1017,16 @@ public abstract class SchedulerBase implements SchedulerNG {
             final OperatorEvent evt)
             throws FlinkException {
 
-        // Failure semantics (as per the javadocs of the method):
-        // If the task manager sends an event for a non-running task or an non-existing operator
-        // coordinator, then respond with an exception to the call. If task and coordinator exist,
-        // then we assume that the call from the TaskManager was valid, and any bubbling exception
-        // needs to cause a job failure.
-
-        final Execution exec = executionGraph.getRegisteredExecutions().get(taskExecutionId);
-        if (exec == null || exec.getState() != ExecutionState.RUNNING) {
-            // This situation is common when cancellation happens, or when the task failed while the
-            // event was just being dispatched asynchronously on the TM side.
-            // It should be fine in those expected situations to just ignore this event, but, to be
-            // on the safe, we notify the TM that the event could not be delivered.
-            throw new TaskNotRunningException(
-                    "Task is not known or in state running on the JobManager.");
-        }
-
-        final OperatorCoordinatorHolder coordinator = coordinatorMap.get(operatorId);
-        if (coordinator == null) {
-            throw new FlinkException("No coordinator registered for operator " + operatorId);
-        }
-
-        try {
-            coordinator.handleEventFromOperator(exec.getParallelSubtaskIndex(), evt);
-        } catch (Throwable t) {
-            ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
-            handleGlobalFailure(t);
-        }
+        operatorCoordinatorHandler.deliverOperatorEventToCoordinator(
+                taskExecutionId, operatorId, evt);
     }
 
     @Override
     public CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
             OperatorID operator, CoordinationRequest request) throws FlinkException {
 
-        final OperatorCoordinatorHolder coordinatorHolder = coordinatorMap.get(operator);
-        if (coordinatorHolder == null) {
-            throw new FlinkException("Coordinator of operator " + operator + " does not exist");
-        }
-
-        final OperatorCoordinator coordinator = coordinatorHolder.coordinator();
-        if (coordinator instanceof CoordinationRequestHandler) {
-            return ((CoordinationRequestHandler) coordinator).handleCoordinationRequest(request);
-        } else {
-            throw new FlinkException(
-                    "Coordinator of operator " + operator + " cannot handle client event");
-        }
-    }
-
-    private void initializeOperatorCoordinators(ComponentMainThreadExecutor mainThreadExecutor) {
-        for (OperatorCoordinatorHolder coordinatorHolder : getAllCoordinators()) {
-            coordinatorHolder.lazyInitialize(this::handleGlobalFailure, mainThreadExecutor);
-        }
-    }
-
-    private void startAllOperatorCoordinators() {
-        final Collection<OperatorCoordinatorHolder> coordinators = getAllCoordinators();
-        try {
-            for (OperatorCoordinatorHolder coordinator : coordinators) {
-                coordinator.start();
-            }
-        } catch (Throwable t) {
-            ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
-            coordinators.forEach(IOUtils::closeQuietly);
-            throw new FlinkRuntimeException("Failed to start the operator coordinators", t);
-        }
-    }
-
-    private void disposeAllOperatorCoordinators() {
-        getAllCoordinators().forEach(IOUtils::closeQuietly);
-    }
-
-    private Collection<OperatorCoordinatorHolder> getAllCoordinators() {
-        return coordinatorMap.values();
-    }
-
-    private Map<OperatorID, OperatorCoordinatorHolder> createCoordinatorMap() {
-        Map<OperatorID, OperatorCoordinatorHolder> coordinatorMap = new HashMap<>();
-        for (ExecutionJobVertex vertex : executionGraph.getAllVertices().values()) {
-            for (OperatorCoordinatorHolder holder : vertex.getOperatorCoordinators()) {
-                coordinatorMap.put(holder.operatorId(), holder);
-            }
-        }
-        return coordinatorMap;
+        return operatorCoordinatorHandler.deliverCoordinationRequestToCoordinator(
+                operator, request);
     }
 
     // ------------------------------------------------------------------------
