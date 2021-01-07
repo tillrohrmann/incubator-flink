@@ -21,10 +21,11 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
+import org.apache.flink.runtime.scheduler.declarative.allocator.JobInformation;
 
 import java.util.Collection;
 
-/** TODO: Add javadoc. */
+/** {@link JobInformation} backed by a {@link JobGraph}. */
 public class JobGraphJobInformation implements JobInformation {
 
     private final JobGraph jobGraph;

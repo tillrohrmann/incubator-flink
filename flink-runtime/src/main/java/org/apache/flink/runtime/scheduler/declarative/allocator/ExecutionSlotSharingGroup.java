@@ -15,23 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative;
+package org.apache.flink.runtime.scheduler.declarative.allocator;
 
-import org.apache.flink.runtime.jobgraph.JobVertexID;
-import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
+import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 
 import java.util.Collection;
+import java.util.Set;
 
-/** Information about the job. */
-public interface JobInformation {
-    Collection<SlotSharingGroup> getSlotSharingGroups();
+/**
+ * A parallel instance of a slot sharing group, containing exactly 1 subtask of some or all vertices
+ * belonging the same slot sharing group.
+ */
+class ExecutionSlotSharingGroup {
+    private final Set<ExecutionVertexID> containedExecutionVertices;
 
-    VertexInformation getVertexInformation(JobVertexID jobVertexId);
+    public ExecutionSlotSharingGroup(Set<ExecutionVertexID> containedExecutionVertices) {
+        this.containedExecutionVertices = containedExecutionVertices;
+    }
 
-    /** Information about a single vertex. */
-    interface VertexInformation {
-        JobVertexID getJobVertexID();
-
-        int getParallelism();
+    public Collection<ExecutionVertexID> getContainedExecutionVertices() {
+        return containedExecutionVertices;
     }
 }

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative;
+package org.apache.flink.runtime.scheduler.declarative.allocator;
 
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
@@ -33,7 +33,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /** {@link MappingCalculator} that supports slot sharing. */
-public class SlotSharingMappingCalculator implements MappingCalculator {
+class SlotSharingMappingCalculator implements MappingCalculator {
 
     @Override
     public Optional<SlotSharingAssignments> determineParallelismAndAssignResources(
