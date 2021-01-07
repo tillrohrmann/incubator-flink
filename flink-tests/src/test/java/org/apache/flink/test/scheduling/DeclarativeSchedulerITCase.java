@@ -45,12 +45,16 @@ import org.junit.Test;
 
 import javax.annotation.Nullable;
 
+import static org.junit.Assume.assumeTrue;
+
 /** Integration tests for the {@link DeclarativeScheduler}. */
 public class DeclarativeSchedulerITCase extends TestLogger {
 
     private static final int NUMBER_TASK_MANAGERS = 2;
     private static final int NUMBER_SLOTS_PER_TASK_MANAGER = 2;
     private static final int PARALLELISM = NUMBER_SLOTS_PER_TASK_MANAGER * NUMBER_TASK_MANAGERS;
+
+    private static final Configuration configuration = getConfiguration();
 
     private static Configuration getConfiguration() {
         final Configuration configuration = new Configuration();
@@ -74,6 +78,7 @@ public class DeclarativeSchedulerITCase extends TestLogger {
     /** Tests that the declarative scheduler can recover stateful operators. */
     @Test
     public void testGlobalFailoverCanRecoverState() throws Exception {
+        assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(PARALLELISM);
