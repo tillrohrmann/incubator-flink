@@ -49,7 +49,6 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionDeploymentListener;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphBuilder;
-import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.ExecutionStateUpdateListener;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
@@ -81,10 +80,7 @@ import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
-import org.apache.flink.runtime.operators.coordination.CoordinationRequestHandler;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
-import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
-import org.apache.flink.runtime.operators.coordination.OperatorCoordinatorHolder;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.apache.flink.runtime.query.KvStateLocation;
@@ -93,6 +89,7 @@ import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureSta
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
 import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.KvStateHandler;
+import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
@@ -118,7 +115,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -1053,7 +1049,8 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
         private final ExecutionGraphHandler executionGraphHandler;
 
-        private final Map<OperatorID, OperatorCoordinatorHolder> coordinatorMap;
+        // TODO: We still need to shut it down when we leave the StateWithExecutionGraph
+        private final OperatorCoordinatorHandler operatorCoordinatorHandler;
 
         protected StateWithExecutionGraph(ExecutionGraph executionGraph) {
             this.executionGraph = executionGraph;
@@ -1061,8 +1058,10 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
             this.executionGraphHandler =
                     new ExecutionGraphHandler(
                             executionGraph, backPressureStatsTracker, LOG, ioExecutor);
-
-            this.coordinatorMap = createCoordinatorMap(executionGraph);
+            this.operatorCoordinatorHandler =
+                    new OperatorCoordinatorHandler(
+                            executionGraph, DeclarativeSchedulerNG.this::handleGlobalFailure);
+            operatorCoordinatorHandler.initializeOperatorCoordinators(componentMainThreadExecutor);
 
             executionGraph
                     .getTerminationFuture()
@@ -1073,17 +1072,6 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
                                 }
                             },
                             componentMainThreadExecutor);
-        }
-
-        private Map<OperatorID, OperatorCoordinatorHolder> createCoordinatorMap(
-                ExecutionGraph executionGraph) {
-            Map<OperatorID, OperatorCoordinatorHolder> coordinatorMap = new HashMap<>();
-            for (ExecutionJobVertex vertex : executionGraph.getAllVertices().values()) {
-                for (OperatorCoordinatorHolder holder : vertex.getOperatorCoordinators()) {
-                    coordinatorMap.put(holder.operatorId(), holder);
-                }
-            }
-            return coordinatorMap;
         }
 
         @Override
@@ -1327,56 +1315,15 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         private Void deliverOperatorEventToCoordinator(
                 ExecutionAttemptID taskExecutionId, OperatorID operatorId, OperatorEvent evt)
                 throws FlinkException {
-            // Failure semantics (as per the javadocs of the method):
-            // If the task manager sends an event for a non-running task or an non-existing operator
-            // coordinator, then respond with an exception to the call. If task and coordinator
-            // exist,
-            // then we assume that the call from the TaskManager was valid, and any bubbling
-            // exception
-            // needs to cause a job failure.
-
-            final Execution exec = executionGraph.getRegisteredExecutions().get(taskExecutionId);
-            if (exec == null || exec.getState() != ExecutionState.RUNNING) {
-                // This situation is common when cancellation happens, or when the task failed while
-                // the
-                // event was just being dispatched asynchronously on the TM side.
-                // It should be fine in those expected situations to just ignore this event, but, to
-                // be
-                // on the safe, we notify the TM that the event could not be delivered.
-                throw new TaskNotRunningException(
-                        "Task is not known or in state running on the JobManager.");
-            }
-
-            final OperatorCoordinatorHolder coordinator = coordinatorMap.get(operatorId);
-            if (coordinator == null) {
-                throw new FlinkException("No coordinator registered for operator " + operatorId);
-            }
-
-            try {
-                coordinator.handleEventFromOperator(exec.getParallelSubtaskIndex(), evt);
-            } catch (Throwable t) {
-                ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
-                DeclarativeSchedulerNG.this.handleGlobalFailure(t);
-            }
-
+            operatorCoordinatorHandler.deliverOperatorEventToCoordinator(
+                    taskExecutionId, operatorId, evt);
             return null;
         }
 
         private CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
-                OperatorID operator, CoordinationRequest request) throws FlinkException {
-            final OperatorCoordinatorHolder coordinatorHolder = coordinatorMap.get(operator);
-            if (coordinatorHolder == null) {
-                throw new FlinkException("Coordinator of operator " + operator + " does not exist");
-            }
-
-            final OperatorCoordinator coordinator = coordinatorHolder.coordinator();
-            if (coordinator instanceof CoordinationRequestHandler) {
-                return ((CoordinationRequestHandler) coordinator)
-                        .handleCoordinationRequest(request);
-            } else {
-                throw new FlinkException(
-                        "Coordinator of operator " + operator + " cannot handle client event");
-            }
+                OperatorID operatorId, CoordinationRequest request) throws FlinkException {
+            return operatorCoordinatorHandler.deliverCoordinationRequestToCoordinator(
+                    operatorId, request);
         }
 
         abstract StateAndBoolean updateTaskExecutionState(
