@@ -15,25 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative;
+package org.apache.flink.runtime.scheduler.declarative.allocator;
 
-import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
+import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 
 import java.util.Collection;
-import java.util.Set;
+import java.util.Optional;
 
-/**
- * A parallel instance of a slot sharing group, containing exactly 1 subtask of some or all vertices
- * belonging the same slot sharing group.
- */
-class ExecutionSlotSharingGroup {
-    private final Set<ExecutionVertexID> containedExecutionVertices;
+/** Calculates a potential mapping between slots & * vertices. */
+interface MappingCalculator {
 
-    public ExecutionSlotSharingGroup(Set<ExecutionVertexID> containedExecutionVertices) {
-        this.containedExecutionVertices = containedExecutionVertices;
-    }
-
-    public Collection<ExecutionVertexID> getContainedExecutionVertices() {
-        return containedExecutionVertices;
-    }
+    /**
+     * Attempts to create a mapping between vertices and slots.
+     *
+     * @param jobInformation information about the job graph
+     * @param freeSlots currently free slots
+     * @return mapping of slots and the vertices that should be deployed into them, if a mapping
+     *     could be found
+     */
+    Optional<SlotSharingAssignments> determineParallelismAndAssignResources(
+            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
 }

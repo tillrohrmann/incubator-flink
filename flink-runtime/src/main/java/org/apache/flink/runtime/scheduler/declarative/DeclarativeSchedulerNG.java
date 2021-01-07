@@ -20,11 +20,9 @@ package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
-import org.apache.flink.api.common.operators.ResourceSpec;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.queryablestate.KvStateID;
 import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
@@ -68,7 +66,6 @@ import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTrackerDeploymentLi
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.jobmaster.SerializedInputSplit;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
-import org.apache.flink.runtime.jobmaster.SlotRequestId;
 import org.apache.flink.runtime.jobmaster.slotpool.DeclarativeSlotPool;
 import org.apache.flink.runtime.jobmaster.slotpool.PhysicalSlot;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
@@ -91,7 +88,7 @@ import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
-import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
+import org.apache.flink.runtime.scheduler.declarative.allocator.SlotSharingSlotAllocator;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
@@ -110,10 +107,8 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -156,9 +151,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
     @Nullable private JobStatusListener jobStatusListener;
 
-    private final RequirementsCalculator requirementsCalculator =
-            new SlotSharingRequirementsCalculator();
-    private final MappingCalculator mappingCalculator = new SlotSharingMappingCalculator();
+    private final SlotSharingSlotAllocator slotAllocator;
 
     private State state = new Created();
 
@@ -207,6 +200,11 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
                         jobGraph, checkpointRecoveryFactory);
         this.checkpointsCleaner = new CheckpointsCleaner();
 
+        this.slotAllocator =
+                new SlotSharingSlotAllocator(
+                        declarativeSlotPool::reserveFreeSlot,
+                        declarativeSlotPool::freeReservedSlot);
+
         declarativeSlotPool.registerNewSlotsListener(this::newResourcesAvailable);
     }
 
@@ -249,7 +247,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
     }
 
     private ResourceCounter calculateDesiredResources() {
-        return requirementsCalculator.calculateRequiredSlots(jobGraph.getVertices());
+        return slotAllocator.calculateRequiredSlots(jobGraph.getVertices());
     }
 
     private ExecutionGraph createExecutionGraphAndRestoreState() throws Exception {
@@ -764,72 +762,22 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
             }
         }
 
-        private DeclarativeScheduler.ParallelismAndResourceAssignments
-                determineParallelismAndAssignResources(JobGraph jobGraph)
-                        throws JobExecutionException {
-            final HashMap<ExecutionVertexID, LogicalSlot> assignedSlots = new HashMap<>();
+        @Nonnull
+        private ExecutionGraph createExecutionGraphAndAssignResources() throws Exception {
+            final Optional<DeclarativeScheduler.ParallelismAndResourceAssignments>
+                    parallelismAndResourceAssignmentsOptional =
+                            slotAllocator.determineParallelismAndAssignResources(
+                                    new JobGraphJobInformation(jobGraph),
+                                    declarativeSlotPool.getFreeSlotsInformation());
 
-            final Optional<SlotSharingAssignments> slotSharingSlotAssignmentsOptional =
-                    mappingCalculator.determineParallelismAndAssignResources(
-                            new JobGraphJobInformation(jobGraph),
-                            declarativeSlotPool.getFreeSlotsInformation());
-
-            if (!slotSharingSlotAssignmentsOptional.isPresent()) {
+            if (!parallelismAndResourceAssignmentsOptional.isPresent()) {
                 throw new JobExecutionException(
                         jobGraph.getJobID(), "Not enough resources available for scheduling.");
             }
 
-            final SlotSharingAssignments slotSharingSlotAssignments =
-                    slotSharingSlotAssignmentsOptional.get();
-
-            for (ExecutionSlotSharingGroupAndSlot executionSlotSharingGroup :
-                    slotSharingSlotAssignments.getAssignments()) {
-                final SharedSlot sharedSlot =
-                        reserveSharedSlot(executionSlotSharingGroup.getSlotInfo());
-
-                for (ExecutionVertexID executionVertexId :
-                        executionSlotSharingGroup
-                                .getExecutionSlotSharingGroup()
-                                .getContainedExecutionVertices()) {
-                    final LogicalSlot logicalSlot = sharedSlot.allocateLogicalSlot();
-                    assignedSlots.put(executionVertexId, logicalSlot);
-                }
-            }
-
-            final Map<JobVertexID, Integer> parallelismPerJobVertex =
-                    slotSharingSlotAssignments.getMaxParallelismForVertices();
-
-            return new DeclarativeScheduler.ParallelismAndResourceAssignments(
-                    assignedSlots, parallelismPerJobVertex);
-        }
-
-        private SharedSlot reserveSharedSlot(SlotInfo slotInfo) {
-            final PhysicalSlot physicalSlot =
-                    declarativeSlotPool.reserveFreeSlot(
-                            slotInfo.getAllocationId(),
-                            ResourceProfile.fromResourceSpec(
-                                    ResourceSpec.DEFAULT, MemorySize.ZERO));
-
-            final SharedSlot sharedSlot =
-                    new SharedSlot(
-                            new SlotRequestId(),
-                            physicalSlot,
-                            slotInfo.willBeOccupiedIndefinitely(),
-                            () ->
-                                    declarativeSlotPool.freeReservedSlot(
-                                            slotInfo.getAllocationId(),
-                                            null,
-                                            System.currentTimeMillis()));
-            physicalSlot.tryAssignPayload(sharedSlot);
-
-            return sharedSlot;
-        }
-
-        @Nonnull
-        private ExecutionGraph createExecutionGraphAndAssignResources() throws Exception {
             final DeclarativeScheduler.ParallelismAndResourceAssignments
                     parallelismAndResourceAssignments =
-                            determineParallelismAndAssignResources(jobGraph);
+                            parallelismAndResourceAssignmentsOptional.get();
 
             for (JobVertex vertex : jobGraph.getVertices()) {
                 vertex.setParallelism(

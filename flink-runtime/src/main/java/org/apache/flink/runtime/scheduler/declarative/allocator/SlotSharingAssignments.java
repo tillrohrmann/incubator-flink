@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative;
+package org.apache.flink.runtime.scheduler.declarative.allocator;
 
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /** Mapping of slots to execution slot sharing groups. */
-public class SlotSharingAssignments {
+class SlotSharingAssignments {
 
     private final Collection<ExecutionSlotSharingGroupAndSlot> assignments;
 

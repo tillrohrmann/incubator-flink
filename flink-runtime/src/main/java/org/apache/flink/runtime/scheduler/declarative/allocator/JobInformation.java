@@ -15,24 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative;
+package org.apache.flink.runtime.scheduler.declarative.allocator;
 
-import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 
 import java.util.Collection;
-import java.util.Optional;
 
-/** Calculates a potential mapping between slots & * vertices. */
-public interface MappingCalculator {
+/** Information about the job. */
+public interface JobInformation {
+    Collection<SlotSharingGroup> getSlotSharingGroups();
 
-    /**
-     * Attempts to create a mapping between vertices and slots.
-     *
-     * @param jobInformation information about the job graph
-     * @param freeSlots currently free slots
-     * @return mapping of slots and the vertices that should be deployed into them, if a mapping
-     *     could be found
-     */
-    Optional<SlotSharingAssignments> determineParallelismAndAssignResources(
-            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
+    VertexInformation getVertexInformation(JobVertexID jobVertexId);
+
+    /** Information about a single vertex. */
+    interface VertexInformation {
+        JobVertexID getJobVertexID();
+
+        int getParallelism();
+    }
 }

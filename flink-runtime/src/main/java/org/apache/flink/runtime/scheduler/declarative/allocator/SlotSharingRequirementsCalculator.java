@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative;
+package org.apache.flink.runtime.scheduler.declarative.allocator;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.instance.SlotSharingGroupId;
@@ -26,7 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** {@link RequirementsCalculator} that supports slot sharing. */
-public class SlotSharingRequirementsCalculator implements RequirementsCalculator {
+class SlotSharingRequirementsCalculator implements RequirementsCalculator {
 
     @Override
     public ResourceCounter calculateRequiredSlots(Iterable<JobVertex> vertices) {
