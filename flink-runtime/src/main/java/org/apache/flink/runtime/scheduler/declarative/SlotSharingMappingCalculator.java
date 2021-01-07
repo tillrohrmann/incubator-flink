@@ -17,12 +17,11 @@
 
 package org.apache.flink.runtime.scheduler.declarative;
 
-import org.apache.flink.runtime.instance.SlotSharingGroupId;
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
-import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,17 +36,15 @@ import java.util.stream.Collectors;
 public class SlotSharingMappingCalculator implements MappingCalculator {
 
     @Override
-    public Optional<Map<SlotSharingGroupId, Map<SlotInfo, ExecutionSlotSharingGroup>>>
-            determineParallelismAndAssignResources(
-                    JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots) {
+    public Optional<SlotSharingAssignments> determineParallelismAndAssignResources(
+            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots) {
 
         // TODO: This can waste slots if the max parallelism for slot sharing groups is not equal
         final int slotsPerSlotSharingGroup =
                 freeSlots.size() / jobInformation.getSlotSharingGroups().size();
         final Iterator<SlotInfoWithUtilization> slotIterator = freeSlots.iterator();
 
-        Map<SlotSharingGroupId, Map<SlotInfo, ExecutionSlotSharingGroup>>
-                slotSharingSlotAssignments = new HashMap<>();
+        final Collection<ExecutionSlotSharingGroupAndSlot> assignments = new ArrayList<>();
 
         for (SlotSharingGroup slotSharingGroup : jobInformation.getSlotSharingGroups()) {
             final List<JobInformation.VertexInformation> containedJobVertices =
@@ -59,18 +56,16 @@ public class SlotSharingMappingCalculator implements MappingCalculator {
                     determineParallelismAndAssignToFutureSlotIndex(
                             containedJobVertices, slotsPerSlotSharingGroup);
 
-            Map<SlotInfo, ExecutionSlotSharingGroup> slotAssignments = new HashMap<>();
             for (ExecutionSlotSharingGroup executionSlotSharingGroup :
                     sharedSlotToVertexAssignment) {
                 final SlotInfoWithUtilization slotInfo = slotIterator.next();
 
-                slotAssignments.put(slotInfo, executionSlotSharingGroup);
+                assignments.add(
+                        new ExecutionSlotSharingGroupAndSlot(executionSlotSharingGroup, slotInfo));
             }
-            slotSharingSlotAssignments.put(
-                    slotSharingGroup.getSlotSharingGroupId(), slotAssignments);
         }
 
-        return Optional.of(slotSharingSlotAssignments);
+        return Optional.of(new SlotSharingAssignments(assignments));
     }
 
     private Iterable<ExecutionSlotSharingGroup> determineParallelismAndAssignToFutureSlotIndex(

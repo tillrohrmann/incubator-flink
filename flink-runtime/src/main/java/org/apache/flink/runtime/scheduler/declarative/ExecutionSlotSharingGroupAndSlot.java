@@ -17,22 +17,24 @@
 
 package org.apache.flink.runtime.scheduler.declarative;
 
-import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
+import org.apache.flink.runtime.jobmaster.SlotInfo;
 
-import java.util.Collection;
-import java.util.Optional;
+/** An execution slot sharing group and the slot it could be assigned to. */
+public class ExecutionSlotSharingGroupAndSlot {
+    private final ExecutionSlotSharingGroup executionSlotSharingGroup;
+    private final SlotInfo slotInfo;
 
-/** Calculates a potential mapping between slots & * vertices. */
-public interface MappingCalculator {
+    public ExecutionSlotSharingGroupAndSlot(
+            ExecutionSlotSharingGroup executionSlotSharingGroup, SlotInfo slotInfo) {
+        this.executionSlotSharingGroup = executionSlotSharingGroup;
+        this.slotInfo = slotInfo;
+    }
 
-    /**
-     * Attempts to create a mapping between vertices and slots.
-     *
-     * @param jobInformation information about the job graph
-     * @param freeSlots currently free slots
-     * @return mapping of slots and the vertices that should be deployed into them, if a mapping
-     *     could be found
-     */
-    Optional<SlotSharingAssignments> determineParallelismAndAssignResources(
-            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
+    public ExecutionSlotSharingGroup getExecutionSlotSharingGroup() {
+        return executionSlotSharingGroup;
+    }
+
+    public SlotInfo getSlotInfo() {
+        return slotInfo;
+    }
 }
