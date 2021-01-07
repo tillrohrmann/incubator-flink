@@ -37,6 +37,7 @@ import org.junit.Test;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /**
  * This class contains integration tests for the declarative scheduler which start a {@link
@@ -48,11 +49,13 @@ public class DeclarativeSchedulerClusterITCase extends TestLogger {
     private static final int NUMBER_TASK_MANAGERS = 2;
     private static final int PARALLELISM = NUMBER_SLOTS_PER_TASK_MANAGER * NUMBER_TASK_MANAGERS;
 
+    private final Configuration configuration = createConfiguration();
+
     @Rule
     public final MiniClusterResource miniClusterResource =
             new MiniClusterResource(
                     new MiniClusterResourceConfiguration.Builder()
-                            .setConfiguration(createConfiguration())
+                            .setConfiguration(configuration)
                             .setNumberSlotsPerTaskManager(NUMBER_SLOTS_PER_TASK_MANAGER)
                             .setNumberTaskManagers(NUMBER_TASK_MANAGERS)
                             .build());
@@ -69,6 +72,8 @@ public class DeclarativeSchedulerClusterITCase extends TestLogger {
 
     @Test
     public void testAutomaticScaleDownInCaseOfLostSlots() throws InterruptedException {
+        assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
+
         final MiniCluster miniCluster = miniClusterResource.getMiniCluster();
         final JobGraph jobGraph = createBlockingJobGraph(PARALLELISM);
 
