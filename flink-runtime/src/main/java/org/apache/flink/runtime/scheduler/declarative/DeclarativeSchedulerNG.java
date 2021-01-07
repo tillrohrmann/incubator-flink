@@ -849,6 +849,9 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
             for (ExecutionVertex executionVertex : executionGraph.getAllExecutionVertices()) {
                 final LogicalSlot assignedSlot =
                         parallelismAndResourceAssignments.getAssignedSlot(executionVertex.getID());
+                executionVertex
+                        .getCurrentExecutionAttempt()
+                        .registerProducedPartitions(assignedSlot.getTaskManagerLocation(), false);
                 executionVertex.tryAssignResource(assignedSlot);
             }
             return executionGraph;
