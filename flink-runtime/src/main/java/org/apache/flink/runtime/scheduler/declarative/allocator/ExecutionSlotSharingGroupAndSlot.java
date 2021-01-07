@@ -15,20 +15,26 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative;
+package org.apache.flink.runtime.scheduler.declarative.allocator;
 
-import org.apache.flink.runtime.jobgraph.JobVertex;
-import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
+import org.apache.flink.runtime.jobmaster.SlotInfo;
 
-/** Calculates resource requirements for a set of vertices. */
-public interface RequirementsCalculator {
+/** An execution slot sharing group and the slot it could be assigned to. */
+class ExecutionSlotSharingGroupAndSlot {
+    private final ExecutionSlotSharingGroup executionSlotSharingGroup;
+    private final SlotInfo slotInfo;
 
-    /**
-     * Calculates the total resources required for scheduling the given vertices.
-     *
-     * @param vertices vertices to schedule
-     * @return required resources
-     */
-    // TODO: replace JobVertex with VertexInformation
-    ResourceCounter calculateRequiredSlots(Iterable<JobVertex> vertices);
+    public ExecutionSlotSharingGroupAndSlot(
+            ExecutionSlotSharingGroup executionSlotSharingGroup, SlotInfo slotInfo) {
+        this.executionSlotSharingGroup = executionSlotSharingGroup;
+        this.slotInfo = slotInfo;
+    }
+
+    public ExecutionSlotSharingGroup getExecutionSlotSharingGroup() {
+        return executionSlotSharingGroup;
+    }
+
+    public SlotInfo getSlotInfo() {
+        return slotInfo;
+    }
 }
