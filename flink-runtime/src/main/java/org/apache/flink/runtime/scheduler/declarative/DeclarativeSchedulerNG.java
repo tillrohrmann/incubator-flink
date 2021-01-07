@@ -50,6 +50,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionDeploymentListener;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphBuilder;
+import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.ExecutionStateUpdateListener;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
@@ -894,8 +895,11 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         }
 
         private void deploy() {
-            for (ExecutionVertex executionVertex : executionGraph.getAllExecutionVertices()) {
-                deploySafely(executionVertex);
+            for (ExecutionJobVertex executionJobVertex :
+                    executionGraph.getVerticesTopologically()) {
+                for (ExecutionVertex executionVertex : executionJobVertex.getTaskVertices()) {
+                    deploySafely(executionVertex);
+                }
             }
         }
 
