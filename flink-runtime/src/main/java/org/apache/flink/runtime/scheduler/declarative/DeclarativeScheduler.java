@@ -480,7 +480,7 @@ public class DeclarativeScheduler implements SchedulerNG {
                                 new JobGraphJobInformation(jobGraph),
                                 declarativeSlotPool.getFreeSlotsInformation());
 
-        if (slotSharingSlotAssignmentsOptional.isEmpty()) {
+        if (!slotSharingSlotAssignmentsOptional.isPresent()) {
             throw new JobExecutionException(
                     jobGraph.getJobID(), "Not enough resources available for scheduling.");
         }
