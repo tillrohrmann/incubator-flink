@@ -74,13 +74,17 @@ public class SharedSlot implements SlotOwner, PhysicalSlot.Payload {
      */
     public LogicalSlot allocateLogicalSlot() {
         LOG.debug("Allocating logical slot from shared slot ({})", physicalSlotRequestId);
-        return new SingleLogicalSlot(
-                new SlotRequestId(),
-                physicalSlot,
-                null,
-                Locality.UNKNOWN,
-                this,
-                slotWillBeOccupiedIndefinitely);
+        final LogicalSlot slot =
+                new SingleLogicalSlot(
+                        new SlotRequestId(),
+                        physicalSlot,
+                        null,
+                        Locality.UNKNOWN,
+                        this,
+                        slotWillBeOccupiedIndefinitely);
+
+        allocatedLogicalSlots.put(slot.getSlotRequestId(), slot);
+        return slot;
     }
 
     @Override
