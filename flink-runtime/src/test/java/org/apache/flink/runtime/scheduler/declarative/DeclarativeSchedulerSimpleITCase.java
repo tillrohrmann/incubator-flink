@@ -41,6 +41,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /** Integration tests for the {@link DeclarativeScheduler}. */
 public class DeclarativeSchedulerSimpleITCase extends TestLogger {
@@ -48,6 +49,8 @@ public class DeclarativeSchedulerSimpleITCase extends TestLogger {
     private static final int NUMBER_TASK_MANAGERS = 2;
     private static final int NUMBER_SLOTS_PER_TASK_MANAGER = 2;
     private static final int PARALLELISM = 10;
+
+    private static final Configuration configuration = getConfiguration();
 
     private static Configuration getConfiguration() {
         final Configuration configuration = new Configuration();
@@ -63,13 +66,15 @@ public class DeclarativeSchedulerSimpleITCase extends TestLogger {
     public static final MiniClusterResource MINI_CLUSTER_RESOURCE =
             new MiniClusterResource(
                     new MiniClusterResourceConfiguration.Builder()
-                            .setConfiguration(getConfiguration())
+                            .setConfiguration(configuration)
                             .setNumberTaskManagers(NUMBER_TASK_MANAGERS)
                             .setNumberSlotsPerTaskManager(NUMBER_SLOTS_PER_TASK_MANAGER)
                             .build());
 
     @Test
     public void testSchedulingOfSimpleJob() throws Exception {
+        assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
+
         final MiniCluster miniCluster = MINI_CLUSTER_RESOURCE.getMiniCluster();
         final JobGraph jobGraph = createJobGraph();
 
@@ -100,6 +105,8 @@ public class DeclarativeSchedulerSimpleITCase extends TestLogger {
 
     @Test
     public void testGlobalFailoverIfTaskFails() {
+        assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
+
         final MiniCluster miniCluster = MINI_CLUSTER_RESOURCE.getMiniCluster();
         final JobGraph jobGraph = createOnceFailingJobGraph();
 
