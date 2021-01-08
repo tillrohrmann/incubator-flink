@@ -24,7 +24,6 @@ import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.akka.AkkaUtils;
-import org.apache.flink.runtime.dispatcher.SchedulerNGFactoryFactory;
 import org.apache.flink.util.clock.SystemClock;
 
 import javax.annotation.Nonnull;
@@ -58,8 +57,7 @@ public interface SlotPoolServiceFactory {
     }
 
     static boolean isDeclarativeSchedulerEnabled(Configuration configuration) {
-        return configuration
-                .get(JobManagerOptions.SCHEDULER)
-                .equals(SchedulerNGFactoryFactory.DECLARATIVE_SCHEDULER);
+        return configuration.get(JobManagerOptions.SCHEDULER)
+                == JobManagerOptions.SchedulerType.Declarative;
     }
 }

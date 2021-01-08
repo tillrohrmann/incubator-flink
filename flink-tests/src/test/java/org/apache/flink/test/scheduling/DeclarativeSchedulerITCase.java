@@ -24,7 +24,6 @@ import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
-import org.apache.flink.runtime.dispatcher.SchedulerNGFactoryFactory;
 import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
@@ -59,8 +58,7 @@ public class DeclarativeSchedulerITCase extends TestLogger {
     private static Configuration getConfiguration() {
         final Configuration configuration = new Configuration();
 
-        configuration.set(
-                JobManagerOptions.SCHEDULER, SchedulerNGFactoryFactory.DECLARATIVE_SCHEDULER);
+        configuration.set(JobManagerOptions.SCHEDULER, JobManagerOptions.SchedulerType.Declarative);
         configuration.set(ClusterOptions.ENABLE_DECLARATIVE_RESOURCE_MANAGEMENT, true);
 
         return configuration;
