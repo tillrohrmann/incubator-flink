@@ -28,6 +28,7 @@ STAGE_TESTS="tests"
 STAGE_MISC="misc"
 STAGE_CLEANUP="cleanup"
 STAGE_LEGACY_SLOT_MANAGEMENT="legacy_slot_management"
+STAGE_DECLARATIVE_SCHEDULER="declarative_scheduler"
 
 MODULES_CORE="\
 flink-annotations,\
@@ -164,6 +165,9 @@ function get_compile_modules_for_stage() {
         (${STAGE_LEGACY_SLOT_MANAGEMENT})
             echo "-pl $MODULES_LEGACY_SLOT_MANAGEMENT -am"
         ;;
+        (${STAGE_DECLARATIVE_SCHEDULER})
+            echo "-pl $MODULES_LEGACY_SLOT_MANAGEMENT -am"
+        ;;
     esac
 }
 
@@ -208,6 +212,9 @@ function get_test_modules_for_stage() {
         ;;
         (${STAGE_LEGACY_SLOT_MANAGEMENT})
             echo "-pl $modules_legacy_slot_management"
+        ;;
+        (${STAGE_DECLARATIVE_SCHEDULER})
+            echo "-pl $modules_legacy_slot_management -am -Pwith-declarative-scheduler"
         ::
     esac
 }

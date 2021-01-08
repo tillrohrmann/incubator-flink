@@ -117,8 +117,20 @@ public class ClusterOptions {
                 || isDeclarativeSchedulerEnabled(configuration);
     }
 
+    public static JobManagerOptions.SchedulerType getSchedulerType(Configuration configuration) {
+        if (isDeclarativeSchedulerEnabled(configuration)) {
+            return JobManagerOptions.SchedulerType.Declarative;
+        } else {
+            return configuration.get(JobManagerOptions.SCHEDULER);
+        }
+    }
+
     public static boolean isDeclarativeSchedulerEnabled(Configuration configuration) {
-        return configuration.get(JobManagerOptions.SCHEDULER)
-                == JobManagerOptions.SchedulerType.Declarative;
+        if (configuration.contains(JobManagerOptions.SCHEDULER)) {
+            return configuration.get(JobManagerOptions.SCHEDULER)
+                    == JobManagerOptions.SchedulerType.Declarative;
+        } else {
+            return System.getProperties().containsKey("flink.tests.enable-declarative-scheduler");
+        }
     }
 }
