@@ -40,7 +40,8 @@ public interface SlotPoolServiceFactory {
                 Time.milliseconds(configuration.getLong(JobManagerOptions.SLOT_IDLE_TIMEOUT));
         final Time batchSlotTimeout =
                 Time.milliseconds(configuration.getLong(JobManagerOptions.SLOT_REQUEST_TIMEOUT));
-        final boolean isDeclarativeSchedulerEnabled = isDeclarativeSchedulerEnabled(configuration);
+        final boolean isDeclarativeSchedulerEnabled =
+                ClusterOptions.isDeclarativeSchedulerEnabled(configuration);
 
         if (ClusterOptions.isDeclarativeResourceManagementEnabled(configuration)) {
             if (isDeclarativeSchedulerEnabled) {
@@ -54,10 +55,5 @@ public interface SlotPoolServiceFactory {
             return new DefaultSlotPoolServiceFactory(
                     SystemClock.getInstance(), rpcTimeout, slotIdleTimeout, batchSlotTimeout);
         }
-    }
-
-    static boolean isDeclarativeSchedulerEnabled(Configuration configuration) {
-        return configuration.get(JobManagerOptions.SCHEDULER)
-                == JobManagerOptions.SchedulerType.Declarative;
     }
 }
