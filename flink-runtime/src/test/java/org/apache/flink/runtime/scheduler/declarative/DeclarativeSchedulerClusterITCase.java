@@ -28,10 +28,12 @@ import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.testtasks.OnceBlockingNoOpInvokable;
 import org.apache.flink.runtime.testutils.MiniClusterResource;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
+import org.apache.flink.testutils.junit.WithDeclarativeScheduler;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -42,6 +44,7 @@ import static org.junit.Assume.assumeTrue;
  * This class contains integration tests for the declarative scheduler which start a {@link
  * org.apache.flink.runtime.minicluster.MiniCluster} per test case.
  */
+@Category(WithDeclarativeScheduler.class)
 public class DeclarativeSchedulerClusterITCase extends TestLogger {
 
     private static final int NUMBER_SLOTS_PER_TASK_MANAGER = 2;

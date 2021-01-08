@@ -33,16 +33,19 @@ import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.runtime.testutils.MiniClusterResource;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
+import org.apache.flink.testutils.junit.WithDeclarativeScheduler;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
 /** Integration tests for the {@link DeclarativeScheduler}. */
+@Category(WithDeclarativeScheduler.class)
 public class DeclarativeSchedulerSimpleITCase extends TestLogger {
 
     private static final int NUMBER_TASK_MANAGERS = 2;
