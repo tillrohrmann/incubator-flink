@@ -21,7 +21,6 @@ package org.apache.flink.runtime.scheduler.declarative;
 import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
-import org.apache.flink.runtime.dispatcher.SchedulerNGFactoryFactory;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
 import org.apache.flink.runtime.jobgraph.JobGraph;
@@ -49,8 +48,7 @@ public class DeclarativeSchedulerSlotSharingITCase extends TestLogger {
     private static Configuration getConfiguration() {
         final Configuration configuration = new Configuration();
 
-        configuration.set(
-                JobManagerOptions.SCHEDULER, SchedulerNGFactoryFactory.DECLARATIVE_SCHEDULER);
+        configuration.set(JobManagerOptions.SCHEDULER, JobManagerOptions.SchedulerType.Declarative);
         configuration.set(
                 JobManagerOptions.DECLARATIVE_SCHEDULER_TYPE,
                 JobManagerOptions.DeclarativeSchedulerType.StateMachine);

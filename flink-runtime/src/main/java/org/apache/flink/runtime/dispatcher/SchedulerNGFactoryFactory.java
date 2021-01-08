@@ -28,24 +28,22 @@ import org.apache.flink.runtime.scheduler.declarative.DeclarativeSchedulerFactor
 /** Factory for {@link SchedulerNGFactory}. */
 public final class SchedulerNGFactoryFactory {
 
-    public static final String SCHEDULER_TYPE_NG = "ng";
-    public static final String DECLARATIVE_SCHEDULER = "declarative";
-
     private SchedulerNGFactoryFactory() {}
 
     public static SchedulerNGFactory createSchedulerNGFactory(final Configuration configuration) {
-        final String schedulerName = configuration.getString(JobManagerOptions.SCHEDULER);
-        switch (schedulerName) {
-            case SCHEDULER_TYPE_NG:
+        final JobManagerOptions.SchedulerType schedulerTyp =
+                configuration.get(JobManagerOptions.SCHEDULER);
+        switch (schedulerTyp) {
+            case Ng:
                 return new DefaultSchedulerFactory();
-            case DECLARATIVE_SCHEDULER:
+            case Declarative:
                 return new DeclarativeSchedulerFactory();
 
             default:
                 throw new IllegalArgumentException(
                         String.format(
                                 "Illegal value [%s] for config option [%s]",
-                                schedulerName, JobManagerOptions.SCHEDULER.key()));
+                                schedulerTyp, JobManagerOptions.SCHEDULER.key()));
         }
     }
 }

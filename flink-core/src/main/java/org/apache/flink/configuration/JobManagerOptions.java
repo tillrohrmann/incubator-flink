@@ -347,16 +347,22 @@ public class JobManagerOptions {
 
     /** Config parameter determining the scheduler implementation. */
     @Documentation.ExcludeFromDocumentation("SchedulerNG is still in development.")
-    public static final ConfigOption<String> SCHEDULER =
+    public static final ConfigOption<SchedulerType> SCHEDULER =
             key("jobmanager.scheduler")
-                    .stringType()
-                    .defaultValue("ng")
+                    .enumType(SchedulerType.class)
+                    .defaultValue(SchedulerType.Ng)
                     .withDescription(
                             Description.builder()
                                     .text(
                                             "Determines which scheduler implementation is used to schedule tasks. Accepted values are:")
                                     .list(text("'ng': new generation scheduler"))
                                     .build());
+
+    /** Type of scheduler implementation. */
+    public enum SchedulerType {
+        Ng,
+        Declarative
+    }
 
     /** Config parameter determining the declarative scheduler implementation. */
     @Documentation.ExcludeFromDocumentation("Declarative scheduler is still in development.")
