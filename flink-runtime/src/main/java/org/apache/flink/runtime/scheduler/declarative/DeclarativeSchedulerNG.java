@@ -53,6 +53,8 @@ import org.apache.flink.runtime.executiongraph.ExecutionStateUpdateListener;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
 import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
+import org.apache.flink.runtime.executiongraph.failover.flip1.ExecutionFailureHandler;
+import org.apache.flink.runtime.executiongraph.failover.flip1.RestartBackoffTimeStrategy;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
@@ -146,6 +148,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
     private final CheckpointsCleaner checkpointsCleaner;
 
     private final CompletableFuture<Void> terminationFuture = new CompletableFuture<>();
+    private final RestartBackoffTimeStrategy restartBackoffTimeStrategy;
 
     private ComponentMainThreadExecutor componentMainThreadExecutor =
             new ComponentMainThreadExecutor.DummyComponentMainThreadExecutor("foobar");
@@ -170,6 +173,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
             JobManagerJobMetricGroup jobManagerJobMetricGroup,
             ShuffleMaster<?> shuffleMaster,
             JobMasterPartitionTracker partitionTracker,
+            RestartBackoffTimeStrategy restartBackoffTimeStrategy,
             ExecutionDeploymentTracker executionDeploymentTracker,
             BackPressureStatsTracker backPressureStatsTracker,
             long initializationTimestamp)
@@ -186,6 +190,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         this.blobWriter = blobWriter;
         this.shuffleMaster = shuffleMaster;
         this.partitionTracker = partitionTracker;
+        this.restartBackoffTimeStrategy = restartBackoffTimeStrategy;
         this.executionDeploymentTracker = executionDeploymentTracker;
         this.jobManagerJobMetricGroup = jobManagerJobMetricGroup;
         this.backPressureStatsTracker = backPressureStatsTracker;
@@ -821,8 +826,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
         @Override
         public State handleGlobalFailure(Throwable cause) {
-            executionGraph.initFailureCause(cause);
-            return new Restarting(executionGraph);
+            return handleAnyFailure(cause);
         }
 
         @Override
@@ -831,12 +835,34 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
             if (successfulUpdate) {
                 if (taskExecutionState.getExecutionState() == ExecutionState.FAILED) {
-                    return StateAndBoolean.create(new Restarting(executionGraph), true);
+                    Throwable cause = taskExecutionState.getError(userCodeClassLoader);
+                    return StateAndBoolean.create(handleAnyFailure(cause), true);
                 } else {
                     return StateAndBoolean.create(this, true);
                 }
             } else {
                 return StateAndBoolean.create(this, false);
+            }
+        }
+
+        private State handleAnyFailure(Throwable cause) {
+            if (ExecutionFailureHandler.isUnrecoverableError(cause)) {
+                Throwable finalCause = new JobException("The failure is not recoverable", cause);
+                executionGraph.failJob(finalCause);
+                return new Finished(createArchivedExecutionGraph(JobStatus.FAILED, finalCause));
+            }
+
+            restartBackoffTimeStrategy.notifyFailure(cause);
+            if (restartBackoffTimeStrategy.canRestart()) {
+                executionGraph.initFailureCause(cause);
+                return new Restarting(executionGraph, restartBackoffTimeStrategy.getBackoffTime());
+            } else {
+                return new Finished(
+                        createArchivedExecutionGraph(
+                                JobStatus.FAILED,
+                                new JobException(
+                                        "Recovery is suppressed by " + restartBackoffTimeStrategy,
+                                        cause)));
             }
         }
 
@@ -869,8 +895,11 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
     private final class Restarting extends StateWithExecutionGraph {
 
-        private Restarting(ExecutionGraph executionGraph) {
+        private long backoffTime;
+
+        private Restarting(ExecutionGraph executionGraph, long backoffTime) {
             super(executionGraph);
+            this.backoffTime = backoffTime;
             executionGraph.cancel();
         }
 
@@ -894,8 +923,11 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         @Override
         void onTerminalState(JobStatus jobStatus) {
             Preconditions.checkArgument(jobStatus == JobStatus.CANCELED);
-
-            transitionToState(new WaitingForResources(calculateDesiredResources()));
+            runIfState(
+                    this,
+                    () -> transitionToState(new WaitingForResources(calculateDesiredResources())),
+                    backoffTime,
+                    TimeUnit.MILLISECONDS);
         }
     }
 

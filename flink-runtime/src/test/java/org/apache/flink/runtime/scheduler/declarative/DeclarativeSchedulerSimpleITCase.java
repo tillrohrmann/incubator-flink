@@ -18,7 +18,9 @@
 
 package org.apache.flink.runtime.scheduler.declarative;
 
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobExecutionResult;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
@@ -40,6 +42,8 @@ import org.apache.flink.util.TestLogger;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+
+import java.io.IOException;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
@@ -105,7 +109,7 @@ public class DeclarativeSchedulerSimpleITCase extends TestLogger {
     }
 
     @Test
-    public void testGlobalFailoverIfTaskFails() {
+    public void testGlobalFailoverIfTaskFails() throws IOException {
         assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
 
         final MiniCluster miniCluster = MINI_CLUSTER_RESOURCE.getMiniCluster();
@@ -118,7 +122,7 @@ public class DeclarativeSchedulerSimpleITCase extends TestLogger {
         assertTrue(jobResult.isSuccess());
     }
 
-    private JobGraph createOnceFailingJobGraph() {
+    private JobGraph createOnceFailingJobGraph() throws IOException {
         final JobVertex onceFailingOperator = new JobVertex("Once failing operator");
 
         OnceFailingInvokable.reset();
@@ -126,6 +130,9 @@ public class DeclarativeSchedulerSimpleITCase extends TestLogger {
 
         onceFailingOperator.setParallelism(1);
         final JobGraph jobGraph = new JobGraph("Once failing job", onceFailingOperator);
+        ExecutionConfig executionConfig = new ExecutionConfig();
+        executionConfig.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0L));
+        jobGraph.setExecutionConfig(executionConfig);
         return jobGraph;
     }
 

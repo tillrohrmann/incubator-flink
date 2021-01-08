@@ -18,6 +18,8 @@
 
 package org.apache.flink.runtime.scheduler.declarative;
 
+import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
@@ -35,6 +37,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertTrue;
@@ -72,7 +75,7 @@ public class DeclarativeSchedulerClusterITCase extends TestLogger {
     }
 
     @Test
-    public void testAutomaticScaleDownInCaseOfLostSlots() throws InterruptedException {
+    public void testAutomaticScaleDownInCaseOfLostSlots() throws InterruptedException, IOException {
         assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
 
         final MiniCluster miniCluster = miniClusterResource.getMiniCluster();
@@ -91,7 +94,7 @@ public class DeclarativeSchedulerClusterITCase extends TestLogger {
         assertTrue(jobResult.isSuccess());
     }
 
-    private JobGraph createBlockingJobGraph(int parallelism) {
+    private JobGraph createBlockingJobGraph(int parallelism) throws IOException {
         final JobVertex blockingOperator = new JobVertex("Blocking operator");
 
         OnceBlockingNoOpInvokable.resetFor(parallelism);
@@ -100,6 +103,10 @@ public class DeclarativeSchedulerClusterITCase extends TestLogger {
         blockingOperator.setParallelism(parallelism);
 
         final JobGraph jobGraph = new JobGraph("Blocking job.", blockingOperator);
+
+        ExecutionConfig executionConfig = new ExecutionConfig();
+        executionConfig.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0L));
+        jobGraph.setExecutionConfig(executionConfig);
 
         return jobGraph;
     }

@@ -123,7 +123,7 @@ public class ExecutionFailureHandler {
     }
 
     @VisibleForTesting
-    static boolean isUnrecoverableError(Throwable cause) {
+    public static boolean isUnrecoverableError(Throwable cause) {
         Optional<Throwable> unrecoverableError =
                 ThrowableClassifier.findThrowableOfThrowableType(
                         cause, ThrowableType.NonRecoverableError);

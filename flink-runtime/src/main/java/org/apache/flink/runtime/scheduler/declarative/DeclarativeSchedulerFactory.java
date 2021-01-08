@@ -23,6 +23,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.blob.BlobWriter;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
+import org.apache.flink.runtime.executiongraph.failover.flip1.RestartBackoffTimeStrategy;
+import org.apache.flink.runtime.executiongraph.failover.flip1.RestartBackoffTimeStrategyFactoryLoader;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTracker;
@@ -68,6 +70,20 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
                                 () ->
                                         new IllegalStateException(
                                                 "The DeclarativeScheduler requires a DeclarativeSlotPool."));
+        final RestartBackoffTimeStrategy restartBackoffTimeStrategy =
+                RestartBackoffTimeStrategyFactoryLoader.createRestartBackoffTimeStrategyFactory(
+                                jobGraph.getSerializedExecutionConfig()
+                                        .deserializeValue(userCodeLoader)
+                                        .getRestartStrategy(),
+                                jobMasterConfiguration,
+                                jobGraph.isCheckpointingEnabled())
+                        .create();
+        log.info(
+                "Using restart back off time strategy {} for {} ({}).",
+                restartBackoffTimeStrategy,
+                jobGraph.getName(),
+                jobGraph.getJobID());
+
         switch (jobMasterConfiguration.get(JobManagerOptions.DECLARATIVE_SCHEDULER_TYPE)) {
             case StateMachine:
                 return new DeclarativeSchedulerNG(
@@ -84,6 +100,7 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
                         jobManagerJobMetricGroup,
                         shuffleMaster,
                         partitionTracker,
+                        restartBackoffTimeStrategy,
                         executionDeploymentTracker,
                         backPressureStatsTracker,
                         initializationTimestamp);
