@@ -19,6 +19,7 @@
 
 package org.apache.flink.runtime.dispatcher;
 
+import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.scheduler.DefaultSchedulerFactory;
@@ -32,7 +33,7 @@ public final class SchedulerNGFactoryFactory {
 
     public static SchedulerNGFactory createSchedulerNGFactory(final Configuration configuration) {
         final JobManagerOptions.SchedulerType schedulerTyp =
-                configuration.get(JobManagerOptions.SCHEDULER);
+                ClusterOptions.getSchedulerType(configuration);
         switch (schedulerTyp) {
             case Ng:
                 return new DefaultSchedulerFactory();
