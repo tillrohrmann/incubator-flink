@@ -115,4 +115,9 @@ public class ClusterOptions {
         return configuration.get(ENABLE_DECLARATIVE_RESOURCE_MANAGEMENT)
                 && !System.getProperties().containsKey("flink.tests.disable-declarative");
     }
+
+    public static boolean isDeclarativeSchedulerEnabled(Configuration configuration) {
+        return configuration.get(JobManagerOptions.SCHEDULER)
+                == JobManagerOptions.SchedulerType.Declarative;
+    }
 }
