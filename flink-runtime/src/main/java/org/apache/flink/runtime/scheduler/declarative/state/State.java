@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative;
+package org.apache.flink.runtime.scheduler.declarative.state;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
@@ -28,19 +28,19 @@ import org.slf4j.Logger;
 import java.util.Optional;
 
 public interface State {
-    default void onEnter() {};
+    default void onEnter() {}
 
-    default void onLeave() {};
+    default void onLeave() {}
 
-    State cancel();
+    void cancel();
 
-    State suspend(Throwable cause);
+    void suspend(Throwable cause);
 
     JobStatus getJobStatus();
 
     ArchivedExecutionGraph getJob();
 
-    State handleGlobalFailure(Throwable cause);
+    void handleGlobalFailure(Throwable cause);
 
     Logger getLogger();
 
