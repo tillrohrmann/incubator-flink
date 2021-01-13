@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /** Mapping of slots to execution slot sharing groups. */
-class SlotSharingAssignments {
+class SlotSharingAssignments implements VertexAssignment {
 
     private final Collection<ExecutionSlotSharingGroupAndSlot> assignments;
 
@@ -37,6 +37,7 @@ class SlotSharingAssignments {
         return assignments;
     }
 
+    @Override
     public Map<JobVertexID, Integer> getMaxParallelismForVertices() {
         return assignments.stream()
                 .map(ExecutionSlotSharingGroupAndSlot::getExecutionSlotSharingGroup)
