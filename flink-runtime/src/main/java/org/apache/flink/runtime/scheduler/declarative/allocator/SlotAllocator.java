@@ -24,17 +24,29 @@ import java.util.Collection;
 import java.util.Optional;
 
 /** Component for calculating the slot requirements and mapping of vertices to slots. */
-public interface SlotAllocator extends RequirementsCalculator {
+public interface SlotAllocator<T extends VertexAssignment> extends RequirementsCalculator {
 
     /**
-     * Attempts to create a mapping between vertices and slots.
+     * Determines the parallelism at which the vertices could given the collection of slots.
      *
      * @param jobInformation information about the job graph
      * @param freeSlots currently free slots
-     * @return parallelism of each vertex and mapping slots to vertices, if a mapping could be
-     *     computed
+     * @return parallelism of each vertex along with implementation specific information, if the job
+     *     could be run with the given slots
      */
-    Optional<DeclarativeScheduler.ParallelismAndResourceAssignments>
-            determineParallelismAndAssignResources(
-                    JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
+    Optional<T> determineParallelism(
+            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
+
+    /**
+     * Assigns vertices to the given slots.
+     *
+     * @param jobInformation information about the job graph
+     * @param freeSlots currently free slots
+     * @param assignment information on how slots should be assigned to the slots
+     * @return parallelism of each vertex and mapping slots to vertices
+     */
+    DeclarativeScheduler.ParallelismAndResourceAssignments assignResources(
+            JobInformation jobInformation,
+            Collection<SlotInfoWithUtilization> freeSlots,
+            T assignment);
 }

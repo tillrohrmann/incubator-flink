@@ -79,7 +79,9 @@ import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPre
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
+import org.apache.flink.runtime.scheduler.declarative.allocator.SlotAllocator;
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotSharingSlotAllocator;
+import org.apache.flink.runtime.scheduler.declarative.allocator.VertexAssignment;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
@@ -146,7 +148,7 @@ public class DeclarativeScheduler implements SchedulerNG {
 
     private ResourceCounter desiredResources = ResourceCounter.empty();
 
-    private final SlotSharingSlotAllocator slotAllocator;
+    private final SlotAllocator<?> slotAllocator;
 
     @Nullable private ExecutionGraph executionGraph = null;
 
@@ -308,22 +310,29 @@ public class DeclarativeScheduler implements SchedulerNG {
         deployExecutionGraph();
     }
 
-    private void createExecutionGraphAndAssignResources() throws Exception {
-        logger.debug("Calculate parallelism of job and assign resources.");
+    private <T extends VertexAssignment>
+            ParallelismAndResourceAssignments determineParallelismAndAssignResources(
+                    SlotAllocator<T> slotAllocator) throws JobExecutionException {
+        final Optional<T> parallelism =
+                slotAllocator.determineParallelism(
+                        new JobGraphJobInformation(jobGraph),
+                        declarativeSlotPool.getFreeSlotsInformation());
 
-        final Optional<ParallelismAndResourceAssignments>
-                parallelismAndResourceAssignmentsOptional =
-                        slotAllocator.determineParallelismAndAssignResources(
-                                new JobGraphJobInformation(jobGraph),
-                                declarativeSlotPool.getFreeSlotsInformation());
-
-        if (!parallelismAndResourceAssignmentsOptional.isPresent()) {
+        if (!parallelism.isPresent()) {
             throw new JobExecutionException(
                     jobGraph.getJobID(), "Not enough resources available for scheduling.");
         }
 
+        return slotAllocator.assignResources(
+                new JobGraphJobInformation(jobGraph),
+                declarativeSlotPool.getFreeSlotsInformation(),
+                parallelism.get());
+    }
+
+    private void createExecutionGraphAndAssignResources() throws Exception {
+        logger.debug("Calculate parallelism of job and assign resources.");
         final ParallelismAndResourceAssignments parallelismAndResourceAssignments =
-                parallelismAndResourceAssignmentsOptional.get();
+                determineParallelismAndAssignResources(slotAllocator);
 
         for (JobVertex vertex : jobGraph.getVertices()) {
             vertex.setParallelism(parallelismAndResourceAssignments.getParallelism(vertex.getID()));

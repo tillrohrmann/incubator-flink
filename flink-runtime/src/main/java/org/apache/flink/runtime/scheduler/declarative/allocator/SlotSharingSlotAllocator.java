@@ -40,7 +40,7 @@ import java.util.Optional;
 import java.util.function.BiFunction;
 
 /** {@link SlotAllocator} implementation that supports slot sharing. */
-public class SlotSharingSlotAllocator implements SlotAllocator {
+public class SlotSharingSlotAllocator implements SlotAllocator<SlotSharingAssignments> {
 
     private final RequirementsCalculator requirementsCalculator;
     private final MappingCalculator mappingCalculator;
@@ -64,20 +64,18 @@ public class SlotSharingSlotAllocator implements SlotAllocator {
     }
 
     @Override
-    public Optional<DeclarativeScheduler.ParallelismAndResourceAssignments>
-            determineParallelismAndAssignResources(
-                    JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots) {
+    public Optional<SlotSharingAssignments> determineParallelism(
+            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots) {
+        return mappingCalculator.determineParallelismAndAssignResources(jobInformation, freeSlots);
+    }
+
+    @Override
+    public DeclarativeScheduler.ParallelismAndResourceAssignments assignResources(
+            JobInformation jobInformation,
+            Collection<SlotInfoWithUtilization> freeSlots,
+            SlotSharingAssignments slotSharingSlotAssignments) {
+
         final HashMap<ExecutionVertexID, LogicalSlot> assignedSlots = new HashMap<>();
-
-        final Optional<SlotSharingAssignments> slotSharingSlotAssignmentsOptional =
-                mappingCalculator.determineParallelismAndAssignResources(jobInformation, freeSlots);
-
-        if (!slotSharingSlotAssignmentsOptional.isPresent()) {
-            return Optional.empty();
-        }
-
-        final SlotSharingAssignments slotSharingSlotAssignments =
-                slotSharingSlotAssignmentsOptional.get();
 
         for (ExecutionSlotSharingGroupAndSlot executionSlotSharingGroup :
                 slotSharingSlotAssignments.getAssignments()) {
@@ -96,9 +94,8 @@ public class SlotSharingSlotAllocator implements SlotAllocator {
         final Map<JobVertexID, Integer> parallelismPerJobVertex =
                 slotSharingSlotAssignments.getMaxParallelismForVertices();
 
-        return Optional.of(
-                new DeclarativeScheduler.ParallelismAndResourceAssignments(
-                        assignedSlots, parallelismPerJobVertex));
+        return new DeclarativeScheduler.ParallelismAndResourceAssignments(
+                assignedSlots, parallelismPerJobVertex);
     }
 
     private SharedSlot reserveSharedSlot(SlotInfo slotInfo) {
