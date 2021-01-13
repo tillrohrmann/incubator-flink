@@ -556,16 +556,14 @@ public class DeclarativeScheduler
     public void deliverOperatorEventToCoordinator(
             ExecutionAttemptID taskExecution, OperatorID operator, OperatorEvent evt)
             throws FlinkException {
-        state.tryCall(
-                        StateWithExecutionGraph.class,
-                        stateWithExecutionGraph ->
-                                stateWithExecutionGraph.deliverOperatorEventToCoordinator(
-                                        taskExecution, operator, evt),
-                        "deliverOperatorEventToCoordinator")
-                .orElseThrow(
-                        () ->
-                                new TaskNotRunningException(
-                                        "Task is not known or in state running on the JobManager."));
+        final StateWithExecutionGraph stateWithExecutionGraph =
+                state.as(StateWithExecutionGraph.class)
+                        .orElseThrow(
+                                () ->
+                                        new TaskNotRunningException(
+                                                "Task is not known or in state running on the JobManager."));
+
+        stateWithExecutionGraph.deliverOperatorEventToCoordinator(taskExecution, operator, evt);
     }
 
     @Override
