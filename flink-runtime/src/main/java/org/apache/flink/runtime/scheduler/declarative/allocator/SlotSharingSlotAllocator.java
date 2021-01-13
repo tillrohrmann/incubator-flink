@@ -21,7 +21,6 @@ import org.apache.flink.api.common.operators.ResourceSpec;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
-import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
@@ -59,14 +58,15 @@ public class SlotSharingSlotAllocator implements SlotAllocator<SlotSharingAssign
     }
 
     @Override
-    public ResourceCounter calculateRequiredSlots(Iterable<JobVertex> vertices) {
+    public ResourceCounter calculateRequiredSlots(
+            Iterable<JobInformation.VertexInformation> vertices) {
         return requirementsCalculator.calculateRequiredSlots(vertices);
     }
 
     @Override
     public Optional<SlotSharingAssignments> determineParallelism(
-            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots) {
-        return mappingCalculator.determineParallelismAndAssignResources(jobInformation, freeSlots);
+            JobInformation jobInformation, Collection<? extends SlotInfo> slots) {
+        return mappingCalculator.determineParallelismAndAssignResources(jobInformation, slots);
     }
 
     @Override

@@ -19,7 +19,6 @@ package org.apache.flink.runtime.scheduler.declarative.allocator;
 
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.instance.SlotSharingGroupId;
-import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
 
 import java.util.HashMap;
@@ -29,7 +28,8 @@ import java.util.Map;
 class SlotSharingRequirementsCalculator implements RequirementsCalculator {
 
     @Override
-    public ResourceCounter calculateRequiredSlots(Iterable<JobVertex> vertices) {
+    public ResourceCounter calculateRequiredSlots(
+            Iterable<JobInformation.VertexInformation> vertices) {
         int numTotalRequiredSlots = 0;
         for (Integer requiredSlots : getMaxParallelismForSlotSharingGroups(vertices).values()) {
             numTotalRequiredSlots += requiredSlots;
@@ -38,9 +38,9 @@ class SlotSharingRequirementsCalculator implements RequirementsCalculator {
     }
 
     private static Map<SlotSharingGroupId, Integer> getMaxParallelismForSlotSharingGroups(
-            Iterable<JobVertex> vertices) {
+            Iterable<JobInformation.VertexInformation> vertices) {
         final Map<SlotSharingGroupId, Integer> maxParallelismForSlotSharingGroups = new HashMap<>();
-        for (JobVertex vertex : vertices) {
+        for (JobInformation.VertexInformation vertex : vertices) {
             maxParallelismForSlotSharingGroups.compute(
                     vertex.getSlotSharingGroup().getSlotSharingGroupId(),
                     (slotSharingGroupId, currentMaxParallelism) ->

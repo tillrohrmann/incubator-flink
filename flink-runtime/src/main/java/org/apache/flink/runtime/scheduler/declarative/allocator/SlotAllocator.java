@@ -17,6 +17,7 @@
 
 package org.apache.flink.runtime.scheduler.declarative.allocator;
 
+import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 import org.apache.flink.runtime.scheduler.declarative.ParallelismAndResourceAssignments;
 
@@ -30,12 +31,12 @@ public interface SlotAllocator<T extends VertexAssignment> extends RequirementsC
      * Determines the parallelism at which the vertices could given the collection of slots.
      *
      * @param jobInformation information about the job graph
-     * @param freeSlots currently free slots
+     * @param slots Slots to consider for determining the parallelism
      * @return parallelism of each vertex along with implementation specific information, if the job
      *     could be run with the given slots
      */
     Optional<T> determineParallelism(
-            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
+            JobInformation jobInformation, Collection<? extends SlotInfo> slots);
 
     /**
      * Assigns vertices to the given slots.

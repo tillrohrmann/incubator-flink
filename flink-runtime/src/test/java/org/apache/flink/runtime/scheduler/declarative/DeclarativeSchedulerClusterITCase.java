@@ -40,6 +40,7 @@ import org.junit.experimental.categories.Category;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
@@ -92,6 +93,40 @@ public class DeclarativeSchedulerClusterITCase extends TestLogger {
         final JobResult jobResult = resultFuture.join();
 
         assertTrue(jobResult.isSuccess());
+    }
+
+    @Test
+    public void testAutomaticScaleUp() throws Exception {
+        assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
+
+        final MiniCluster miniCluster = miniClusterResource.getMiniCluster();
+        int targetInstanceCount = NUMBER_SLOTS_PER_TASK_MANAGER * (NUMBER_TASK_MANAGERS + 1);
+        final JobGraph jobGraph = createBlockingJobGraph(targetInstanceCount);
+
+        // initially only expect NUMBER_TASK_MANAGERS
+        OnceBlockingNoOpInvokable.resetFor(NUMBER_SLOTS_PER_TASK_MANAGER * NUMBER_TASK_MANAGERS);
+
+        log.info(
+                "Submitting job with parallelism of "
+                        + targetInstanceCount
+                        + ", to a cluster with only one TM.");
+        miniCluster.submitJob(jobGraph).join();
+        final CompletableFuture<JobResult> jobResultFuture =
+                miniCluster.requestJobResult(jobGraph.getJobID());
+
+        OnceBlockingNoOpInvokable.waitUntilOpsAreRunning();
+
+        log.info("Start additional TaskManager to scale up to the full parallelism.");
+        OnceBlockingNoOpInvokable.resetInstanceCount(); // we expect a restart
+        OnceBlockingNoOpInvokable.resetFor(targetInstanceCount);
+        miniCluster.startTaskManager();
+
+        log.info("Waiting until Invokable is running with higher parallelism");
+        OnceBlockingNoOpInvokable.waitUntilOpsAreRunning();
+
+        assertEquals(targetInstanceCount, OnceBlockingNoOpInvokable.getInstanceCount());
+
+        assertTrue(jobResultFuture.join().isSuccess());
     }
 
     private JobGraph createBlockingJobGraph(int parallelism) throws IOException {

@@ -33,5 +33,7 @@ public interface JobInformation {
         JobVertexID getJobVertexID();
 
         int getParallelism();
+
+        SlotSharingGroup getSlotSharingGroup();
     }
 }

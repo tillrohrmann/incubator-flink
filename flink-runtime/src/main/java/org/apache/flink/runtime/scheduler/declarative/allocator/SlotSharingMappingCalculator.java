@@ -18,7 +18,7 @@
 package org.apache.flink.runtime.scheduler.declarative.allocator;
 
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
-import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
+import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 
 import java.util.ArrayList;
@@ -37,12 +37,11 @@ class SlotSharingMappingCalculator implements MappingCalculator {
 
     @Override
     public Optional<SlotSharingAssignments> determineParallelismAndAssignResources(
-            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots) {
-
+            JobInformation jobInformation, Collection<? extends SlotInfo> slots) {
         // TODO: This can waste slots if the max parallelism for slot sharing groups is not equal
         final int slotsPerSlotSharingGroup =
-                freeSlots.size() / jobInformation.getSlotSharingGroups().size();
-        final Iterator<SlotInfoWithUtilization> slotIterator = freeSlots.iterator();
+                slots.size() / jobInformation.getSlotSharingGroups().size();
+        final Iterator<? extends SlotInfo> slotIterator = slots.iterator();
 
         final Collection<ExecutionSlotSharingGroupAndSlot> assignments = new ArrayList<>();
 
@@ -58,7 +57,7 @@ class SlotSharingMappingCalculator implements MappingCalculator {
 
             for (ExecutionSlotSharingGroup executionSlotSharingGroup :
                     sharedSlotToVertexAssignment) {
-                final SlotInfoWithUtilization slotInfo = slotIterator.next();
+                final SlotInfo slotInfo = slotIterator.next();
 
                 assignments.add(
                         new ExecutionSlotSharingGroupAndSlot(executionSlotSharingGroup, slotInfo));

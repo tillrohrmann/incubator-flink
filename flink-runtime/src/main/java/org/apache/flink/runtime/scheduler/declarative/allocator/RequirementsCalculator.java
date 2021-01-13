@@ -17,7 +17,6 @@
 
 package org.apache.flink.runtime.scheduler.declarative.allocator;
 
-import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
 
 /** Calculates resource requirements for a set of vertices. */
@@ -29,6 +28,5 @@ interface RequirementsCalculator {
      * @param vertices vertices to schedule
      * @return required resources
      */
-    // TODO: replace JobVertex with VertexInformation
-    ResourceCounter calculateRequiredSlots(Iterable<JobVertex> vertices);
+    ResourceCounter calculateRequiredSlots(Iterable<JobInformation.VertexInformation> vertices);
 }

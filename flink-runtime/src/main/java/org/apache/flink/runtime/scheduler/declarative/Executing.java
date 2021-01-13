@@ -37,7 +37,7 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 
 /** State which represents a running job with an {@link ExecutionGraph} and assigned slots. */
-class Executing extends StateWithExecutionGraph {
+class Executing extends StateWithExecutionGraph implements ResourceConsumer {
 
     private final Context context;
 
@@ -129,6 +129,18 @@ class Executing extends StateWithExecutionGraph {
         executionVertex.markFailed(e);
     }
 
+    @Override
+    public void notifyNewResourcesAvailable() {
+        if (context.canScaleUp(getExecutionGraph())) {
+            getLogger().info("New resources are available. Restarting job to scale up.");
+            context.goToRestarting(
+                    getExecutionGraph(),
+                    getExecutionGraphHandler(),
+                    getOperatorCoordinatorHandler(),
+                    Duration.ofMillis(0L));
+        }
+    }
+
     /** Context of the {@link Executing} state. */
     interface Context extends StateWithExecutionGraph.Context {
 
@@ -152,6 +164,14 @@ class Executing extends StateWithExecutionGraph {
          * @return {@link FailureResult} which describes how to handle the failure
          */
         FailureResult howToHandleFailure(Throwable failure);
+
+        /**
+         * Asks if we can scale up the currently executing job.
+         *
+         * @param executionGraph executionGraph for making the scaling decision.
+         * @return true, if we can scale up
+         */
+        boolean canScaleUp(ExecutionGraph executionGraph);
 
         /**
          * Transitions into the {@link Restarting} state.

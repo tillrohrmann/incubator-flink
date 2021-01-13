@@ -22,6 +22,7 @@ import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Simple {@link AbstractInvokable} which blocks the first time it is run. Moreover, one can wait
@@ -33,7 +34,9 @@ public class OnceBlockingNoOpInvokable extends AbstractInvokable {
 
     private static final Object lock = new Object();
 
-    private static volatile CountDownLatch numOpsRunning = new CountDownLatch(1);
+    private static volatile CountDownLatch numOpsPending = new CountDownLatch(1);
+
+    private static volatile AtomicInteger instanceCount = new AtomicInteger(0);
 
     private static volatile boolean isBlocking = true;
 
@@ -46,7 +49,8 @@ public class OnceBlockingNoOpInvokable extends AbstractInvokable {
     @Override
     public void invoke() throws Exception {
 
-        numOpsRunning.countDown();
+        numOpsPending.countDown();
+        instanceCount.incrementAndGet();
 
         synchronized (lock) {
             while (isBlocking && running) {
@@ -67,11 +71,19 @@ public class OnceBlockingNoOpInvokable extends AbstractInvokable {
     }
 
     public static void waitUntilOpsAreRunning() throws InterruptedException {
-        numOpsRunning.await();
+        numOpsPending.await();
+    }
+
+    public static int getInstanceCount() {
+        return instanceCount.get();
+    }
+
+    public static void resetInstanceCount() {
+        instanceCount.set(0);
     }
 
     public static void resetFor(int parallelism) {
-        numOpsRunning = new CountDownLatch(parallelism);
+        numOpsPending = new CountDownLatch(parallelism);
         isBlocking = true;
     }
 }
