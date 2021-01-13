@@ -80,7 +80,6 @@ import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
-import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
 import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
@@ -588,16 +587,12 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
     public void deliverOperatorEventToCoordinator(
             ExecutionAttemptID taskExecution, OperatorID operator, OperatorEvent evt)
             throws FlinkException {
-        state.tryCall(
-                        StateWithExecutionGraph.class,
-                        stateWithExecutionGraph ->
-                                stateWithExecutionGraph.deliverOperatorEventToCoordinator(
-                                        taskExecution, operator, evt),
-                        "deliverOperatorEventToCoordinator")
-                .orElseThrow(
-                        () ->
-                                new TaskNotRunningException(
-                                        "Task is not known or in state running on the JobManager."));
+        state.tryRun(
+                StateWithExecutionGraph.class,
+                stateWithExecutionGraph ->
+                        stateWithExecutionGraph.deliverOperatorEventToCoordinator(
+                                taskExecution, operator, evt),
+                "deliverOperatorEventToCoordinator");
     }
 
     @Override
@@ -1311,12 +1306,11 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
             }
         }
 
-        private Void deliverOperatorEventToCoordinator(
+        private void deliverOperatorEventToCoordinator(
                 ExecutionAttemptID taskExecutionId, OperatorID operatorId, OperatorEvent evt)
                 throws FlinkException {
             operatorCoordinatorHandler.deliverOperatorEventToCoordinator(
                     taskExecutionId, operatorId, evt);
-            return null;
         }
 
         private CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
