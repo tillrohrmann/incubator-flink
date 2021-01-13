@@ -357,12 +357,11 @@ abstract class StateWithExecutionGraph implements State {
         }
     }
 
-    Void deliverOperatorEventToCoordinator(
+    void deliverOperatorEventToCoordinator(
             ExecutionAttemptID taskExecutionId, OperatorID operatorId, OperatorEvent evt)
             throws FlinkException {
         operatorCoordinatorHandler.deliverOperatorEventToCoordinator(
                 taskExecutionId, operatorId, evt);
-        return null;
     }
 
     CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
