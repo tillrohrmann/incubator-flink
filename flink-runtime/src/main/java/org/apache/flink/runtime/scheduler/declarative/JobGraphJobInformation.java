@@ -17,21 +17,29 @@
 
 package org.apache.flink.runtime.scheduler.declarative;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.scheduler.declarative.allocator.JobInformation;
+import org.apache.flink.util.InstantiationUtil;
 
+import java.io.IOException;
 import java.util.Collection;
+import java.util.Iterator;
 
-/** {@link JobInformation} backed by a {@link JobGraph}. */
+/** {@link JobInformation} created from a {@link JobGraph}. */
 public class JobGraphJobInformation implements JobInformation {
 
     private final JobGraph jobGraph;
+    private final JobID jobID;
+    private final String name;
 
     public JobGraphJobInformation(JobGraph jobGraph) {
         this.jobGraph = jobGraph;
+        this.jobID = jobGraph.getJobID();
+        this.name = jobGraph.getName();
     }
 
     @Override
@@ -40,11 +48,47 @@ public class JobGraphJobInformation implements JobInformation {
     }
 
     @Override
-    public VertexInformation getVertexInformation(JobVertexID jobVertexId) {
+    public JobInformation.VertexInformation getVertexInformation(JobVertexID jobVertexId) {
         return new JobVertexInformation(jobGraph.findVertexByID(jobVertexId));
     }
 
-    private static class JobVertexInformation implements VertexInformation {
+    public JobID getJobID() {
+        return jobID;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    // note: the SlotSharingGroup returned is mutable.
+    public Iterable<JobInformation.VertexInformation> getVertices() {
+        return jobGraphVerticesToVertexInformation(jobGraph.getVertices());
+    }
+
+    public static Iterable<JobInformation.VertexInformation> jobGraphVerticesToVertexInformation(
+            Iterable<JobVertex> verticesIterable) {
+        return () -> {
+            Iterator<JobVertex> iterator = verticesIterable.iterator();
+            return new Iterator<JobInformation.VertexInformation>() {
+                @Override
+                public boolean hasNext() {
+                    return iterator.hasNext();
+                }
+
+                @Override
+                public JobInformation.VertexInformation next() {
+                    return new JobVertexInformation(iterator.next());
+                }
+            };
+        };
+    }
+
+    /** Returns a copy of a jobGraph that can be mutated. */
+    public JobGraph copyJobGraph() throws IOException, ClassNotFoundException {
+        return InstantiationUtil.clone(jobGraph);
+    }
+
+    private static final class JobVertexInformation implements JobInformation.VertexInformation {
 
         private final JobVertex jobVertex;
 
@@ -60,6 +104,11 @@ public class JobGraphJobInformation implements JobInformation {
         @Override
         public int getParallelism() {
             return jobVertex.getParallelism();
+        }
+
+        @Override
+        public SlotSharingGroup getSlotSharingGroup() {
+            return jobVertex.getSlotSharingGroup();
         }
     }
 }

@@ -17,7 +17,7 @@
 
 package org.apache.flink.runtime.scheduler.declarative.allocator;
 
-import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
+import org.apache.flink.runtime.jobmaster.SlotInfo;
 
 import java.util.Collection;
 import java.util.Optional;
@@ -29,10 +29,10 @@ interface MappingCalculator {
      * Attempts to create a mapping between vertices and slots.
      *
      * @param jobInformation information about the job graph
-     * @param freeSlots currently free slots
+     * @param slots slots to consider for determining the parallelism
      * @return mapping of slots and the vertices that should be deployed into them, if a mapping
      *     could be found
      */
     Optional<SlotSharingAssignments> determineParallelismAndAssignResources(
-            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
+            JobInformation jobInformation, Collection<? extends SlotInfo> slots);
 }

@@ -91,6 +91,7 @@ import org.apache.flink.runtime.scheduler.declarative.allocator.SlotSharingSlotA
 import org.apache.flink.runtime.scheduler.declarative.allocator.VertexAssignment;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
+import org.apache.flink.runtime.util.FatalExitExceptionHandler;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 
@@ -105,12 +106,14 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.StreamSupport;
 
 /** Declarative scheduler. */
 public class DeclarativeScheduler
@@ -124,7 +127,7 @@ public class DeclarativeScheduler
 
     private static final Logger LOG = LoggerFactory.getLogger(DeclarativeScheduler.class);
 
-    private final JobGraph jobGraph;
+    private final JobGraphJobInformation jobInformation;
 
     private final DeclarativeSlotPool declarativeSlotPool;
 
@@ -178,7 +181,7 @@ public class DeclarativeScheduler
             long initializationTimestamp)
             throws JobExecutionException {
 
-        this.jobGraph = jobGraph;
+        this.jobInformation = new JobGraphJobInformation(jobGraph);
         this.declarativeSlotPool = declarativeSlotPool;
         this.initializationTimestamp = initializationTimestamp;
         this.configuration = configuration;
@@ -241,10 +244,11 @@ public class DeclarativeScheduler
     }
 
     private ResourceCounter calculateDesiredResources() {
-        return slotAllocator.calculateRequiredSlots(jobGraph.getVertices());
+        return slotAllocator.calculateRequiredSlots(jobInformation.getVertices());
     }
 
-    private ExecutionGraph createExecutionGraphAndRestoreState() throws Exception {
+    private ExecutionGraph createExecutionGraphAndRestoreState(JobGraph adjustedJobGraph)
+            throws Exception {
         ExecutionDeploymentListener executionDeploymentListener =
                 new ExecutionDeploymentTrackerDeploymentListenerAdapter(executionDeploymentTracker);
         ExecutionStateUpdateListener executionStateUpdateListener =
@@ -256,7 +260,7 @@ public class DeclarativeScheduler
 
         final ExecutionGraph newExecutionGraph =
                 ExecutionGraphBuilder.buildGraph(
-                        jobGraph,
+                        adjustedJobGraph,
                         configuration,
                         futureExecutor,
                         ioExecutor,
@@ -286,7 +290,7 @@ public class DeclarativeScheduler
 
                 // check whether we can restore from a savepoint
                 tryRestoreExecutionGraphFromSavepoint(
-                        newExecutionGraph, jobGraph.getSavepointRestoreSettings());
+                        newExecutionGraph, adjustedJobGraph.getSavepointRestoreSettings());
             }
         }
 
@@ -613,18 +617,15 @@ public class DeclarativeScheduler
                     SlotAllocator<T> slotAllocator) throws JobExecutionException {
         final Optional<T> parallelism =
                 slotAllocator.determineParallelism(
-                        new JobGraphJobInformation(jobGraph),
-                        declarativeSlotPool.getFreeSlotsInformation());
+                        jobInformation, declarativeSlotPool.getFreeSlotsInformation());
 
         if (!parallelism.isPresent()) {
             throw new JobExecutionException(
-                    jobGraph.getJobID(), "Not enough resources available for scheduling.");
+                    jobInformation.getJobID(), "Not enough resources available for scheduling.");
         }
 
         return slotAllocator.assignResources(
-                new JobGraphJobInformation(jobGraph),
-                declarativeSlotPool.getFreeSlotsInformation(),
-                parallelism.get());
+                jobInformation, declarativeSlotPool.getFreeSlotsInformation(), parallelism.get());
     }
 
     @Override
@@ -632,17 +633,18 @@ public class DeclarativeScheduler
         final ParallelismAndResourceAssignments parallelismAndResourceAssignments =
                 determineParallelismAndAssignResources(slotAllocator);
 
-        for (JobVertex vertex : jobGraph.getVertices()) {
+        JobGraph adjustedJobGraph = jobInformation.copyJobGraph();
+        for (JobVertex vertex : adjustedJobGraph.getVertices()) {
             vertex.setParallelism(parallelismAndResourceAssignments.getParallelism(vertex.getID()));
         }
 
-        final ExecutionGraph executionGraph = createExecutionGraphAndRestoreState();
+        final ExecutionGraph executionGraph = createExecutionGraphAndRestoreState(adjustedJobGraph);
 
         executionGraph.start(componentMainThreadExecutor);
         executionGraph.transitionToRunning();
 
         executionGraph.setInternalTaskFailuresListener(
-                new UpdateSchedulerNgOnInternalFailuresListener(this, jobGraph.getJobID()));
+                new UpdateSchedulerNgOnInternalFailuresListener(this, jobInformation.getJobID()));
 
         for (ExecutionVertex executionVertex : executionGraph.getAllExecutionVertices()) {
             final LogicalSlot assignedSlot =
@@ -659,7 +661,11 @@ public class DeclarativeScheduler
     public ArchivedExecutionGraph getArchivedExecutionGraph(
             JobStatus jobStatus, @Nullable Throwable cause) {
         return ArchivedExecutionGraph.createFromInitializingJob(
-                jobGraph.getJobID(), jobGraph.getName(), jobStatus, cause, initializationTimestamp);
+                jobInformation.getJobID(),
+                jobInformation.getName(),
+                jobStatus,
+                cause,
+                initializationTimestamp);
     }
 
     @Override
@@ -743,12 +749,40 @@ public class DeclarativeScheduler
     }
 
     @Override
+    public boolean canScaleUp(ExecutionGraph executionGraph) {
+        int availableSlots = declarativeSlotPool.getFreeSlotsInformation().size();
+
+        if (availableSlots > 0) {
+            // check if rescaling would increase the parallelism of at least one vertex
+
+            final Optional<? extends VertexAssignment> potentialNewParallelism =
+                    slotAllocator.determineParallelism(
+                            jobInformation, declarativeSlotPool.getAllSlotsInformation());
+
+            return potentialNewParallelism.isPresent()
+                    && isParallelismHigher(potentialNewParallelism.get(), executionGraph);
+        }
+        return false;
+    }
+
+    private boolean isParallelismHigher(
+            VertexAssignment vertexAssignment, ExecutionGraph executionGraph) {
+        Map<JobVertexID, Integer> perVertex = vertexAssignment.getMaxParallelismForVertices();
+
+        return StreamSupport.stream(executionGraph.getAllExecutionVertices().spliterator(), false)
+                .anyMatch(
+                        vertex ->
+                                perVertex.get(vertex.getJobvertexId())
+                                        > vertex.getJobVertex().getParallelism());
+    }
+
+    @Override
     public void onFinished(ArchivedExecutionGraph archivedExecutionGraph) {
         stopCheckpointServicesSafely(archivedExecutionGraph.getState());
 
         if (jobStatusListener != null) {
             jobStatusListener.jobStatusChanges(
-                    jobGraph.getJobID(),
+                    jobInformation.getJobID(),
                     archivedExecutionGraph.getState(),
                     archivedExecutionGraph.getStatusTimestamp(archivedExecutionGraph.getState()),
                     archivedExecutionGraph.getFailureInfo() != null
@@ -777,7 +811,13 @@ public class DeclarativeScheduler
         componentMainThreadExecutor.schedule(
                 () -> {
                     if (state == expectedState) {
-                        action.run();
+                        try {
+                            action.run();
+                        } catch (Throwable t) {
+                            // TODO pass a proper FatalExceptionHandler to the scheduler
+                            FatalExitExceptionHandler.INSTANCE.uncaughtException(
+                                    Thread.currentThread(), t);
+                        }
                     } else {
                         LOG.debug(
                                 "Ignoring scheduled action because expected state {} is not the actual state {}.",
