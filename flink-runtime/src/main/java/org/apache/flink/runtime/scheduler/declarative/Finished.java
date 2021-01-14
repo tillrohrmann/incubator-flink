@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
@@ -24,7 +24,7 @@ import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.slf4j.Logger;
 
 /** State which describes a finished job execution. */
-public class Finished implements State {
+class Finished implements State {
 
     private final Context context;
 
@@ -32,7 +32,7 @@ public class Finished implements State {
 
     private final Logger logger;
 
-    public Finished(Context context, ArchivedExecutionGraph archivedExecutionGraph, Logger logger) {
+    Finished(Context context, ArchivedExecutionGraph archivedExecutionGraph, Logger logger) {
         this.context = context;
         this.archivedExecutionGraph = archivedExecutionGraph;
         this.logger = logger;
@@ -68,7 +68,7 @@ public class Finished implements State {
     }
 
     /** Context of the {@link Finished} state. */
-    public interface Context {
+    interface Context {
 
         /**
          * Callback which is called when the execution reaches the {@link Finished} state.

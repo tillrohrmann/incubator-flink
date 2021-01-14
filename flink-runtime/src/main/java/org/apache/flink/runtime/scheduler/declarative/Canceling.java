@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
@@ -28,11 +28,11 @@ import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 
-public class Canceling extends StateWithExecutionGraph {
+class Canceling extends StateWithExecutionGraph {
 
     private final Context context;
 
-    public Canceling(
+    Canceling(
             Context context,
             ExecutionGraph executionGraph,
             ExecutionGraphHandler executionGraphHandler,
@@ -58,8 +58,7 @@ public class Canceling extends StateWithExecutionGraph {
     }
 
     @Override
-    public boolean updateTaskExecutionState(
-            TaskExecutionStateTransition taskExecutionStateTransition) {
+    boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionStateTransition) {
         return executionGraph.updateState(taskExecutionStateTransition);
     }
 

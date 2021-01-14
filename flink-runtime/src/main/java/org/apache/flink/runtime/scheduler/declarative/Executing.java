@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.JobException;
@@ -37,13 +37,13 @@ import javax.annotation.Nullable;
 import java.time.Duration;
 
 /** State which represents a running job with an {@link ExecutionGraph} and assigned slots. */
-public class Executing extends StateWithExecutionGraph {
+class Executing extends StateWithExecutionGraph {
 
     private final Context context;
 
     private final ClassLoader userCodeClassLoader;
 
-    public Executing(
+    Executing(
             ExecutionGraph executionGraph,
             ExecutionGraphHandler executionGraphHandler,
             OperatorCoordinatorHandler operatorCoordinatorHandler,
@@ -89,7 +89,7 @@ public class Executing extends StateWithExecutionGraph {
     }
 
     @Override
-    public boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
+    boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
         final boolean successfulUpdate = executionGraph.updateState(taskExecutionState);
 
         if (successfulUpdate) {
@@ -128,7 +128,7 @@ public class Executing extends StateWithExecutionGraph {
     }
 
     /** Context of the {@link Executing} state. */
-    public interface Context extends StateWithExecutionGraph.Context {
+    interface Context extends StateWithExecutionGraph.Context {
 
         /**
          * Transitions into the {@link Canceling} state.
@@ -188,7 +188,7 @@ public class Executing extends StateWithExecutionGraph {
      * The {@link FailureResult} describes how a failure shall be handled. Currently, there are two
      * alternatives: Either restarting the job or failing it.
      */
-    public static final class FailureResult {
+    static final class FailureResult {
         @Nullable private final Duration backoffTime;
 
         @Nullable private final Throwable failureCause;
@@ -221,7 +221,7 @@ public class Executing extends StateWithExecutionGraph {
          * @param backoffTime backoffTime to wait before restarting the job
          * @return FailureResult which allows to restart the job
          */
-        public static FailureResult canRestart(Duration backoffTime) {
+        static FailureResult canRestart(Duration backoffTime) {
             return new FailureResult(backoffTime, null);
         }
 
@@ -231,7 +231,7 @@ public class Executing extends StateWithExecutionGraph {
          * @param failureCause failureCause describes the reason why the job cannot be restarted
          * @return FailureResult which does not allow to restart the job
          */
-        public static FailureResult canNotRestart(Throwable failureCause) {
+        static FailureResult canNotRestart(Throwable failureCause) {
             return new FailureResult(null, failureCause);
         }
     }

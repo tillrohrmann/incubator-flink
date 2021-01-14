@@ -16,9 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobStatus;
+import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
 import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
@@ -27,30 +28,27 @@ import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 
-import java.time.Duration;
-
-/** State which describes a job which is currently being restarted. */
-public class Restarting extends StateWithExecutionGraph {
-
+/** State which describes a failing job which is currently being canceled. */
+class Failing extends StateWithExecutionGraph {
     private final Context context;
 
-    private final Duration backoffTime;
+    private final Throwable failureCause;
 
-    public Restarting(
+    Failing(
             Context context,
             ExecutionGraph executionGraph,
             ExecutionGraphHandler executionGraphHandler,
             OperatorCoordinatorHandler operatorCoordinatorHandler,
             Logger logger,
-            Duration backoffTime) {
+            Throwable failureCause) {
         super(context, executionGraph, executionGraphHandler, operatorCoordinatorHandler, logger);
         this.context = context;
-        this.backoffTime = backoffTime;
+        this.failureCause = failureCause;
     }
 
     @Override
     public void onEnter() {
-        executionGraph.cancel();
+        executionGraph.failJob(failureCause);
     }
 
     @Override
@@ -60,50 +58,34 @@ public class Restarting extends StateWithExecutionGraph {
 
     @Override
     public void handleGlobalFailure(Throwable cause) {
-        // don't do anything
+        // nothing to do since we are already failing
     }
 
     @Override
-    public boolean updateTaskExecutionState(
-            TaskExecutionStateTransition taskExecutionStateTransition) {
+    boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionStateTransition) {
         return executionGraph.updateState(taskExecutionStateTransition);
     }
 
     @Override
     void onTerminalState(JobStatus terminalState) {
-        Preconditions.checkArgument(terminalState == JobStatus.CANCELED);
-        context.runIfState(this, context::goToWaitingForResources, backoffTime);
+        Preconditions.checkState(terminalState == JobStatus.FAILED);
+        context.goToFinished(ArchivedExecutionGraph.createFrom(executionGraph));
     }
 
-    /** Context of the {@link Restarting} state. */
-    public interface Context extends StateWithExecutionGraph.Context {
+    /** Context of the {@link Failing} state. */
+    interface Context extends StateWithExecutionGraph.Context {
 
         /**
          * Transitions into the {@link Canceling} state.
          *
-         * @param executionGraph executionGraph which is passed to the {@link Canceling} state
-         * @param executionGraphHandler executionGraphHandler which is passed to the {@link
+         * @param executionGraph executionGraph to pass to the {@link Canceling} state
+         * @param executionGraphHandler executionGraphHandler to pass to the {@link Canceling} state
+         * @param operatorCoordinatorHandler operatorCoordinatorHandler to pass to the {@link
          *     Canceling} state
-         * @param operatorCoordinatorHandler operatorCoordinatorHandler which is passed to the
-         *     {@link Canceling} state
          */
         void goToCanceling(
                 ExecutionGraph executionGraph,
                 ExecutionGraphHandler executionGraphHandler,
                 OperatorCoordinatorHandler operatorCoordinatorHandler);
-
-        /** Transitions into the {@link WaitingForResources} state. */
-        void goToWaitingForResources();
-
-        /**
-         * Runs the given action after the specified delay if the state is the expected state at
-         * this time.
-         *
-         * @param expectedState expectedState describes the required state to run the action after
-         *     the delay
-         * @param action action to run if the state equals the expected state
-         * @param delay delay after which the action should be executed
-         */
-        void runIfState(State expectedState, Runnable action, Duration delay);
     }
 }

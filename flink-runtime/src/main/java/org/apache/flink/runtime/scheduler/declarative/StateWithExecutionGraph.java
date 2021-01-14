@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
@@ -67,7 +67,7 @@ import java.util.concurrent.Executor;
  * Abstract state class which contains an {@link ExecutionGraph} and the required handlers to
  * execute common operations.
  */
-public abstract class StateWithExecutionGraph implements State {
+abstract class StateWithExecutionGraph implements State {
     private final Context context;
 
     protected final ExecutionGraph executionGraph;
@@ -80,7 +80,7 @@ public abstract class StateWithExecutionGraph implements State {
 
     private final Logger logger;
 
-    protected StateWithExecutionGraph(
+    StateWithExecutionGraph(
             Context context,
             ExecutionGraph executionGraph,
             ExecutionGraphHandler executionGraphHandler,
@@ -130,22 +130,22 @@ public abstract class StateWithExecutionGraph implements State {
         return logger;
     }
 
-    public void notifyPartitionDataAvailable(ResultPartitionID partitionID) {
+    void notifyPartitionDataAvailable(ResultPartitionID partitionID) {
         executionGraph.notifyPartitionDataAvailable(partitionID);
     }
 
-    public SerializedInputSplit requestNextInputSplit(
+    SerializedInputSplit requestNextInputSplit(
             JobVertexID vertexID, ExecutionAttemptID executionAttempt) throws IOException {
         return executionGraphHandler.requestNextInputSplit(vertexID, executionAttempt);
     }
 
-    public ExecutionState requestPartitionState(
+    ExecutionState requestPartitionState(
             IntermediateDataSetID intermediateResultId, ResultPartitionID resultPartitionId)
             throws PartitionProducerDisposedException {
         return executionGraphHandler.requestPartitionState(intermediateResultId, resultPartitionId);
     }
 
-    public void acknowledgeCheckpoint(
+    void acknowledgeCheckpoint(
             JobID jobID,
             ExecutionAttemptID executionAttemptID,
             long checkpointId,
@@ -156,20 +156,20 @@ public abstract class StateWithExecutionGraph implements State {
                 jobID, executionAttemptID, checkpointId, checkpointMetrics, checkpointState);
     }
 
-    public void declineCheckpoint(DeclineCheckpoint decline) {
+    void declineCheckpoint(DeclineCheckpoint decline) {
         executionGraphHandler.declineCheckpoint(decline);
     }
 
-    public void updateAccumulators(AccumulatorSnapshot accumulatorSnapshot) {
+    void updateAccumulators(AccumulatorSnapshot accumulatorSnapshot) {
         executionGraph.updateAccumulators(accumulatorSnapshot);
     }
 
-    public KvStateLocation requestKvStateLocation(JobID jobId, String registrationName)
+    KvStateLocation requestKvStateLocation(JobID jobId, String registrationName)
             throws FlinkJobNotFoundException, UnknownKvStateLocation {
         return kvStateHandler.requestKvStateLocation(jobId, registrationName);
     }
 
-    public void notifyKvStateRegistered(
+    void notifyKvStateRegistered(
             JobID jobId,
             JobVertexID jobVertexId,
             KeyGroupRange keyGroupRange,
@@ -186,7 +186,7 @@ public abstract class StateWithExecutionGraph implements State {
                 kvStateServerAddress);
     }
 
-    public void notifyKvStateUnregistered(
+    void notifyKvStateUnregistered(
             JobID jobId,
             JobVertexID jobVertexId,
             KeyGroupRange keyGroupRange,
@@ -196,12 +196,12 @@ public abstract class StateWithExecutionGraph implements State {
                 jobId, jobVertexId, keyGroupRange, registrationName);
     }
 
-    public Optional<OperatorBackPressureStats> requestOperatorBackPressureStats(
-            JobVertexID jobVertexId) throws FlinkException {
+    Optional<OperatorBackPressureStats> requestOperatorBackPressureStats(JobVertexID jobVertexId)
+            throws FlinkException {
         return executionGraphHandler.requestOperatorBackPressureStats(jobVertexId);
     }
 
-    public CompletableFuture<String> triggerSavepoint(String targetDirectory, boolean cancelJob) {
+    CompletableFuture<String> triggerSavepoint(String targetDirectory, boolean cancelJob) {
         final CheckpointCoordinator checkpointCoordinator =
                 executionGraph.getCheckpointCoordinator();
         if (checkpointCoordinator == null) {
@@ -252,7 +252,7 @@ public abstract class StateWithExecutionGraph implements State {
                         context.getMainThreadExecutor());
     }
 
-    public CompletableFuture<String> stopWithSavepoint(
+    CompletableFuture<String> stopWithSavepoint(
             String targetDirectory, boolean advanceToEndOfEventTime) {
         final CheckpointCoordinator checkpointCoordinator =
                 executionGraph.getCheckpointCoordinator();
@@ -345,7 +345,7 @@ public abstract class StateWithExecutionGraph implements State {
         }
     }
 
-    public Void deliverOperatorEventToCoordinator(
+    Void deliverOperatorEventToCoordinator(
             ExecutionAttemptID taskExecutionId, OperatorID operatorId, OperatorEvent evt)
             throws FlinkException {
         operatorCoordinatorHandler.deliverOperatorEventToCoordinator(
@@ -353,7 +353,7 @@ public abstract class StateWithExecutionGraph implements State {
         return null;
     }
 
-    public CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
+    CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
             OperatorID operatorId, CoordinationRequest request) throws FlinkException {
         return operatorCoordinatorHandler.deliverCoordinationRequestToCoordinator(
                 operatorId, request);
@@ -366,7 +366,7 @@ public abstract class StateWithExecutionGraph implements State {
      *     with
      * @return {@code true} if the update was successful; otherwise {@code false}
      */
-    public abstract boolean updateTaskExecutionState(
+    abstract boolean updateTaskExecutionState(
             TaskExecutionStateTransition taskExecutionStateTransition);
 
     /**
@@ -377,7 +377,7 @@ public abstract class StateWithExecutionGraph implements State {
     abstract void onTerminalState(JobStatus terminalState);
 
     /** Context of the {@link StateWithExecutionGraph} state. */
-    public interface Context {
+    interface Context {
 
         /**
          * Run the given action if the current state equals the expected state.

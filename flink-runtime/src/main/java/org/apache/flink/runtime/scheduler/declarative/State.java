@@ -16,11 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
-import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
 import org.apache.flink.util.function.FunctionWithException;
 import org.apache.flink.util.function.ThrowingConsumer;
 
@@ -32,7 +31,7 @@ import java.util.Optional;
  * State abstraction of the {@link DeclarativeScheduler}. This interface contains all methods every
  * state implementation must support.
  */
-public interface State {
+interface State {
 
     /** This method is called whenever one transitions into this state. */
     default void onEnter() {}
