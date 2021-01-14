@@ -95,7 +95,6 @@ import org.apache.flink.util.FlinkException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
@@ -237,17 +236,6 @@ public class DeclarativeScheduler
         if (exception != null) {
             LOG.warn("Failed to stop checkpoint services.", exception);
         }
-    }
-
-    @Nonnull
-    private ArchivedExecutionGraph createArchivedExecutionGraph(
-            JobStatus jobStatus, @Nullable Throwable throwable) {
-        return ArchivedExecutionGraph.createFromInitializingJob(
-                jobGraph.getJobID(),
-                jobGraph.getName(),
-                jobStatus,
-                throwable,
-                initializationTimestamp);
     }
 
     private ResourceCounter calculateDesiredResources() {
@@ -662,7 +650,8 @@ public class DeclarativeScheduler
     @Override
     public ArchivedExecutionGraph getArchivedExecutionGraph(
             JobStatus jobStatus, @Nullable Throwable cause) {
-        return createArchivedExecutionGraph(jobStatus, cause);
+        return ArchivedExecutionGraph.createFromInitializingJob(
+                jobGraph.getJobID(), jobGraph.getName(), jobStatus, cause, initializationTimestamp);
     }
 
     @Override
