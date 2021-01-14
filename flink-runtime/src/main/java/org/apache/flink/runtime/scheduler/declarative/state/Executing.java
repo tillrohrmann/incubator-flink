@@ -26,9 +26,17 @@ import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
+import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
+import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 
+import javax.annotation.Nullable;
+
+import java.time.Duration;
+
+/** State which represents a running job with an {@link ExecutionGraph} and assigned slots. */
 public class Executing extends StateWithExecutionGraph {
 
     private final Context context;
@@ -37,10 +45,12 @@ public class Executing extends StateWithExecutionGraph {
 
     public Executing(
             ExecutionGraph executionGraph,
+            ExecutionGraphHandler executionGraphHandler,
+            OperatorCoordinatorHandler operatorCoordinatorHandler,
             Logger logger,
             Context context,
             ClassLoader userCodeClassLoader) {
-        super(context, executionGraph, logger);
+        super(context, executionGraph, executionGraphHandler, operatorCoordinatorHandler, logger);
         this.context = context;
         this.userCodeClassLoader = userCodeClassLoader;
     }
@@ -52,22 +62,40 @@ public class Executing extends StateWithExecutionGraph {
 
     @Override
     public void cancel() {
-        context.goToCanceling(executionGraph);
+        context.goToCanceling(executionGraph, executionGraphHandler, operatorCoordinatorHandler);
     }
 
     @Override
     public void handleGlobalFailure(Throwable cause) {
-        context.handleExecutingFailure(cause);
+        handleAnyFailure(cause);
+    }
+
+    private void handleAnyFailure(Throwable cause) {
+        final FailureResult failureResult = context.howToHandleFailure(cause);
+
+        if (failureResult.canRestart()) {
+            context.goToRestarting(
+                    executionGraph,
+                    executionGraphHandler,
+                    operatorCoordinatorHandler,
+                    failureResult.getBackoffTime());
+        } else {
+            context.goToFailing(
+                    executionGraph,
+                    executionGraphHandler,
+                    operatorCoordinatorHandler,
+                    failureResult.getFailureCause());
+        }
     }
 
     @Override
-    boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
+    public boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
         final boolean successfulUpdate = executionGraph.updateState(taskExecutionState);
 
         if (successfulUpdate) {
             if (taskExecutionState.getExecutionState() == ExecutionState.FAILED) {
                 Throwable cause = taskExecutionState.getError(userCodeClassLoader);
-                context.handleExecutingFailure(cause);
+                handleAnyFailure(cause);
             }
         }
 
@@ -99,10 +127,112 @@ public class Executing extends StateWithExecutionGraph {
         executionVertex.markFailed(e);
     }
 
-    interface Context extends StateWithExecutionGraph.Context {
+    /** Context of the {@link Executing} state. */
+    public interface Context extends StateWithExecutionGraph.Context {
 
-        void goToCanceling(ExecutionGraph executionGraph);
+        /**
+         * Transitions into the {@link Canceling} state.
+         *
+         * @param executionGraph executionGraph to pass to the {@link Canceling} state
+         * @param executionGraphHandler executionGraphHandler to pass to the {@link Canceling} state
+         * @param operatorCoordinatorHandler operatorCoordinatorHandler to pass to the {@link
+         *     Canceling} state
+         */
+        void goToCanceling(
+                ExecutionGraph executionGraph,
+                ExecutionGraphHandler executionGraphHandler,
+                OperatorCoordinatorHandler operatorCoordinatorHandler);
 
-        void handleExecutingFailure(Throwable failure);
+        /**
+         * Asks how to handle the failure.
+         *
+         * @param failure failure describing the failure cause
+         * @return {@link FailureResult} which describes how to handle the failure
+         */
+        FailureResult howToHandleFailure(Throwable failure);
+
+        /**
+         * Transitions into the {@link Restarting} state.
+         *
+         * @param executionGraph executionGraph to pass to the {@link Restarting} state
+         * @param executionGraphHandler executionGraphHandler to pass to the {@link Restarting}
+         *     state
+         * @param operatorCoordinatorHandler operatorCoordinatorHandler to pas to the {@link
+         *     Restarting} state
+         * @param backoffTime backoffTime to wait before transitioning to the {@link Restarting}
+         *     state
+         */
+        void goToRestarting(
+                ExecutionGraph executionGraph,
+                ExecutionGraphHandler executionGraphHandler,
+                OperatorCoordinatorHandler operatorCoordinatorHandler,
+                Duration backoffTime);
+
+        /**
+         * Transitions into the {@link Failing} state.
+         *
+         * @param executionGraph executionGraph to pass to the {@link Failing} state
+         * @param executionGraphHandler executionGraphHandler to pass to the {@link Failing} state
+         * @param operatorCoordinatorHandler operatorCoordinatorHandler to pass to the {@link
+         *     Failing} state
+         * @param failureCause failureCause describing why the job execution failed
+         */
+        void goToFailing(
+                ExecutionGraph executionGraph,
+                ExecutionGraphHandler executionGraphHandler,
+                OperatorCoordinatorHandler operatorCoordinatorHandler,
+                Throwable failureCause);
+    }
+
+    /**
+     * The {@link FailureResult} describes how a failure shall be handled. Currently, there are two
+     * alternatives: Either restarting the job or failing it.
+     */
+    public static final class FailureResult {
+        @Nullable private final Duration backoffTime;
+
+        @Nullable private final Throwable failureCause;
+
+        private FailureResult(@Nullable Duration backoffTime, @Nullable Throwable failureCause) {
+            this.backoffTime = backoffTime;
+            this.failureCause = failureCause;
+        }
+
+        boolean canRestart() {
+            return backoffTime != null;
+        }
+
+        Duration getBackoffTime() {
+            Preconditions.checkState(
+                    canRestart(), "Failure result must be restartable to return a backoff time.");
+            return backoffTime;
+        }
+
+        Throwable getFailureCause() {
+            Preconditions.checkState(
+                    failureCause != null,
+                    "Failure result must not be restartable to return a failure cause.");
+            return failureCause;
+        }
+
+        /**
+         * Creates a FailureResult which allows to restart the job.
+         *
+         * @param backoffTime backoffTime to wait before restarting the job
+         * @return FailureResult which allows to restart the job
+         */
+        public static FailureResult canRestart(Duration backoffTime) {
+            return new FailureResult(backoffTime, null);
+        }
+
+        /**
+         * Creates FailureResult which does not allow to restart the job.
+         *
+         * @param failureCause failureCause describes the reason why the job cannot be restarted
+         * @return FailureResult which does not allow to restart the job
+         */
+        public static FailureResult canNotRestart(Throwable failureCause) {
+            return new FailureResult(null, failureCause);
+        }
     }
 }
