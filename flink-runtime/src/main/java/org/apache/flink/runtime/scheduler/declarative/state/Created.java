@@ -20,13 +20,13 @@ package org.apache.flink.runtime.scheduler.declarative.state;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
-import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler3rd;
+import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
 
 import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
 
-/** Initial state of the {@link DeclarativeScheduler3rd}. */
+/** Initial state of the {@link DeclarativeScheduler}. */
 public class Created implements State {
 
     private final Context context;

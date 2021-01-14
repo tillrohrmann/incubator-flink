@@ -20,7 +20,7 @@ package org.apache.flink.runtime.scheduler.declarative.state;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
-import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler3rd;
+import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
 import org.apache.flink.util.function.FunctionWithException;
 import org.apache.flink.util.function.ThrowingConsumer;
 
@@ -29,8 +29,8 @@ import org.slf4j.Logger;
 import java.util.Optional;
 
 /**
- * State abstraction of the {@link DeclarativeScheduler3rd}. This interface contains all methods
- * every state implementation must support.
+ * State abstraction of the {@link DeclarativeScheduler}. This interface contains all methods every
+ * state implementation must support.
  */
 public interface State {
 
