@@ -24,7 +24,6 @@ import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
-import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.runtime.testutils.MiniClusterResource;
@@ -46,7 +45,7 @@ import javax.annotation.Nullable;
 
 import static org.junit.Assume.assumeTrue;
 
-/** Integration tests for the {@link DeclarativeScheduler}. */
+/** Integration tests for the declarative scheduler. */
 public class DeclarativeSchedulerITCase extends TestLogger {
 
     private static final int NUMBER_TASK_MANAGERS = 2;

@@ -41,7 +41,7 @@ import org.slf4j.Logger;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
-/** Factory for the {@link DeclarativeScheduler}. */
+/** Factory for the declarative scheduler. */
 public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
     @Override
     public SchedulerNG createInstance(
@@ -103,23 +103,6 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
                         restartBackoffTimeStrategy,
                         executionDeploymentTracker,
                         backPressureStatsTracker,
-                        initializationTimestamp);
-            case Old:
-                return new DeclarativeScheduler(
-                        jobGraph,
-                        jobMasterConfiguration,
-                        log,
-                        declarativeSlotPool,
-                        futureExecutor,
-                        ioExecutor,
-                        userCodeLoader,
-                        checkpointRecoveryFactory,
-                        rpcTimeout,
-                        blobWriter,
-                        jobManagerJobMetricGroup,
-                        shuffleMaster,
-                        partitionTracker,
-                        executionDeploymentTracker,
                         initializationTimestamp);
             default:
                 throw new IllegalStateException("Unknown scheduler type");
