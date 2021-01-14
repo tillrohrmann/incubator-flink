@@ -16,24 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
-import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
 
 import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
 
 /** Initial state of the {@link DeclarativeScheduler}. */
-public class Created implements State {
+class Created implements State {
 
     private final Context context;
 
     private final Logger logger;
 
-    public Created(Context context, Logger logger) {
+    Created(Context context, Logger logger) {
         this.context = context;
         this.logger = logger;
     }
@@ -69,12 +68,12 @@ public class Created implements State {
     }
 
     /** Starts the scheduling by going into the {@link WaitingForResources} state. */
-    public void startScheduling() {
+    void startScheduling() {
         context.goToWaitingForResources();
     }
 
     /** Context of the {@link Created} state. */
-    public interface Context {
+    interface Context {
 
         /**
          * Transitions into the {@link Finished} state.

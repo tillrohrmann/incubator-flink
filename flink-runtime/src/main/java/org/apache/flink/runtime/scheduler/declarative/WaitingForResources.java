@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
@@ -32,7 +32,7 @@ import java.time.Duration;
 /**
  * State which describes that the scheduler is waiting for resources in order to execute the job.
  */
-public class WaitingForResources implements State, ResourceConsumer {
+class WaitingForResources implements State, ResourceConsumer {
 
     private final Context context;
 
@@ -40,7 +40,7 @@ public class WaitingForResources implements State, ResourceConsumer {
 
     private final ResourceCounter desiredResources;
 
-    public WaitingForResources(Context context, Logger logger, ResourceCounter desiredResources) {
+    WaitingForResources(Context context, Logger logger, ResourceCounter desiredResources) {
         this.context = context;
         this.logger = logger;
         this.desiredResources = desiredResources;
@@ -105,7 +105,7 @@ public class WaitingForResources implements State, ResourceConsumer {
     }
 
     /** Context of the {@link WaitingForResources} state. */
-    public interface Context {
+    interface Context {
 
         /**
          * Transitions into the {@link Finished} state.

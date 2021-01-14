@@ -87,16 +87,6 @@ import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotSharingSlotAllocator;
-import org.apache.flink.runtime.scheduler.declarative.state.Canceling;
-import org.apache.flink.runtime.scheduler.declarative.state.Created;
-import org.apache.flink.runtime.scheduler.declarative.state.Executing;
-import org.apache.flink.runtime.scheduler.declarative.state.Failing;
-import org.apache.flink.runtime.scheduler.declarative.state.Finished;
-import org.apache.flink.runtime.scheduler.declarative.state.ResourceConsumer;
-import org.apache.flink.runtime.scheduler.declarative.state.Restarting;
-import org.apache.flink.runtime.scheduler.declarative.state.State;
-import org.apache.flink.runtime.scheduler.declarative.state.StateWithExecutionGraph;
-import org.apache.flink.runtime.scheduler.declarative.state.WaitingForResources;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.util.ExceptionUtils;
@@ -165,8 +155,7 @@ public class DeclarativeScheduler
 
     private final SlotSharingSlotAllocator slotAllocator;
 
-    private State state =
-            new org.apache.flink.runtime.scheduler.declarative.state.Created(this, LOG);
+    private State state = new Created(this, LOG);
 
     public DeclarativeScheduler(
             JobGraph jobGraph,
@@ -678,9 +667,7 @@ public class DeclarativeScheduler
 
     @Override
     public void goToFinished(ArchivedExecutionGraph archivedExecutionGraph) {
-        transitionToState(
-                new org.apache.flink.runtime.scheduler.declarative.state.Finished(
-                        this, archivedExecutionGraph, LOG));
+        transitionToState(new Finished(this, archivedExecutionGraph, LOG));
     }
 
     @Override
@@ -693,7 +680,7 @@ public class DeclarativeScheduler
         operatorCoordinatorHandler.initializeOperatorCoordinators(componentMainThreadExecutor);
 
         transitionToState(
-                new org.apache.flink.runtime.scheduler.declarative.state.Executing(
+                new Executing(
                         executionGraph,
                         executionGraphHandler,
                         operatorCoordinatorHandler,
@@ -708,9 +695,7 @@ public class DeclarativeScheduler
         // TODO: replace with set resources
         declarativeSlotPool.increaseResourceRequirementsBy(desiredResources);
 
-        transitionToState(
-                new org.apache.flink.runtime.scheduler.declarative.state.WaitingForResources(
-                        this, LOG, desiredResources));
+        transitionToState(new WaitingForResources(this, LOG, desiredResources));
     }
 
     @Override

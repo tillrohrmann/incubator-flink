@@ -16,10 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.state;
+package org.apache.flink.runtime.scheduler.declarative;
 
 /** Interface which denotes that {@link State} can react to newly available resource (slots). */
-public interface ResourceConsumer {
+interface ResourceConsumer {
 
     /** Notifies that new resources are available. */
     void notifyNewResourcesAvailable();
