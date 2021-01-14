@@ -28,6 +28,7 @@ import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 
+/** State which describes a job which is currently being canceled. */
 class Canceling extends StateWithExecutionGraph {
 
     private final Context context;
