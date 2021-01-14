@@ -121,8 +121,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-/** Declarative scheduler ng. */
-public class DeclarativeScheduler3rd
+/** Declarative scheduler. */
+public class DeclarativeScheduler
         implements SchedulerNG,
                 Created.Context,
                 Finished.Context,
@@ -131,7 +131,7 @@ public class DeclarativeScheduler3rd
                 Restarting.Context,
                 Failing.Context {
 
-    private static final Logger LOG = LoggerFactory.getLogger(DeclarativeScheduler3rd.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DeclarativeScheduler.class);
 
     private final JobGraph jobGraph;
 
@@ -168,7 +168,7 @@ public class DeclarativeScheduler3rd
     private State state =
             new org.apache.flink.runtime.scheduler.declarative.state.Created(this, LOG);
 
-    public DeclarativeScheduler3rd(
+    public DeclarativeScheduler(
             JobGraph jobGraph,
             Configuration configuration,
             Logger log,
