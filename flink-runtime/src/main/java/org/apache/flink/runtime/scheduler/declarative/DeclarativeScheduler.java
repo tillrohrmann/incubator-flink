@@ -675,6 +675,7 @@ public class DeclarativeScheduler
         final OperatorCoordinatorHandler operatorCoordinatorHandler =
                 new OperatorCoordinatorHandler(executionGraph, this::handleGlobalFailure);
         operatorCoordinatorHandler.initializeOperatorCoordinators(componentMainThreadExecutor);
+        operatorCoordinatorHandler.startAllOperatorCoordinators();
 
         transitionToState(
                 new Executing(
