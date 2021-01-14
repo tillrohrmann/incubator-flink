@@ -48,7 +48,7 @@ import java.io.IOException;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
-/** Integration tests for the {@link DeclarativeScheduler}. */
+/** Integration tests for the declarative scheduler. */
 @Category(WithDeclarativeScheduler.class)
 public class DeclarativeSchedulerSimpleITCase extends TestLogger {
 

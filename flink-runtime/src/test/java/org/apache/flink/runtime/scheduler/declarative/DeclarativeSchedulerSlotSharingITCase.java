@@ -40,7 +40,7 @@ import org.junit.experimental.categories.Category;
 
 import static org.junit.Assert.assertTrue;
 
-/** SlotSharing tests for the {@link DeclarativeScheduler}. */
+/** SlotSharing tests for the declarative scheduler. */
 @Category(WithDeclarativeScheduler.class)
 public class DeclarativeSchedulerSlotSharingITCase extends TestLogger {
 

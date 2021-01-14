@@ -373,7 +373,6 @@ public class JobManagerOptions {
 
     /** Type of declarative scheduler implementation. */
     public enum DeclarativeSchedulerType {
-        Old,
         StateMachine,
     }
 

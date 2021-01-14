@@ -24,7 +24,6 @@ import org.apache.flink.runtime.jobmaster.SlotOwner;
 import org.apache.flink.runtime.jobmaster.SlotRequestId;
 import org.apache.flink.runtime.jobmaster.slotpool.PhysicalSlot;
 import org.apache.flink.runtime.jobmaster.slotpool.SingleLogicalSlot;
-import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -35,7 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Shared slot implementation for the {@link DeclarativeScheduler}. */
+/** Shared slot implementation for the declarative scheduler. */
 class SharedSlot implements SlotOwner, PhysicalSlot.Payload {
     private static final Logger LOG = LoggerFactory.getLogger(SharedSlot.class);
 
