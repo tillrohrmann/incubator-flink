@@ -18,7 +18,7 @@
 package org.apache.flink.runtime.scheduler.declarative.allocator;
 
 import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
-import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
+import org.apache.flink.runtime.scheduler.declarative.ParallelismAndResourceAssignments;
 
 import java.util.Collection;
 import java.util.Optional;
@@ -34,7 +34,6 @@ public interface SlotAllocator extends RequirementsCalculator {
      * @return parallelism of each vertex and mapping slots to vertices, if a mapping could be
      *     computed
      */
-    Optional<DeclarativeScheduler.ParallelismAndResourceAssignments>
-            determineParallelismAndAssignResources(
-                    JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
+    Optional<ParallelismAndResourceAssignments> determineParallelismAndAssignResources(
+            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots);
 }

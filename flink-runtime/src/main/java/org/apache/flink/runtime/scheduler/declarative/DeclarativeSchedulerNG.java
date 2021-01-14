@@ -770,7 +770,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
 
         @Nonnull
         private ExecutionGraph createExecutionGraphAndAssignResources() throws Exception {
-            final Optional<DeclarativeScheduler.ParallelismAndResourceAssignments>
+            final Optional<ParallelismAndResourceAssignments>
                     parallelismAndResourceAssignmentsOptional =
                             slotAllocator.determineParallelismAndAssignResources(
                                     new JobGraphJobInformation(jobGraph),
@@ -781,9 +781,8 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
                         jobGraph.getJobID(), "Not enough resources available for scheduling.");
             }
 
-            final DeclarativeScheduler.ParallelismAndResourceAssignments
-                    parallelismAndResourceAssignments =
-                            parallelismAndResourceAssignmentsOptional.get();
+            final ParallelismAndResourceAssignments parallelismAndResourceAssignments =
+                    parallelismAndResourceAssignmentsOptional.get();
 
             for (JobVertex vertex : jobGraph.getVertices()) {
                 vertex.setParallelism(
