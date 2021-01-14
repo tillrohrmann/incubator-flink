@@ -48,12 +48,13 @@ class Failing extends StateWithExecutionGraph {
 
     @Override
     public void onEnter() {
-        executionGraph.failJob(failureCause);
+        getExecutionGraph().failJob(failureCause);
     }
 
     @Override
     public void cancel() {
-        context.goToCanceling(executionGraph, executionGraphHandler, operatorCoordinatorHandler);
+        context.goToCanceling(
+                getExecutionGraph(), getExecutionGraphHandler(), getOperatorCoordinatorHandler());
     }
 
     @Override
@@ -63,13 +64,13 @@ class Failing extends StateWithExecutionGraph {
 
     @Override
     boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionStateTransition) {
-        return executionGraph.updateState(taskExecutionStateTransition);
+        return getExecutionGraph().updateState(taskExecutionStateTransition);
     }
 
     @Override
     void onTerminalState(JobStatus terminalState) {
         Preconditions.checkState(terminalState == JobStatus.FAILED);
-        context.goToFinished(ArchivedExecutionGraph.createFrom(executionGraph));
+        context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
     }
 
     /** Context of the {@link Failing} state. */

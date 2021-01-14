@@ -44,7 +44,7 @@ class Canceling extends StateWithExecutionGraph {
 
     @Override
     public void onEnter() {
-        executionGraph.cancel();
+        getExecutionGraph().cancel();
     }
 
     @Override
@@ -59,13 +59,13 @@ class Canceling extends StateWithExecutionGraph {
 
     @Override
     boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionStateTransition) {
-        return executionGraph.updateState(taskExecutionStateTransition);
+        return getExecutionGraph().updateState(taskExecutionStateTransition);
     }
 
     @Override
     void onTerminalState(JobStatus terminalState) {
         Preconditions.checkArgument(terminalState == JobStatus.CANCELED);
 
-        context.goToFinished(ArchivedExecutionGraph.createFrom(executionGraph));
+        context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
     }
 }
