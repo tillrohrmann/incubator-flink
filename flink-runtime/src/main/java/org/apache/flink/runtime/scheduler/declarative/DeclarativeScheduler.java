@@ -80,7 +80,6 @@ import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotSharingSlotAllocator;
-import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
@@ -98,7 +97,6 @@ import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -474,30 +472,6 @@ public class DeclarativeScheduler implements SchedulerNG {
         logger.error("Fatal error occurred in declarative scheduler.", failure);
         jobStatusListener.jobStatusChanges(
                 jobGraph.getJobID(), JobStatus.FAILED, System.currentTimeMillis(), failure);
-    }
-
-    /** Assignment of slots to execution vertices. */
-    public static final class ParallelismAndResourceAssignments {
-        private final Map<ExecutionVertexID, ? extends LogicalSlot> assignedSlots;
-
-        private final Map<JobVertexID, Integer> parallelismPerJobVertex;
-
-        public ParallelismAndResourceAssignments(
-                Map<ExecutionVertexID, ? extends LogicalSlot> assignedSlots,
-                Map<JobVertexID, Integer> parallelismPerJobVertex) {
-            this.assignedSlots = assignedSlots;
-            this.parallelismPerJobVertex = parallelismPerJobVertex;
-        }
-
-        public int getParallelism(JobVertexID jobVertexId) {
-            Preconditions.checkState(parallelismPerJobVertex.containsKey(jobVertexId));
-            return parallelismPerJobVertex.get(jobVertexId);
-        }
-
-        public LogicalSlot getAssignedSlot(ExecutionVertexID executionVertexId) {
-            Preconditions.checkState(assignedSlots.containsKey(executionVertexId));
-            return assignedSlots.get(executionVertexId);
-        }
     }
 
     private void deployExecutionGraph() {

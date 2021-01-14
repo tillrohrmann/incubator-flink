@@ -29,7 +29,7 @@ import org.apache.flink.runtime.jobmaster.SlotRequestId;
 import org.apache.flink.runtime.jobmaster.slotpool.PhysicalSlot;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
-import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler;
+import org.apache.flink.runtime.scheduler.declarative.ParallelismAndResourceAssignments;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.util.function.TriConsumer;
 
@@ -64,9 +64,8 @@ public class SlotSharingSlotAllocator implements SlotAllocator {
     }
 
     @Override
-    public Optional<DeclarativeScheduler.ParallelismAndResourceAssignments>
-            determineParallelismAndAssignResources(
-                    JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots) {
+    public Optional<ParallelismAndResourceAssignments> determineParallelismAndAssignResources(
+            JobInformation jobInformation, Collection<SlotInfoWithUtilization> freeSlots) {
         final HashMap<ExecutionVertexID, LogicalSlot> assignedSlots = new HashMap<>();
 
         final Optional<SlotSharingAssignments> slotSharingSlotAssignmentsOptional =
@@ -97,8 +96,7 @@ public class SlotSharingSlotAllocator implements SlotAllocator {
                 slotSharingSlotAssignments.getMaxParallelismForVertices();
 
         return Optional.of(
-                new DeclarativeScheduler.ParallelismAndResourceAssignments(
-                        assignedSlots, parallelismPerJobVertex));
+                new ParallelismAndResourceAssignments(assignedSlots, parallelismPerJobVertex));
     }
 
     private SharedSlot reserveSharedSlot(SlotInfo slotInfo) {

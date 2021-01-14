@@ -633,7 +633,7 @@ public class DeclarativeScheduler3rd
 
     @Override
     public ExecutionGraph createExecutionGraphWithAvailableResources() throws Exception {
-        final Optional<DeclarativeScheduler.ParallelismAndResourceAssignments>
+        final Optional<ParallelismAndResourceAssignments>
                 parallelismAndResourceAssignmentsOptional =
                         slotAllocator.determineParallelismAndAssignResources(
                                 new JobGraphJobInformation(jobGraph),
@@ -644,8 +644,8 @@ public class DeclarativeScheduler3rd
                     jobGraph.getJobID(), "Not enough resources available for scheduling.");
         }
 
-        final DeclarativeScheduler.ParallelismAndResourceAssignments
-                parallelismAndResourceAssignments = parallelismAndResourceAssignmentsOptional.get();
+        final ParallelismAndResourceAssignments parallelismAndResourceAssignments =
+                parallelismAndResourceAssignmentsOptional.get();
 
         for (JobVertex vertex : jobGraph.getVertices()) {
             vertex.setParallelism(parallelismAndResourceAssignments.getParallelism(vertex.getID()));
