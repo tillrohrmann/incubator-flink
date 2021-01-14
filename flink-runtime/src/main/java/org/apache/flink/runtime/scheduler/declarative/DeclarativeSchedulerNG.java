@@ -872,6 +872,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         }
 
         private void deploy() {
+            operatorCoordinatorHandler.startAllOperatorCoordinators();
             for (ExecutionJobVertex executionJobVertex :
                     executionGraph.getVerticesTopologically()) {
                 for (ExecutionVertex executionVertex : executionJobVertex.getTaskVertices()) {
@@ -1049,7 +1050,7 @@ public class DeclarativeSchedulerNG implements SchedulerNG {
         private final ExecutionGraphHandler executionGraphHandler;
 
         // TODO: We still need to shut it down when we leave the StateWithExecutionGraph
-        private final OperatorCoordinatorHandler operatorCoordinatorHandler;
+        protected final OperatorCoordinatorHandler operatorCoordinatorHandler;
 
         protected StateWithExecutionGraph(ExecutionGraph executionGraph) {
             this.executionGraph = executionGraph;
