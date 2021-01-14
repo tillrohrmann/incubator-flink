@@ -86,7 +86,7 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
 
         switch (jobMasterConfiguration.get(JobManagerOptions.DECLARATIVE_SCHEDULER_TYPE)) {
             case StateMachine:
-                return new DeclarativeSchedulerNG(
+                return new DeclarativeScheduler3rd(
                         jobGraph,
                         jobMasterConfiguration,
                         log,
