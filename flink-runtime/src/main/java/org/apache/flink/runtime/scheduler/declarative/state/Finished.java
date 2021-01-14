@@ -23,6 +23,7 @@ import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 
 import org.slf4j.Logger;
 
+/** State which describes a finished job execution. */
 public class Finished implements State {
 
     private final Context context;
@@ -31,8 +32,7 @@ public class Finished implements State {
 
     private final Logger logger;
 
-    private Finished(
-            Context context, ArchivedExecutionGraph archivedExecutionGraph, Logger logger) {
+    public Finished(Context context, ArchivedExecutionGraph archivedExecutionGraph, Logger logger) {
         this.context = context;
         this.archivedExecutionGraph = archivedExecutionGraph;
         this.logger = logger;
@@ -40,7 +40,7 @@ public class Finished implements State {
 
     @Override
     public void onEnter() {
-        context.onFinished();
+        context.onFinished(archivedExecutionGraph);
     }
 
     @Override
@@ -67,7 +67,15 @@ public class Finished implements State {
         return logger;
     }
 
-    interface Context {
-        void onFinished();
+    /** Context of the {@link Finished} state. */
+    public interface Context {
+
+        /**
+         * Callback which is called when the execution reaches the {@link Finished} state.
+         *
+         * @param archivedExecutionGraph archivedExecutionGraph represents the final state of the
+         *     job execution
+         */
+        void onFinished(ArchivedExecutionGraph archivedExecutionGraph);
     }
 }

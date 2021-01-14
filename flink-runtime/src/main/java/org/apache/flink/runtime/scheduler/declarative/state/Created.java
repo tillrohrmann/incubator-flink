@@ -20,18 +20,20 @@ package org.apache.flink.runtime.scheduler.declarative.state;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
+import org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler3rd;
 
 import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
 
+/** Initial state of the {@link DeclarativeScheduler3rd}. */
 public class Created implements State {
 
     private final Context context;
 
     private final Logger logger;
 
-    protected Created(Context context, Logger logger) {
+    public Created(Context context, Logger logger) {
         this.context = context;
         this.logger = logger;
     }
@@ -66,16 +68,34 @@ public class Created implements State {
         return logger;
     }
 
+    /** Starts the scheduling by going into the {@link WaitingForResources} state. */
     public void startScheduling() {
         context.goToWaitingForResources();
     }
 
-    interface Context {
+    /** Context of the {@link Created} state. */
+    public interface Context {
+
+        /**
+         * Transitions into the {@link Finished} state.
+         *
+         * @param archivedExecutionGraph archivedExecutionGraph is passed to the {@link Finished}
+         *     state
+         */
         void goToFinished(ArchivedExecutionGraph archivedExecutionGraph);
 
+        /**
+         * Creates an {@link ArchivedExecutionGraph} for the given jobStatus and failure cause.
+         *
+         * @param jobStatus jobStatus to create the {@link ArchivedExecutionGraph} with
+         * @param cause cause represents the failure cause for the {@link ArchivedExecutionGraph};
+         *     {@code null} if there is no failure cause
+         * @return the created {@link ArchivedExecutionGraph}
+         */
         ArchivedExecutionGraph getArchivedExecutionGraph(
                 JobStatus jobStatus, @Nullable Throwable cause);
 
+        /** Transitions into the {@link WaitingForResources} state. */
         void goToWaitingForResources();
     }
 }
