@@ -50,12 +50,13 @@ class Restarting extends StateWithExecutionGraph {
 
     @Override
     public void onEnter() {
-        executionGraph.cancel();
+        getExecutionGraph().cancel();
     }
 
     @Override
     public void cancel() {
-        context.goToCanceling(executionGraph, executionGraphHandler, operatorCoordinatorHandler);
+        context.goToCanceling(
+                getExecutionGraph(), getExecutionGraphHandler(), getOperatorCoordinatorHandler());
     }
 
     @Override
@@ -65,7 +66,7 @@ class Restarting extends StateWithExecutionGraph {
 
     @Override
     boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionStateTransition) {
-        return executionGraph.updateState(taskExecutionStateTransition);
+        return getExecutionGraph().updateState(taskExecutionStateTransition);
     }
 
     @Override

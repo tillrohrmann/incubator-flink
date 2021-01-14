@@ -70,11 +70,11 @@ import java.util.concurrent.Executor;
 abstract class StateWithExecutionGraph implements State {
     private final Context context;
 
-    protected final ExecutionGraph executionGraph;
+    private final ExecutionGraph executionGraph;
 
-    protected final ExecutionGraphHandler executionGraphHandler;
+    private final ExecutionGraphHandler executionGraphHandler;
 
-    protected final OperatorCoordinatorHandler operatorCoordinatorHandler;
+    private final OperatorCoordinatorHandler operatorCoordinatorHandler;
 
     private final KvStateHandler kvStateHandler;
 
@@ -98,6 +98,18 @@ abstract class StateWithExecutionGraph implements State {
                 .thenAcceptAsync(
                         jobStatus -> context.runIfState(this, () -> onTerminalState(jobStatus)),
                         context.getMainThreadExecutor());
+    }
+
+    ExecutionGraph getExecutionGraph() {
+        return executionGraph;
+    }
+
+    OperatorCoordinatorHandler getOperatorCoordinatorHandler() {
+        return operatorCoordinatorHandler;
+    }
+
+    ExecutionGraphHandler getExecutionGraphHandler() {
+        return executionGraphHandler;
     }
 
     @Override

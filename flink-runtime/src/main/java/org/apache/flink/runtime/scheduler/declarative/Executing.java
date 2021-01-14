@@ -62,7 +62,8 @@ class Executing extends StateWithExecutionGraph {
 
     @Override
     public void cancel() {
-        context.goToCanceling(executionGraph, executionGraphHandler, operatorCoordinatorHandler);
+        context.goToCanceling(
+                getExecutionGraph(), getExecutionGraphHandler(), getOperatorCoordinatorHandler());
     }
 
     @Override
@@ -75,22 +76,22 @@ class Executing extends StateWithExecutionGraph {
 
         if (failureResult.canRestart()) {
             context.goToRestarting(
-                    executionGraph,
-                    executionGraphHandler,
-                    operatorCoordinatorHandler,
+                    getExecutionGraph(),
+                    getExecutionGraphHandler(),
+                    getOperatorCoordinatorHandler(),
                     failureResult.getBackoffTime());
         } else {
             context.goToFailing(
-                    executionGraph,
-                    executionGraphHandler,
-                    operatorCoordinatorHandler,
+                    getExecutionGraph(),
+                    getExecutionGraphHandler(),
+                    getOperatorCoordinatorHandler(),
                     failureResult.getFailureCause());
         }
     }
 
     @Override
     boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionState) {
-        final boolean successfulUpdate = executionGraph.updateState(taskExecutionState);
+        final boolean successfulUpdate = getExecutionGraph().updateState(taskExecutionState);
 
         if (successfulUpdate) {
             if (taskExecutionState.getExecutionState() == ExecutionState.FAILED) {
@@ -104,11 +105,12 @@ class Executing extends StateWithExecutionGraph {
 
     @Override
     void onTerminalState(JobStatus jobStatus) {
-        context.goToFinished(ArchivedExecutionGraph.createFrom(executionGraph));
+        context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
     }
 
     private void deploy() {
-        for (ExecutionJobVertex executionJobVertex : executionGraph.getVerticesTopologically()) {
+        for (ExecutionJobVertex executionJobVertex :
+                getExecutionGraph().getVerticesTopologically()) {
             for (ExecutionVertex executionVertex : executionJobVertex.getTaskVertices()) {
                 deploySafely(executionVertex);
             }
