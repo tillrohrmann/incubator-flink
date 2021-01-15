@@ -23,6 +23,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.blob.BlobWriter;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
+import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
+import org.apache.flink.runtime.executiongraph.JobStatusListener;
 import org.apache.flink.runtime.executiongraph.failover.flip1.RestartBackoffTimeStrategy;
 import org.apache.flink.runtime.executiongraph.failover.flip1.RestartBackoffTimeStrategyFactoryLoader;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
@@ -31,7 +33,6 @@ import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTracker;
 import org.apache.flink.runtime.jobmaster.slotpool.DeclarativeSlotPool;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPoolService;
 import org.apache.flink.runtime.metrics.groups.JobManagerJobMetricGroup;
-import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerNGFactory;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
@@ -47,7 +48,6 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
     public SchedulerNG createInstance(
             Logger log,
             JobGraph jobGraph,
-            BackPressureStatsTracker backPressureStatsTracker,
             Executor ioExecutor,
             Configuration jobMasterConfiguration,
             SlotPoolService slotPoolService,
@@ -61,7 +61,9 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
             ShuffleMaster<?> shuffleMaster,
             JobMasterPartitionTracker partitionTracker,
             ExecutionDeploymentTracker executionDeploymentTracker,
-            long initializationTimestamp)
+            long initializationTimestamp,
+            ComponentMainThreadExecutor mainThreadExecutor,
+            JobStatusListener jobStatusListener)
             throws Exception {
         final DeclarativeSlotPool declarativeSlotPool =
                 slotPoolService
@@ -102,8 +104,9 @@ public class DeclarativeSchedulerFactory implements SchedulerNGFactory {
                         partitionTracker,
                         restartBackoffTimeStrategy,
                         executionDeploymentTracker,
-                        backPressureStatsTracker,
-                        initializationTimestamp);
+                        initializationTimestamp,
+                        mainThreadExecutor,
+                        jobStatusListener);
             default:
                 throw new IllegalStateException("Unknown scheduler type");
         }

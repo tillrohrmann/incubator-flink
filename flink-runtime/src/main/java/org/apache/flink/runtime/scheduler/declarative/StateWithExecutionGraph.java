@@ -46,7 +46,6 @@ import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
-import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
 import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.KvStateHandler;
 import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
@@ -58,7 +57,6 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -206,11 +204,6 @@ abstract class StateWithExecutionGraph implements State {
             throws FlinkJobNotFoundException {
         kvStateHandler.notifyKvStateUnregistered(
                 jobId, jobVertexId, keyGroupRange, registrationName);
-    }
-
-    Optional<OperatorBackPressureStats> requestOperatorBackPressureStats(JobVertexID jobVertexId)
-            throws FlinkException {
-        return executionGraphHandler.requestOperatorBackPressureStats(jobVertexId);
     }
 
     CompletableFuture<String> triggerSavepoint(String targetDirectory, boolean cancelJob) {

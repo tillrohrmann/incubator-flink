@@ -68,7 +68,6 @@ import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.jobmaster.slotpool.DeclarativeSlotPool;
 import org.apache.flink.runtime.jobmaster.slotpool.PhysicalSlot;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
-import org.apache.flink.runtime.jobmaster.slotpool.ThrowingSlotProvider;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
@@ -79,8 +78,6 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
-import org.apache.flink.runtime.rest.handler.legacy.backpressure.BackPressureStatsTracker;
-import org.apache.flink.runtime.rest.handler.legacy.backpressure.OperatorBackPressureStats;
 import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
@@ -112,7 +109,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.StreamSupport;
 
 /** Declarative scheduler. */
@@ -143,7 +139,6 @@ public class DeclarativeScheduler
     private final JobMasterPartitionTracker partitionTracker;
     private final ExecutionDeploymentTracker executionDeploymentTracker;
     private final JobManagerJobMetricGroup jobManagerJobMetricGroup;
-    private final BackPressureStatsTracker backPressureStatsTracker;
 
     private final CompletedCheckpointStore completedCheckpointStore;
     private final CheckpointIDCounter checkpointIdCounter;
@@ -152,10 +147,9 @@ public class DeclarativeScheduler
     private final CompletableFuture<Void> terminationFuture = new CompletableFuture<>();
     private final RestartBackoffTimeStrategy restartBackoffTimeStrategy;
 
-    private ComponentMainThreadExecutor componentMainThreadExecutor =
-            new ComponentMainThreadExecutor.DummyComponentMainThreadExecutor("foobar");
+    private final ComponentMainThreadExecutor componentMainThreadExecutor;
 
-    @Nullable private JobStatusListener jobStatusListener;
+    private final JobStatusListener jobStatusListener;
 
     private final SlotAllocator<?> slotAllocator;
 
@@ -177,8 +171,9 @@ public class DeclarativeScheduler
             JobMasterPartitionTracker partitionTracker,
             RestartBackoffTimeStrategy restartBackoffTimeStrategy,
             ExecutionDeploymentTracker executionDeploymentTracker,
-            BackPressureStatsTracker backPressureStatsTracker,
-            long initializationTimestamp)
+            long initializationTimestamp,
+            ComponentMainThreadExecutor mainThreadExecutor,
+            JobStatusListener jobStatusListener)
             throws JobExecutionException {
 
         this.jobInformation = new JobGraphJobInformation(jobGraph);
@@ -195,7 +190,6 @@ public class DeclarativeScheduler
         this.restartBackoffTimeStrategy = restartBackoffTimeStrategy;
         this.executionDeploymentTracker = executionDeploymentTracker;
         this.jobManagerJobMetricGroup = jobManagerJobMetricGroup;
-        this.backPressureStatsTracker = backPressureStatsTracker;
         this.completedCheckpointStore =
                 SchedulerUtils.createCompletedCheckpointStoreIfCheckpointingIsEnabled(
                         jobGraph,
@@ -214,6 +208,9 @@ public class DeclarativeScheduler
                         declarativeSlotPool::freeReservedSlot);
 
         declarativeSlotPool.registerNewSlotsListener(this::newResourcesAvailable);
+
+        this.componentMainThreadExecutor = mainThreadExecutor;
+        this.jobStatusListener = jobStatusListener;
     }
 
     private void newResourcesAvailable(Collection<? extends PhysicalSlot> physicalSlots) {
@@ -264,7 +261,6 @@ public class DeclarativeScheduler
                         configuration,
                         futureExecutor,
                         ioExecutor,
-                        new ThrowingSlotProvider(),
                         userCodeClassLoader,
                         completedCheckpointStore,
                         checkpointsCleaner,
@@ -272,7 +268,6 @@ public class DeclarativeScheduler
                         rpcTimeout,
                         jobManagerJobMetricGroup,
                         blobWriter,
-                        Time.milliseconds(0L),
                         LOG,
                         shuffleMaster,
                         partitionTracker,
@@ -321,16 +316,6 @@ public class DeclarativeScheduler
                         userCodeClassLoader);
             }
         }
-    }
-
-    @Override
-    public void initialize(ComponentMainThreadExecutor mainThreadExecutor) {
-        this.componentMainThreadExecutor = mainThreadExecutor;
-    }
-
-    @Override
-    public void registerJobStatusListener(JobStatusListener jobStatusListener) {
-        this.jobStatusListener = jobStatusListener;
     }
 
     @Override
@@ -483,18 +468,6 @@ public class DeclarativeScheduler
                 stateWithExecutionGraph ->
                         stateWithExecutionGraph.updateAccumulators(accumulatorSnapshot),
                 "updateAccumulators");
-    }
-
-    @Override
-    public Optional<OperatorBackPressureStats> requestOperatorBackPressureStats(
-            JobVertexID jobVertexId) throws FlinkException {
-        return state.tryCall(
-                        StateWithExecutionGraph.class,
-                        stateWithExecutionGraph ->
-                                stateWithExecutionGraph.requestOperatorBackPressureStats(
-                                        jobVertexId),
-                        "requestOperatorBackPressureStats")
-                .flatMap(Function.identity());
     }
 
     @Override
@@ -676,8 +649,7 @@ public class DeclarativeScheduler
     @Override
     public void goToExecuting(ExecutionGraph executionGraph) {
         final ExecutionGraphHandler executionGraphHandler =
-                new ExecutionGraphHandler(
-                        executionGraph, backPressureStatsTracker, LOG, ioExecutor);
+                new ExecutionGraphHandler(executionGraph, LOG, ioExecutor);
         final OperatorCoordinatorHandler operatorCoordinatorHandler =
                 new OperatorCoordinatorHandler(executionGraph, this::handleGlobalFailure);
         operatorCoordinatorHandler.initializeOperatorCoordinators(componentMainThreadExecutor);
