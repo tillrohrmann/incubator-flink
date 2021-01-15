@@ -24,7 +24,6 @@ import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
 import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
-import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 
@@ -65,8 +64,6 @@ class Canceling extends StateWithExecutionGraph {
 
     @Override
     void onTerminalState(JobStatus terminalState) {
-        Preconditions.checkArgument(terminalState == JobStatus.CANCELED);
-
         context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
     }
 }

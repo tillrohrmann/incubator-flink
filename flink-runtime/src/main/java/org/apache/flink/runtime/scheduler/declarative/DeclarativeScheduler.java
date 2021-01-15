@@ -793,7 +793,19 @@ public class DeclarativeScheduler
 
     @Override
     public void runIfState(State expectedState, Runnable action) {
-        runIfState(expectedState, action, Duration.ZERO);
+        if (state == expectedState) {
+            try {
+                action.run();
+            } catch (Throwable t) {
+                // TODO pass a proper FatalExceptionHandler to the scheduler
+                FatalExitExceptionHandler.INSTANCE.uncaughtException(Thread.currentThread(), t);
+            }
+        } else {
+            LOG.debug(
+                    "Ignoring scheduled action because expected state {} is not the actual state {}.",
+                    expectedState,
+                    state);
+        }
     }
 
     @Override
@@ -809,24 +821,7 @@ public class DeclarativeScheduler
     @Override
     public void runIfState(State expectedState, Runnable action, Duration delay) {
         componentMainThreadExecutor.schedule(
-                () -> {
-                    if (state == expectedState) {
-                        try {
-                            action.run();
-                        } catch (Throwable t) {
-                            // TODO pass a proper FatalExceptionHandler to the scheduler
-                            FatalExitExceptionHandler.INSTANCE.uncaughtException(
-                                    Thread.currentThread(), t);
-                        }
-                    } else {
-                        LOG.debug(
-                                "Ignoring scheduled action because expected state {} is not the actual state {}.",
-                                expectedState,
-                                state);
-                    }
-                },
-                delay.toMillis(),
-                TimeUnit.MILLISECONDS);
+                () -> runIfState(expectedState, action), delay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override
