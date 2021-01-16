@@ -32,13 +32,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class OnceBlockingNoOpInvokable extends AbstractInvokable {
 
-    private static final Object lock = new Object();
+    private static final AtomicInteger instanceCount = new AtomicInteger(0);
 
     private static volatile CountDownLatch numOpsPending = new CountDownLatch(1);
 
-    private static volatile AtomicInteger instanceCount = new AtomicInteger(0);
-
     private static volatile boolean isBlocking = true;
+
+    private final Object lock = new Object();
 
     private volatile boolean running = true;
 
@@ -49,8 +49,8 @@ public class OnceBlockingNoOpInvokable extends AbstractInvokable {
     @Override
     public void invoke() throws Exception {
 
-        numOpsPending.countDown();
         instanceCount.incrementAndGet();
+        numOpsPending.countDown();
 
         synchronized (lock) {
             while (isBlocking && running) {
@@ -63,9 +63,8 @@ public class OnceBlockingNoOpInvokable extends AbstractInvokable {
 
     @Override
     public void cancel() throws Exception {
-        running = false;
-
         synchronized (lock) {
+            running = false;
             lock.notifyAll();
         }
     }
