@@ -41,8 +41,13 @@ class SlotSharingMappingCalculator implements MappingCalculator {
         // TODO: This can waste slots if the max parallelism for slot sharing groups is not equal
         final int slotsPerSlotSharingGroup =
                 slots.size() / jobInformation.getSlotSharingGroups().size();
-        final Iterator<? extends SlotInfo> slotIterator = slots.iterator();
 
+        if (slotsPerSlotSharingGroup == 0) {
+            // => less slots than slot-sharing groups
+            return Optional.empty();
+        }
+
+        final Iterator<? extends SlotInfo> slotIterator = slots.iterator();
         final Collection<ExecutionSlotSharingGroupAndSlot> assignments = new ArrayList<>();
 
         for (SlotSharingGroup slotSharingGroup : jobInformation.getSlotSharingGroups()) {
