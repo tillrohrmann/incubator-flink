@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.scheduler.declarative;
 
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.time.Time;
@@ -206,6 +207,12 @@ public class DeclarativeScheduler
                 new SlotSharingSlotAllocator(
                         declarativeSlotPool::reserveFreeSlot,
                         declarativeSlotPool::freeReservedSlot);
+
+        for (JobVertex vertex : jobGraph.getVertices()) {
+            if (vertex.getParallelism() == ExecutionConfig.PARALLELISM_DEFAULT) {
+                vertex.setParallelism(1);
+            }
+        }
 
         declarativeSlotPool.registerNewSlotsListener(this::newResourcesAvailable);
 
