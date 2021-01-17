@@ -100,6 +100,7 @@ class WaitingForResources implements State, ResourceConsumer {
 
             context.goToExecuting(executionGraph);
         } catch (Exception exception) {
+            logger.error("handling initialization failure", exception);
             context.goToFinished(context.getArchivedExecutionGraph(JobStatus.FAILED, exception));
         }
     }
