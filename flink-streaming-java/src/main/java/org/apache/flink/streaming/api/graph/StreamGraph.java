@@ -93,6 +93,8 @@ public class StreamGraph implements Pipeline {
 
     private ScheduleMode scheduleMode;
 
+    private boolean shouldExecuteInBatchMode;
+
     private boolean chaining;
 
     private Collection<Tuple2<String, DistributedCache.DistributedCacheEntry>> userArtifacts;
@@ -190,6 +192,14 @@ public class StreamGraph implements Pipeline {
 
     public void setScheduleMode(ScheduleMode scheduleMode) {
         this.scheduleMode = scheduleMode;
+    }
+
+    public void setShouldExecuteInBatchMode(boolean mode) {
+        this.shouldExecuteInBatchMode = mode;
+    }
+
+    public boolean shouldExecuteInBatchMode() {
+        return shouldExecuteInBatchMode;
     }
 
     public Collection<Tuple2<String, DistributedCache.DistributedCacheEntry>> getUserArtifacts() {

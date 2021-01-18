@@ -37,6 +37,7 @@ import org.apache.flink.runtime.jobgraph.InputOutputFormatVertex;
 import org.apache.flink.runtime.jobgraph.JobEdge;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobGraphUtils;
+import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -158,6 +159,12 @@ public class StreamingJobGraphGenerator {
 
     private JobGraph createJobGraph() {
         preValidate();
+
+        if (streamGraph.shouldExecuteInBatchMode()) {
+            jobGraph.setJobType(JobType.BATCH);
+        } else {
+            jobGraph.setJobType(JobType.STREAMING);
+        }
 
         // make sure that all vertices start immediately
         jobGraph.setScheduleMode(streamGraph.getScheduleMode());

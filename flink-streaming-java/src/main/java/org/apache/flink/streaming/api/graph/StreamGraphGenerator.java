@@ -261,6 +261,7 @@ public class StreamGraphGenerator {
     public StreamGraph generate() {
         streamGraph = new StreamGraph(executionConfig, checkpointConfig, savepointRestoreSettings);
         shouldExecuteInBatchMode = shouldExecuteInBatchMode(runtimeExecutionMode);
+        streamGraph.setShouldExecuteInBatchMode(shouldExecuteInBatchMode);
         configureStreamGraph(streamGraph);
 
         alreadyTransformed = new HashMap<>();

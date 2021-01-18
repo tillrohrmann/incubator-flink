@@ -350,7 +350,7 @@ public class JobManagerOptions {
     public static final ConfigOption<SchedulerType> SCHEDULER =
             key("jobmanager.scheduler")
                     .enumType(SchedulerType.class)
-                    .defaultValue(SchedulerType.Ng)
+                    .defaultValue(SchedulerType.Declarative)
                     .withDescription(
                             Description.builder()
                                     .text(

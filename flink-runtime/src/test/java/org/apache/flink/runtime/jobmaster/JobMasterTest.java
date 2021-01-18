@@ -300,7 +300,7 @@ public class JobMasterTest extends TestLogger {
                     JobMasterConfiguration.fromConfiguration(configuration);
 
             final SchedulerNGFactory schedulerNGFactory =
-                    SchedulerNGFactoryFactory.createSchedulerNGFactory(configuration);
+                    SchedulerNGFactoryFactory.createSchedulerNGFactory(configuration, jobGraph);
 
             final JobMaster jobMaster =
                     new JobMaster(
@@ -310,7 +310,7 @@ public class JobMasterTest extends TestLogger {
                             jmResourceId,
                             jobGraph,
                             haServices,
-                            SlotPoolServiceFactory.fromConfiguration(configuration),
+                            SlotPoolServiceFactory.fromConfiguration(configuration, jobGraph),
                             jobManagerSharedServices,
                             heartbeatServices,
                             UnregisteredJobManagerJobMetricGroupFactory.INSTANCE,

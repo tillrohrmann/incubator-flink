@@ -21,6 +21,8 @@ package org.apache.flink.runtime.dispatcher;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
+import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.scheduler.DefaultSchedulerFactory;
 import org.apache.flink.runtime.scheduler.SchedulerNGFactory;
 import org.apache.flink.util.TestLogger;
@@ -35,9 +37,12 @@ import static org.junit.Assert.assertThat;
 /** Tests for {@link SchedulerNGFactory}. */
 public class SchedulerNGFactoryFactoryTest extends TestLogger {
 
+    private final JobGraph testGraph = new JobGraph("test");
+
     @Test
     public void createDefaultSchedulerFactoryByDefault() {
-        final SchedulerNGFactory schedulerNGFactory = createSchedulerNGFactory(new Configuration());
+        final SchedulerNGFactory schedulerNGFactory =
+                createSchedulerNGFactory(new Configuration(), testGraph);
         assertThat(schedulerNGFactory, is(instanceOf(DefaultSchedulerFactory.class)));
     }
 
@@ -46,7 +51,8 @@ public class SchedulerNGFactoryFactoryTest extends TestLogger {
         final Configuration configuration = new Configuration();
         configuration.set(JobManagerOptions.SCHEDULER, JobManagerOptions.SchedulerType.Ng);
 
-        final SchedulerNGFactory schedulerNGFactory = createSchedulerNGFactory(configuration);
+        final SchedulerNGFactory schedulerNGFactory =
+                createSchedulerNGFactory(configuration, testGraph);
 
         assertThat(schedulerNGFactory, is(instanceOf(DefaultSchedulerFactory.class)));
     }
@@ -57,7 +63,7 @@ public class SchedulerNGFactoryFactoryTest extends TestLogger {
         configuration.setString(JobManagerOptions.SCHEDULER.key(), "invalid-scheduler-name");
 
         try {
-            createSchedulerNGFactory(configuration);
+            createSchedulerNGFactory(configuration, testGraph);
         } catch (IllegalArgumentException e) {
             assertThat(
                     e.getMessage(),
@@ -65,7 +71,20 @@ public class SchedulerNGFactoryFactoryTest extends TestLogger {
         }
     }
 
-    private static SchedulerNGFactory createSchedulerNGFactory(final Configuration configuration) {
-        return SchedulerNGFactoryFactory.createSchedulerNGFactory(configuration);
+    @Test
+    public void fallBackIfBatchAndDeclarative() {
+        final Configuration configuration = new Configuration();
+        configuration.set(JobManagerOptions.SCHEDULER, JobManagerOptions.SchedulerType.Declarative);
+        final JobGraph jobGraph = new JobGraph("test");
+        jobGraph.setJobType(JobType.BATCH);
+        final SchedulerNGFactory schedulerNGFactory =
+                createSchedulerNGFactory(configuration, testGraph);
+
+        assertThat(schedulerNGFactory, is(instanceOf(DefaultSchedulerFactory.class)));
+    }
+
+    private static SchedulerNGFactory createSchedulerNGFactory(
+            final Configuration configuration, JobGraph jobGraph) {
+        return SchedulerNGFactoryFactory.createSchedulerNGFactory(configuration, jobGraph);
     }
 }
