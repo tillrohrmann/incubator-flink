@@ -22,18 +22,34 @@ package org.apache.flink.runtime.dispatcher;
 import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
+import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.scheduler.DefaultSchedulerFactory;
 import org.apache.flink.runtime.scheduler.SchedulerNGFactory;
 import org.apache.flink.runtime.scheduler.declarative.DeclarativeSchedulerFactory;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /** Factory for {@link SchedulerNGFactory}. */
 public final class SchedulerNGFactoryFactory {
 
+    private static final Logger LOG = LoggerFactory.getLogger(SchedulerNGFactoryFactory.class);
+
     private SchedulerNGFactoryFactory() {}
 
-    public static SchedulerNGFactory createSchedulerNGFactory(final Configuration configuration) {
-        final JobManagerOptions.SchedulerType schedulerType =
+    public static SchedulerNGFactory createSchedulerNGFactory(
+            final Configuration configuration, final JobGraph jobGraph) {
+        JobManagerOptions.SchedulerType schedulerType =
                 ClusterOptions.getSchedulerType(configuration);
+
+        if (schedulerType == JobManagerOptions.SchedulerType.Declarative
+                && jobGraph.getJobType() == JobType.BATCH) {
+            LOG.info(
+                    "Declarative Scheduler configured, but Batch job detected. Changing scheduler type to NG / DefaultScheduler.");
+            // overwrite
+            schedulerType = JobManagerOptions.SchedulerType.Ng;
+        }
         switch (schedulerType) {
             case Ng:
                 return new DefaultSchedulerFactory();
