@@ -32,9 +32,9 @@ public final class SchedulerNGFactoryFactory {
     private SchedulerNGFactoryFactory() {}
 
     public static SchedulerNGFactory createSchedulerNGFactory(final Configuration configuration) {
-        final JobManagerOptions.SchedulerType schedulerTyp =
+        final JobManagerOptions.SchedulerType schedulerType =
                 ClusterOptions.getSchedulerType(configuration);
-        switch (schedulerTyp) {
+        switch (schedulerType) {
             case Ng:
                 return new DefaultSchedulerFactory();
             case Declarative:
@@ -44,7 +44,7 @@ public final class SchedulerNGFactoryFactory {
                 throw new IllegalArgumentException(
                         String.format(
                                 "Illegal value [%s] for config option [%s]",
-                                schedulerTyp, JobManagerOptions.SCHEDULER.key()));
+                                schedulerType, JobManagerOptions.SCHEDULER.key()));
         }
     }
 }
