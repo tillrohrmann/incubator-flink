@@ -46,6 +46,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionDeploymentListener;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphBuilder;
+import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.ExecutionStateUpdateListener;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
@@ -87,6 +88,8 @@ import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresLis
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotAllocator;
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotSharingSlotAllocator;
 import org.apache.flink.runtime.scheduler.declarative.allocator.VertexAssignment;
+import org.apache.flink.runtime.scheduler.declarative.scalingpolicy.ReactiveScaleUpController;
+import org.apache.flink.runtime.scheduler.declarative.scalingpolicy.ScaleUpController;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.util.FatalExitExceptionHandler;
@@ -104,13 +107,11 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.StreamSupport;
 
 /** Declarative scheduler. */
 public class DeclarativeScheduler
@@ -153,6 +154,8 @@ public class DeclarativeScheduler
     private final JobStatusListener jobStatusListener;
 
     private final SlotAllocator<?> slotAllocator;
+
+    private final ScaleUpController scaleUpController;
 
     private State state = new Created(this, LOG);
 
@@ -218,6 +221,8 @@ public class DeclarativeScheduler
 
         this.componentMainThreadExecutor = mainThreadExecutor;
         this.jobStatusListener = jobStatusListener;
+
+        this.scaleUpController = new ReactiveScaleUpController(configuration);
     }
 
     private void newResourcesAvailable(Collection<? extends PhysicalSlot> physicalSlots) {
@@ -732,27 +737,36 @@ public class DeclarativeScheduler
         int availableSlots = declarativeSlotPool.getFreeSlotsInformation().size();
 
         if (availableSlots > 0) {
-            // check if rescaling would increase the parallelism of at least one vertex
-
             final Optional<? extends VertexAssignment> potentialNewParallelism =
                     slotAllocator.determineParallelism(
                             jobInformation, declarativeSlotPool.getAllSlotsInformation());
 
-            return potentialNewParallelism.isPresent()
-                    && isParallelismHigher(potentialNewParallelism.get(), executionGraph);
+            if (potentialNewParallelism.isPresent()) {
+                int currentCumulativeParallelism = getCurrentCumulativeParallelism(executionGraph);
+                int newCumulativeParallelism =
+                        getCumulativeParallelism(potentialNewParallelism.get());
+                if (newCumulativeParallelism > currentCumulativeParallelism) {
+                    LOG.debug(
+                            "Offering scale up to scaling policy with currentCumulativeParallelism={}, newCumulativeParallelism={}",
+                            currentCumulativeParallelism,
+                            newCumulativeParallelism);
+                    return scaleUpController.canScaleUp(
+                            currentCumulativeParallelism, newCumulativeParallelism);
+                }
+            }
         }
         return false;
     }
 
-    private boolean isParallelismHigher(
-            VertexAssignment vertexAssignment, ExecutionGraph executionGraph) {
-        Map<JobVertexID, Integer> perVertex = vertexAssignment.getMaxParallelismForVertices();
+    private int getCurrentCumulativeParallelism(ExecutionGraph executionGraph) {
+        return executionGraph.getAllVertices().values().stream()
+                .map(ExecutionJobVertex::getParallelism)
+                .reduce(0, Integer::sum);
+    }
 
-        return StreamSupport.stream(executionGraph.getAllExecutionVertices().spliterator(), false)
-                .anyMatch(
-                        vertex ->
-                                perVertex.get(vertex.getJobvertexId())
-                                        > vertex.getJobVertex().getParallelism());
+    private int getCumulativeParallelism(VertexAssignment potentialNewParallelism) {
+        return potentialNewParallelism.getMaxParallelismForVertices().values().stream()
+                .reduce(0, Integer::sum);
     }
 
     @Override
