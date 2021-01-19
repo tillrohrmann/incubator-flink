@@ -87,6 +87,8 @@ import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresLis
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotAllocator;
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotSharingSlotAllocator;
 import org.apache.flink.runtime.scheduler.declarative.allocator.VertexAssignment;
+import org.apache.flink.runtime.scheduler.declarative.scalingpolicy.ReactiveScalingPolicy;
+import org.apache.flink.runtime.scheduler.declarative.scalingpolicy.ScalingPolicy;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.util.FatalExitExceptionHandler;
@@ -104,13 +106,11 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.StreamSupport;
 
 /** Declarative scheduler. */
 public class DeclarativeScheduler
@@ -153,6 +153,8 @@ public class DeclarativeScheduler
     private final JobStatusListener jobStatusListener;
 
     private final SlotAllocator<?> slotAllocator;
+
+    private final ScalingPolicy scalingPolicy;
 
     private State state = new Created(this, LOG);
 
@@ -218,6 +220,8 @@ public class DeclarativeScheduler
 
         this.componentMainThreadExecutor = mainThreadExecutor;
         this.jobStatusListener = jobStatusListener;
+
+        this.scalingPolicy = new ReactiveScalingPolicy(configuration);
     }
 
     private void newResourcesAvailable(Collection<? extends PhysicalSlot> physicalSlots) {
@@ -732,27 +736,32 @@ public class DeclarativeScheduler
         int availableSlots = declarativeSlotPool.getFreeSlotsInformation().size();
 
         if (availableSlots > 0) {
-            // check if rescaling would increase the parallelism of at least one vertex
-
             final Optional<? extends VertexAssignment> potentialNewParallelism =
                     slotAllocator.determineParallelism(
                             jobInformation, declarativeSlotPool.getAllSlotsInformation());
 
-            return potentialNewParallelism.isPresent()
-                    && isParallelismHigher(potentialNewParallelism.get(), executionGraph);
+            if (potentialNewParallelism.isPresent()) {
+                final VertexAssignment currentParallelism =
+                        slotAllocator.determineParallelism(executionGraph);
+                int currentCumulativeParallelism = getCumulativeParallelism(currentParallelism);
+                int newCumulativeParallelism =
+                        getCumulativeParallelism(potentialNewParallelism.get());
+                if (newCumulativeParallelism > currentCumulativeParallelism) {
+                    LOG.debug(
+                            "Offering scale up to scaling policy with currentCumulativeParallelism={}, newCumulativeParallelism={}",
+                            currentCumulativeParallelism,
+                            newCumulativeParallelism);
+                    return scalingPolicy.canScaleUp(
+                            currentCumulativeParallelism, newCumulativeParallelism);
+                }
+            }
         }
         return false;
     }
 
-    private boolean isParallelismHigher(
-            VertexAssignment vertexAssignment, ExecutionGraph executionGraph) {
-        Map<JobVertexID, Integer> perVertex = vertexAssignment.getMaxParallelismForVertices();
-
-        return StreamSupport.stream(executionGraph.getAllExecutionVertices().spliterator(), false)
-                .anyMatch(
-                        vertex ->
-                                perVertex.get(vertex.getJobvertexId())
-                                        > vertex.getJobVertex().getParallelism());
+    private int getCumulativeParallelism(VertexAssignment potentialNewParallelism) {
+        return potentialNewParallelism.getMaxParallelismForVertices().values().stream()
+                .reduce(0, Integer::sum);
     }
 
     @Override
