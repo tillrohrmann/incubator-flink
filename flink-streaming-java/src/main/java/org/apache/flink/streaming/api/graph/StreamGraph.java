@@ -116,7 +116,7 @@ public class StreamGraph implements Pipeline {
     private StateBackend stateBackend;
     private Set<Tuple2<StreamNode, StreamNode>> iterationSourceSinkPairs;
     private InternalTimeServiceManager.Provider timerServiceProvider;
-    private JobType jobType;
+    private JobType jobType = JobType.STREAMING;
 
     public StreamGraph(
             ExecutionConfig executionConfig,

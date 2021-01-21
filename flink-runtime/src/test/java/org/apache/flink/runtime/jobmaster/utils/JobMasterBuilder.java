@@ -195,7 +195,8 @@ public class JobMasterBuilder {
                 highAvailabilityServices,
                 slotPoolFactory != null
                         ? slotPoolFactory
-                        : SlotPoolServiceFactory.fromConfiguration(configuration, jobGraph),
+                        : SlotPoolServiceFactory.fromConfiguration(
+                                configuration, jobGraph.getJobType()),
                 jobManagerSharedServices,
                 heartbeatServices,
                 UnregisteredJobManagerJobMetricGroupFactory.INSTANCE,

@@ -310,7 +310,8 @@ public class JobMasterTest extends TestLogger {
                             jmResourceId,
                             jobGraph,
                             haServices,
-                            SlotPoolServiceFactory.fromConfiguration(configuration, jobGraph),
+                            SlotPoolServiceFactory.fromConfiguration(
+                                    configuration, jobGraph.getJobType()),
                             jobManagerSharedServices,
                             heartbeatServices,
                             UnregisteredJobManagerJobMetricGroupFactory.INSTANCE,

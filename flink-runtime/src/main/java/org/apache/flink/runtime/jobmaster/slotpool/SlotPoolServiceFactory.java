@@ -24,7 +24,6 @@ import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.akka.AkkaUtils;
-import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.util.clock.SystemClock;
 
@@ -36,8 +35,7 @@ public interface SlotPoolServiceFactory {
     @Nonnull
     SlotPoolService createSlotPoolService(@Nonnull JobID jobId);
 
-    static SlotPoolServiceFactory fromConfiguration(
-            Configuration configuration, JobGraph jobGraph) {
+    static SlotPoolServiceFactory fromConfiguration(Configuration configuration, JobType jobType) {
         final Time rpcTimeout = AkkaUtils.getTimeoutAsTime(configuration);
         final Time slotIdleTimeout =
                 Time.milliseconds(configuration.getLong(JobManagerOptions.SLOT_IDLE_TIMEOUT));
@@ -48,7 +46,7 @@ public interface SlotPoolServiceFactory {
                         == JobManagerOptions.SchedulerType.Declarative;
 
         if (ClusterOptions.isDeclarativeResourceManagementEnabled(configuration)) {
-            if (isDeclarativeSchedulerEnabled && jobGraph.getJobType() == JobType.STREAMING) {
+            if (isDeclarativeSchedulerEnabled && jobType == JobType.STREAMING) {
                 return new DeclarativeSlotPoolServiceFactory(slotIdleTimeout, rpcTimeout);
             }
 
