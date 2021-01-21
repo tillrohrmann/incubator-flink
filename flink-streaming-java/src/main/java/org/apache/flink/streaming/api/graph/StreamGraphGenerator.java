@@ -28,6 +28,7 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.runtime.jobgraph.ScheduleMode;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
@@ -261,7 +262,6 @@ public class StreamGraphGenerator {
     public StreamGraph generate() {
         streamGraph = new StreamGraph(executionConfig, checkpointConfig, savepointRestoreSettings);
         shouldExecuteInBatchMode = shouldExecuteInBatchMode(runtimeExecutionMode);
-        streamGraph.setShouldExecuteInBatchMode(shouldExecuteInBatchMode);
         configureStreamGraph(streamGraph);
 
         alreadyTransformed = new HashMap<>();
@@ -286,6 +286,7 @@ public class StreamGraphGenerator {
         graph.setUserArtifacts(userArtifacts);
         graph.setTimeCharacteristic(timeCharacteristic);
         graph.setJobName(jobName);
+        graph.setJobType(shouldExecuteInBatchMode ? JobType.BATCH : JobType.STREAMING);
 
         if (shouldExecuteInBatchMode) {
 

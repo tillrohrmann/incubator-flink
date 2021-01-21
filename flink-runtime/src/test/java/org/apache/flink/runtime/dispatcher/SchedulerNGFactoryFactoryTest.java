@@ -25,8 +25,10 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.scheduler.DefaultSchedulerFactory;
 import org.apache.flink.runtime.scheduler.SchedulerNGFactory;
+import org.apache.flink.runtime.scheduler.declarative.DeclarativeSchedulerFactory;
 import org.apache.flink.util.TestLogger;
 
+import org.hamcrest.core.IsNot;
 import org.junit.Test;
 
 import static org.hamcrest.Matchers.containsString;
@@ -80,7 +82,8 @@ public class SchedulerNGFactoryFactoryTest extends TestLogger {
         final SchedulerNGFactory schedulerNGFactory =
                 createSchedulerNGFactory(configuration, testGraph);
 
-        assertThat(schedulerNGFactory, is(instanceOf(DefaultSchedulerFactory.class)));
+        assertThat(
+                schedulerNGFactory, is(IsNot.not(instanceOf(DeclarativeSchedulerFactory.class))));
     }
 
     private static SchedulerNGFactory createSchedulerNGFactory(

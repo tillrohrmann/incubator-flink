@@ -45,8 +45,8 @@ public final class SchedulerNGFactoryFactory {
 
         if (schedulerType == JobManagerOptions.SchedulerType.Declarative
                 && jobGraph.getJobType() == JobType.BATCH) {
-            LOG.warn(
-                    "Declarative Scheduler configured, but Batch job detected. Changing scheduler type to New Gen.");
+            LOG.info(
+                    "Declarative Scheduler configured, but Batch job detected. Changing scheduler type to NG / DefaultScheduler.");
             // overwrite
             schedulerType = JobManagerOptions.SchedulerType.Ng;
         }

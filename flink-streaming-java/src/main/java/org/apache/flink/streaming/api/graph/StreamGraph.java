@@ -34,6 +34,7 @@ import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.typeutils.MissingTypeInfo;
 import org.apache.flink.core.memory.ManagedMemoryUseCase;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
 import org.apache.flink.runtime.jobgraph.ScheduleMode;
 import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
@@ -93,8 +94,6 @@ public class StreamGraph implements Pipeline {
 
     private ScheduleMode scheduleMode;
 
-    private boolean shouldExecuteInBatchMode;
-
     private boolean chaining;
 
     private Collection<Tuple2<String, DistributedCache.DistributedCacheEntry>> userArtifacts;
@@ -117,6 +116,7 @@ public class StreamGraph implements Pipeline {
     private StateBackend stateBackend;
     private Set<Tuple2<StreamNode, StreamNode>> iterationSourceSinkPairs;
     private InternalTimeServiceManager.Provider timerServiceProvider;
+    private JobType jobType;
 
     public StreamGraph(
             ExecutionConfig executionConfig,
@@ -192,14 +192,6 @@ public class StreamGraph implements Pipeline {
 
     public void setScheduleMode(ScheduleMode scheduleMode) {
         this.scheduleMode = scheduleMode;
-    }
-
-    public void setShouldExecuteInBatchMode(boolean mode) {
-        this.shouldExecuteInBatchMode = mode;
-    }
-
-    public boolean shouldExecuteInBatchMode() {
-        return shouldExecuteInBatchMode;
     }
 
     public Collection<Tuple2<String, DistributedCache.DistributedCacheEntry>> getUserArtifacts() {
@@ -930,5 +922,13 @@ public class StreamGraph implements Pipeline {
         return typeInfo != null && !(typeInfo instanceof MissingTypeInfo)
                 ? typeInfo.createSerializer(executionConfig)
                 : null;
+    }
+
+    public void setJobType(JobType jobType) {
+        this.jobType = jobType;
+    }
+
+    public JobType getJobType() {
+        return jobType;
     }
 }
