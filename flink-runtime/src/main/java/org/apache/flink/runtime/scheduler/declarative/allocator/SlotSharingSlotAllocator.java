@@ -21,10 +21,7 @@ import org.apache.flink.api.common.operators.ResourceSpec;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
-import org.apache.flink.runtime.executiongraph.ExecutionGraph;
-import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
-import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.jobmaster.SlotRequestId;
@@ -35,11 +32,7 @@ import org.apache.flink.runtime.scheduler.declarative.ParallelismAndResourceAssi
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.util.function.TriConsumer;
 
-import org.apache.flink.shaded.guava18.com.google.common.collect.ArrayListMultimap;
-import org.apache.flink.shaded.guava18.com.google.common.collect.Multimap;
-
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -102,37 +95,6 @@ public class SlotSharingSlotAllocator implements SlotAllocator<SlotSharingAssign
                 slotSharingSlotAssignments.getMaxParallelismForVertices();
 
         return new ParallelismAndResourceAssignments(assignedSlots, parallelismPerJobVertex);
-    }
-
-    @Override
-    public VertexAssignment determineParallelism(ExecutionGraph executionGraph) {
-        // compute map of SlotSharingGroup groups to ExecutionJobVertex
-        Multimap<SlotSharingGroup, ExecutionJobVertex> slotSharingGroups =
-                ArrayListMultimap.create();
-        executionGraph
-                .getAllExecutionVertices()
-                .forEach(
-                        executionVertex -> {
-                            slotSharingGroups.put(
-                                    executionVertex.getJobVertex().getSlotSharingGroup(),
-                                    executionVertex.getJobVertex());
-                        });
-
-        // get JobVertexID and parallelism of JobVertex with highest parallelism per
-        // SlotSharingGroup
-        Map<JobVertexID, Integer> result = new HashMap<>();
-        for (SlotSharingGroup slotSharingGroup : slotSharingGroups.keySet()) {
-            Optional<ExecutionJobVertex> highestParallelism =
-                    slotSharingGroups.get(slotSharingGroup).stream()
-                            .max(Comparator.comparingInt(ExecutionJobVertex::getParallelism));
-            highestParallelism.ifPresent(
-                    executionJobVertex ->
-                            result.put(
-                                    executionJobVertex.getJobVertexId(),
-                                    executionJobVertex.getParallelism()));
-        }
-
-        return new ExecutionGraphAssignments(result);
     }
 
     private SharedSlot reserveSharedSlot(SlotInfo slotInfo) {

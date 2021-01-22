@@ -15,21 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.scheduler.declarative.allocator;
+package org.apache.flink.runtime.scheduler.declarative.scalingpolicy;
 
-import org.apache.flink.runtime.jobgraph.JobVertexID;
+/**
+ * Simple policy for controlling the scale up behavior of the {@link
+ * org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler}.
+ */
+public interface ScaleUpController {
 
-import java.util.Map;
-
-class ExecutionGraphAssignments implements VertexAssignment {
-    private Map<JobVertexID, Integer> assignment;
-
-    public ExecutionGraphAssignments(Map<JobVertexID, Integer> assignment) {
-        this.assignment = assignment;
-    }
-
-    @Override
-    public Map<JobVertexID, Integer> getMaxParallelismForVertices() {
-        return assignment;
-    }
+    /**
+     * This method gets called whenever new resources are available to the scheduler to scale up.
+     *
+     * @param currentCumulativeParallelism Cumulative parallelism of the currently running job
+     *     graph.
+     * @param newCumulativeParallelism Potential new cumulative parallelism with the additional
+     *     resources.
+     * @return true if the policy decided to scale up based on the provided information.
+     */
+    boolean canScaleUp(int currentCumulativeParallelism, int newCumulativeParallelism);
 }

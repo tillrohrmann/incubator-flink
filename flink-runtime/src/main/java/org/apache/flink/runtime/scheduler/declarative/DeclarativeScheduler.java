@@ -46,6 +46,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.executiongraph.ExecutionDeploymentListener;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraphBuilder;
+import org.apache.flink.runtime.executiongraph.ExecutionJobVertex;
 import org.apache.flink.runtime.executiongraph.ExecutionStateUpdateListener;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.JobStatusListener;
@@ -87,8 +88,8 @@ import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresLis
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotAllocator;
 import org.apache.flink.runtime.scheduler.declarative.allocator.SlotSharingSlotAllocator;
 import org.apache.flink.runtime.scheduler.declarative.allocator.VertexAssignment;
-import org.apache.flink.runtime.scheduler.declarative.scalingpolicy.ReactiveScalingPolicy;
-import org.apache.flink.runtime.scheduler.declarative.scalingpolicy.ScalingPolicy;
+import org.apache.flink.runtime.scheduler.declarative.scalingpolicy.ReactiveScaleUpController;
+import org.apache.flink.runtime.scheduler.declarative.scalingpolicy.ScaleUpController;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.util.FatalExitExceptionHandler;
@@ -154,7 +155,7 @@ public class DeclarativeScheduler
 
     private final SlotAllocator<?> slotAllocator;
 
-    private final ScalingPolicy scalingPolicy;
+    private final ScaleUpController scaleUpController;
 
     private State state = new Created(this, LOG);
 
@@ -221,7 +222,7 @@ public class DeclarativeScheduler
         this.componentMainThreadExecutor = mainThreadExecutor;
         this.jobStatusListener = jobStatusListener;
 
-        this.scalingPolicy = new ReactiveScalingPolicy(configuration);
+        this.scaleUpController = new ReactiveScaleUpController(configuration);
     }
 
     private void newResourcesAvailable(Collection<? extends PhysicalSlot> physicalSlots) {
@@ -741,9 +742,7 @@ public class DeclarativeScheduler
                             jobInformation, declarativeSlotPool.getAllSlotsInformation());
 
             if (potentialNewParallelism.isPresent()) {
-                final VertexAssignment currentParallelism =
-                        slotAllocator.determineParallelism(executionGraph);
-                int currentCumulativeParallelism = getCumulativeParallelism(currentParallelism);
+                int currentCumulativeParallelism = getCurrentCumulativeParallelism(executionGraph);
                 int newCumulativeParallelism =
                         getCumulativeParallelism(potentialNewParallelism.get());
                 if (newCumulativeParallelism > currentCumulativeParallelism) {
@@ -751,12 +750,18 @@ public class DeclarativeScheduler
                             "Offering scale up to scaling policy with currentCumulativeParallelism={}, newCumulativeParallelism={}",
                             currentCumulativeParallelism,
                             newCumulativeParallelism);
-                    return scalingPolicy.canScaleUp(
+                    return scaleUpController.canScaleUp(
                             currentCumulativeParallelism, newCumulativeParallelism);
                 }
             }
         }
         return false;
+    }
+
+    private int getCurrentCumulativeParallelism(ExecutionGraph executionGraph) {
+        return executionGraph.getAllVertices().values().stream()
+                .map(ExecutionJobVertex::getParallelism)
+                .reduce(0, Integer::sum);
     }
 
     private int getCumulativeParallelism(VertexAssignment potentialNewParallelism) {

@@ -17,20 +17,24 @@
 
 package org.apache.flink.runtime.scheduler.declarative.scalingpolicy;
 
-/**
- * Simple policy for controlling the scale up behavior of the {@link
- * org.apache.flink.runtime.scheduler.declarative.DeclarativeScheduler}.
- */
-public interface ScalingPolicy {
+import org.apache.flink.configuration.Configuration;
 
-    /**
-     * This method gets called whenever new resources are available to the scheduler to scale up.
-     *
-     * @param currentCumulativeParallelism Cumulative parallelism of the currently running job
-     *     graph.
-     * @param newCumulativeParallelism Potential new cumulative parallelism with the additional
-     *     resources.
-     * @return true if the policy decided to scale up based on the provided information.
-     */
-    boolean canScaleUp(int currentCumulativeParallelism, int newCumulativeParallelism);
+import static org.apache.flink.configuration.JobManagerOptions.MIN_PARALLELISM_INCREASE;
+
+/**
+ * Simple scaling policy for a reactive mode. The user can configure a minimum cumulative
+ * parallelism increase to allow a scale up.
+ */
+public class ReactiveScaleUpController implements ScaleUpController {
+
+    private final int minParallelismIncrease;
+
+    public ReactiveScaleUpController(Configuration configuration) {
+        minParallelismIncrease = configuration.get(MIN_PARALLELISM_INCREASE);
+    }
+
+    @Override
+    public boolean canScaleUp(int currentCumulativeParallelism, int newCumulativeParallelism) {
+        return newCumulativeParallelism - currentCumulativeParallelism >= minParallelismIncrease;
+    }
 }

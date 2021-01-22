@@ -17,7 +17,6 @@
 
 package org.apache.flink.runtime.scheduler.declarative.allocator;
 
-import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 import org.apache.flink.runtime.scheduler.declarative.ParallelismAndResourceAssignments;
@@ -51,6 +50,4 @@ public interface SlotAllocator<T extends VertexAssignment> extends RequirementsC
             JobInformation jobInformation,
             Collection<SlotInfoWithUtilization> freeSlots,
             T assignment);
-
-    VertexAssignment determineParallelism(ExecutionGraph executionGraph);
 }
