@@ -371,7 +371,7 @@ public class JobManagerOptions {
     public static final ConfigOption<Integer> MIN_PARALLELISM_INCREASE =
             key("jobmanager.declarative-scheduler.min-parallelism-increase")
                     .intType()
-                    .defaultValue(0)
+                    .defaultValue(1)
                     .withDescription(
                             "Configure the minimum increase in parallelism for a job to scale up.");
 
