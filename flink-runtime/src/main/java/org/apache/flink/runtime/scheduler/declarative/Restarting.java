@@ -54,6 +54,11 @@ class Restarting extends StateWithExecutionGraph {
     }
 
     @Override
+    public JobStatus getJobStatus() {
+        return JobStatus.RESTARTING;
+    }
+
+    @Override
     public void cancel() {
         context.goToCanceling(
                 getExecutionGraph(), getExecutionGraphHandler(), getOperatorCoordinatorHandler());
