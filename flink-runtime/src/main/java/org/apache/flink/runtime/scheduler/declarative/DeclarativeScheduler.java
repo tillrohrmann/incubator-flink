@@ -57,6 +57,7 @@ import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTracker;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -232,6 +233,10 @@ public class DeclarativeScheduler
      * @param jobGraph
      */
     private void ensureStreamingJobGraph(JobGraph jobGraph) throws RuntimeException {
+        if (jobGraph.getJobType() == JobType.BATCH) {
+            throw new RuntimeException(
+                    "Jobs with JobType.BATCH are not supported by the declarative scheduler");
+        }
         if (jobGraph.getScheduleMode() == ScheduleMode.LAZY_FROM_SOURCES_WITH_BATCH_SLOT_REQUEST) {
             throw new RuntimeException(
                     "Jobs with ScheduleMode.LAZY_FROM_SOURCES_WITH_BATCH_SLOT_REQUEST are not supported by the declarative scheduler");
