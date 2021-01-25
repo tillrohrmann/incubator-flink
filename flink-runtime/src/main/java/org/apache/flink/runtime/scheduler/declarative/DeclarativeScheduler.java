@@ -61,6 +61,7 @@ import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings;
+import org.apache.flink.runtime.jobgraph.ScheduleMode;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
 import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTracker;
 import org.apache.flink.runtime.jobmaster.ExecutionDeploymentTrackerDeploymentListenerAdapter;
@@ -179,7 +180,7 @@ public class DeclarativeScheduler
             ComponentMainThreadExecutor mainThreadExecutor,
             JobStatusListener jobStatusListener)
             throws JobExecutionException {
-
+        ensureStreamingJobGraph(jobGraph);
         this.jobInformation = new JobGraphJobInformation(jobGraph);
         this.declarativeSlotPool = declarativeSlotPool;
         this.initializationTimestamp = initializationTimestamp;
@@ -223,6 +224,35 @@ public class DeclarativeScheduler
         this.jobStatusListener = jobStatusListener;
 
         this.scaleUpController = new ReactiveScaleUpController(configuration);
+    }
+
+    /**
+     * Check that the passed job graph is a streaming job.
+     *
+     * @param jobGraph
+     */
+    private void ensureStreamingJobGraph(JobGraph jobGraph) throws RuntimeException {
+        if (jobGraph.getScheduleMode() == ScheduleMode.LAZY_FROM_SOURCES_WITH_BATCH_SLOT_REQUEST) {
+            throw new RuntimeException(
+                    "Jobs with ScheduleMode.LAZY_FROM_SOURCES_WITH_BATCH_SLOT_REQUEST are not supported by the declarative scheduler");
+        }
+        jobGraph.getVertices()
+                .forEach(
+                        vertex ->
+                                vertex.getInputs()
+                                        .forEach(
+                                                jobEdge -> {
+                                                    if (!jobEdge.getSource()
+                                                            .getResultType()
+                                                            .isPipelined()) {
+                                                        throw new RuntimeException(
+                                                                "Detected non-pipelined data exchange in vertex='"
+                                                                        + vertex
+                                                                        + "', jobEdge='"
+                                                                        + jobEdge
+                                                                        + "'");
+                                                    }
+                                                }));
     }
 
     private void newResourcesAvailable(Collection<? extends PhysicalSlot> physicalSlots) {
