@@ -36,6 +36,7 @@ import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.IOUtils;
+import org.apache.flink.util.Preconditions;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -53,7 +54,7 @@ public class OperatorCoordinatorHandler {
 
     public OperatorCoordinatorHandler(
             ExecutionGraph executionGraph, Consumer<Throwable> globalFailureHandler) {
-        this.executionGraph = executionGraph;
+        this.executionGraph = Preconditions.checkNotNull(executionGraph);
 
         this.coordinatorMap = createCoordinatorMap(executionGraph);
         this.globalFailureHandler = globalFailureHandler;
