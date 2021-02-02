@@ -94,7 +94,10 @@ abstract class StateWithExecutionGraph implements State {
         executionGraph
                 .getTerminationFuture()
                 .thenAcceptAsync(
-                        jobStatus -> context.runIfState(this, () -> onTerminalState(jobStatus)),
+                        jobStatus -> {
+                            operatorCoordinatorHandler.disposeAllOperatorCoordinators();
+                            context.runIfState(this, () -> onTerminalState(jobStatus));
+                        },
                         context.getMainThreadExecutor());
     }
 
@@ -108,14 +111,6 @@ abstract class StateWithExecutionGraph implements State {
 
     ExecutionGraphHandler getExecutionGraphHandler() {
         return executionGraphHandler;
-    }
-
-    @Override
-    public void onLeave(State newState) {
-        if (!StateWithExecutionGraph.class.isAssignableFrom(newState.getClass())) {
-            // we are leaving the StateWithExecutionGraph --> we need to dispose temporary services
-            operatorCoordinatorHandler.disposeAllOperatorCoordinators();
-        }
     }
 
     @Override

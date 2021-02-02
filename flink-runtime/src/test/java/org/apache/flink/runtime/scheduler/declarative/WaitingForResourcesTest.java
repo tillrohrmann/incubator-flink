@@ -205,7 +205,7 @@ public class WaitingForResourcesTest extends TestLogger {
                 Assert.fail("More than one state transition initiated");
             }
             transitionTo = target;
-            waitingForResources.onLeave(target);
+            // waitingForResources.onLeave(target);
         }
 
         private State getTransitionTo() {

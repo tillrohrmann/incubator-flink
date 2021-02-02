@@ -878,10 +878,7 @@ public class DeclarativeScheduler
                     "Transition from state {} to {}.",
                     state.getClass().getSimpleName(),
                     newState.getClass().getSimpleName());
-            final State oldState = state;
             state = newState;
-
-            oldState.onLeave(newState);
             newState.onEnter();
         }
     }
