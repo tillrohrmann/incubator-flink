@@ -27,6 +27,7 @@ import org.apache.flink.runtime.executiongraph.TestingExecutionGraphBuilder;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
 import org.apache.flink.runtime.rest.handler.legacy.utils.ArchivedExecutionGraphBuilder;
 import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.function.SupplierWithException;
 
@@ -59,7 +60,6 @@ public class WaitingForResourcesTest extends TestLogger {
             ctx.setExpectExecuting(assertNonNull());
             WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
             wfr.onEnter();
-            // try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {}
         }
     }
 
@@ -76,8 +76,7 @@ public class WaitingForResourcesTest extends TestLogger {
                         assertThat(archivedExecutionGraph.getState(), is(JobStatus.FAILED));
                     }));
             WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
-
-            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {}
+            wfr.onEnter();
         }
     }
 
@@ -87,10 +86,9 @@ public class WaitingForResourcesTest extends TestLogger {
             ctx.setHasEnoughResources(() -> false);
             WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
 
-            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
-                wfr.notifyNewResourcesAvailable();
-                assertThat(ctx.didTransition(), is(false));
-            }
+            wfr.onEnter();
+            wfr.notifyNewResourcesAvailable();
+            assertThat(ctx.didTransition(), is(false));
         }
     }
 
@@ -99,12 +97,10 @@ public class WaitingForResourcesTest extends TestLogger {
         try (MockContext ctx = new MockContext()) {
             ctx.setHasEnoughResources(() -> false); // initially, not enough resources
             WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
-
-            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
-                ctx.setExpectExecuting(assertNonNull());
-                ctx.setHasEnoughResources(() -> true); // make resources available
-                wfr.notifyNewResourcesAvailable(); // .. and notify
-            }
+            wfr.onEnter();
+            ctx.setExpectExecuting(assertNonNull());
+            ctx.setHasEnoughResources(() -> true); // make resources available
+            wfr.notifyNewResourcesAvailable(); // .. and notify
         }
     }
 
@@ -114,15 +110,14 @@ public class WaitingForResourcesTest extends TestLogger {
             ctx.setHasEnoughResources(() -> false);
             WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
 
-            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
-                ctx.setExpectExecuting(assertNonNull());
+            wfr.onEnter();
+            ctx.setExpectExecuting(assertNonNull());
 
-                // immediately execute all scheduled runnables
-                assertThat(ctx.getScheduledRunnables().size(), greaterThan(0));
-                for (ScheduledRunnable scheduledRunnable : ctx.getScheduledRunnables()) {
-                    if (scheduledRunnable.getExpectedState() == wfr) {
-                        scheduledRunnable.runAction();
-                    }
+            // immediately execute all scheduled runnables
+            assertThat(ctx.getScheduledRunnables().size(), greaterThan(0));
+            for (ScheduledRunnable scheduledRunnable : ctx.getScheduledRunnables()) {
+                if (scheduledRunnable.getExpectedState() == wfr) {
+                    scheduledRunnable.runAction();
                 }
             }
         }
@@ -135,21 +130,19 @@ public class WaitingForResourcesTest extends TestLogger {
             ctx.setHasEnoughResources(() -> false);
             WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
 
-            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
-                ctx.setExpectFinished(
-                        archivedExecutionGraph -> {
-                            assertThat(
-                                    archivedExecutionGraph.getState(), is(JobStatus.INITIALIZING));
-                            assertThat(archivedExecutionGraph.getFailureInfo(), notNullValue());
-                            assertTrue(
-                                    archivedExecutionGraph
-                                            .getFailureInfo()
-                                            .getExceptionAsString()
-                                            .contains(testExceptionString));
-                        });
+            wfr.onEnter();
+            ctx.setExpectFinished(
+                    archivedExecutionGraph -> {
+                        assertThat(archivedExecutionGraph.getState(), is(JobStatus.INITIALIZING));
+                        assertThat(archivedExecutionGraph.getFailureInfo(), notNullValue());
+                        assertTrue(
+                                archivedExecutionGraph
+                                        .getFailureInfo()
+                                        .getExceptionAsString()
+                                        .contains(testExceptionString));
+                    });
 
-                wfr.handleGlobalFailure(new RuntimeException(testExceptionString));
-            }
+            wfr.handleGlobalFailure(new RuntimeException(testExceptionString));
         }
     }
 
@@ -164,9 +157,8 @@ public class WaitingForResourcesTest extends TestLogger {
                     }));
             WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
 
-            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
-                wfr.cancel();
-            }
+            wfr.onEnter();
+            wfr.cancel();
         }
     }
 
@@ -182,9 +174,31 @@ public class WaitingForResourcesTest extends TestLogger {
                     }));
             WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
 
-            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
-                wfr.suspend(new RuntimeException("suspend"));
-            }
+            wfr.onEnter();
+            wfr.suspend(new RuntimeException("suspend"));
+        }
+    }
+
+    private static class StateValidator<T> {
+        private Runnable trap = () -> {};
+        private Consumer<T> consumer = null;
+
+        public void validateInput(T input) {
+            Preconditions.checkNotNull(consumer);
+            trap = () -> {};
+            consumer.accept(input);
+        }
+
+        public void activate(Consumer<T> asserter) {
+            consumer = Preconditions.checkNotNull(asserter);
+            trap =
+                    () -> {
+                        throw new AssertionError("no transition to executing");
+                    };
+        }
+
+        public void close() {
+            trap.run();
         }
     }
 
@@ -195,11 +209,12 @@ public class WaitingForResourcesTest extends TestLogger {
                 createExecutionGraphWithAvailableResources =
                         () -> TestingExecutionGraphBuilder.newBuilder().build();
         private final List<ScheduledRunnable> scheduledRunnables = new ArrayList<>();
-        private Runnable noFinishTrap = () -> {};
-        private Runnable noExecutingTrap = () -> {};
+
+        private StateValidator<ExecutionGraph> executingStateValidator = new StateValidator<>();
+        private StateValidator<ArchivedExecutionGraph> finishingStateValidator =
+                new StateValidator<>();
+
         private boolean didTransition = false;
-        private Consumer<ExecutionGraph> goToExecutingConsumer;
-        private Consumer<ArchivedExecutionGraph> goToFinishingConsumer;
 
         @Override
         public ArchivedExecutionGraph getArchivedExecutionGraph(
@@ -227,17 +242,14 @@ public class WaitingForResourcesTest extends TestLogger {
 
         @Override
         public void goToFinished(ArchivedExecutionGraph archivedExecutionGraph) {
-            this.noFinishTrap = () -> {};
+            finishingStateValidator.validateInput(archivedExecutionGraph);
             this.didTransition = true;
-            this.goToFinishingConsumer.accept(archivedExecutionGraph);
         }
 
         @Override
-        public void goToExecuting(ExecutionGraph eg) {
-            this.noExecutingTrap = () -> {};
+        public void goToExecuting(ExecutionGraph executionGraph) {
+            executingStateValidator.validateInput(executionGraph);
             this.didTransition = true;
-            // assert arguments
-            this.goToExecutingConsumer.accept(eg);
         }
 
         // ---- Testing extensions ------
@@ -256,25 +268,17 @@ public class WaitingForResourcesTest extends TestLogger {
         }
 
         void setExpectFinished(Consumer<ArchivedExecutionGraph> asserter) {
-            this.noFinishTrap =
-                    () -> {
-                        throw new AssertionError("no transition to finished");
-                    };
-            this.goToFinishingConsumer = asserter;
+            finishingStateValidator.activate(asserter);
         }
 
         void setExpectExecuting(Consumer<ExecutionGraph> asserter) {
-            this.noExecutingTrap =
-                    () -> {
-                        throw new AssertionError("no transition to executing");
-                    };
-            this.goToExecutingConsumer = asserter;
+            executingStateValidator.activate(asserter);
         }
 
         @Override
         public void close() throws Exception {
-            noFinishTrap.run();
-            noExecutingTrap.run();
+            executingStateValidator.close();
+            finishingStateValidator.close();
         }
 
         public boolean didTransition() {
