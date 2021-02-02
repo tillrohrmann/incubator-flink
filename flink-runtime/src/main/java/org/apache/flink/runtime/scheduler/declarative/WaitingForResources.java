@@ -22,6 +22,7 @@ import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 
@@ -41,9 +42,11 @@ class WaitingForResources implements State, ResourceConsumer {
     private final ResourceCounter desiredResources;
 
     WaitingForResources(Context context, Logger logger, ResourceCounter desiredResources) {
-        this.context = context;
-        this.logger = logger;
-        this.desiredResources = desiredResources;
+        this.context = Preconditions.checkNotNull(context);
+        this.logger = Preconditions.checkNotNull(logger);
+        this.desiredResources = Preconditions.checkNotNull(desiredResources);
+        Preconditions.checkArgument(
+                !desiredResources.isEmpty(), "Desired resources must not be empty");
     }
 
     @Override

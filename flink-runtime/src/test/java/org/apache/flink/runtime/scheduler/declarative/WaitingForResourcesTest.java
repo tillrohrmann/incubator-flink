@@ -19,221 +19,187 @@
 package org.apache.flink.runtime.scheduler.declarative;
 
 import org.apache.flink.api.common.JobStatus;
-import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ErrorInfo;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.TestingExecutionGraphBuilder;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
 import org.apache.flink.runtime.rest.handler.legacy.utils.ArchivedExecutionGraphBuilder;
-import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
-import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
+import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.TestLogger;
+import org.apache.flink.util.function.SupplierWithException;
 
-import org.junit.Assert;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 /** Tests for the WaitingForResources state. */
 public class WaitingForResourcesTest extends TestLogger {
+    private static final ResourceCounter RESOURCE_COUNTER =
+            ResourceCounter.withResource(ResourceProfile.ANY, 1);
 
     /** WaitingForResources is transitioning to Executing if there are enough resources */
     @Test
-    public void testTransitionToExecuting() {
-        StateTestContext testContext =
-                new StateTestContext(ctx -> ctx.setHasEnoughResources(() -> true));
-
-        testContext.assertStateTransitionTo(Executing.class);
-    }
-
-    @Test
-    public void testTransitionToFinishedOnFailure() {
-        StateTestContext testContext =
-                new StateTestContext(
-                        ctx -> {
-                            ctx.setHasEnoughResources(() -> true);
-                            ctx.setCreateExecutionGraphWithAvailableResources(
-                                    () -> {
-                                        throw new RuntimeException("Test");
-                                    });
-                        });
-
-        testContext.assertStateTransitionTo(Finished.class);
-    }
-
-    @Test
-    public void testDelayedResourceAvailability() {
-        StateTestContext testContext =
-                new StateTestContext(
-                        ctx -> {
-                            ctx.setHasEnoughResources(() -> false);
-                        });
-
-        // no resources --> no state transition
-        testContext.getWaitingForResources().notifyNewResourcesAvailable();
-        testContext.assertNoStateTransition();
-
-        // make resources available
-        testContext.getMockContext().setHasEnoughResources(() -> true);
-        testContext.getWaitingForResources().notifyNewResourcesAvailable();
-
-        testContext.assertStateTransitionTo(Executing.class);
-    }
-
-    /*
-    @Test
-    public void testResourceTimeout() {
-        MockContext ctx = new MockContext();
-        ctx.setHasEnoughResources(() -> false);
-
-        WaitingForResources wfr = new WaitingForResources(ctx, log, ResourceCounter.empty());
-        wfr.onEnter();
-        assertThat(ctx.getActions(), hasSize(1));
-        assertThat(ctx.getActions().get(0).f0, is(wfr));
-
-        // trigger delayed action (in this case resource timeout)
-        ctx.getActions().get(0).f1.run();
-
-        assertThat(
-                ctx.getStateTransitions(),
-                contains(Tuple2.of(MockContext.States.EXECUTING, JobStatus.RUNNING)));
-    }
-
-    @Test
-    public void testTransitionToFinishedOnGlobalFailure() {
-        MockContext ctx = new MockContext();
-        ctx.setHasEnoughResources(() -> false);
-
-        WaitingForResources wfr = new WaitingForResources(ctx, log, ResourceCounter.empty());
-        wfr.onEnter();
-        wfr.handleGlobalFailure(new RuntimeException("mock failure"));
-        assertThat(
-                ctx.getStateTransitions(),
-                contains(Tuple2.of(MockContext.States.FINISHED, JobStatus.INITIALIZING)));
-    }
-
-    @Test
-    public void testCancel() {
-        MockContext ctx = new MockContext();
-        ctx.setHasEnoughResources(() -> false);
-
-        WaitingForResources wfr = new WaitingForResources(ctx, log, ResourceCounter.empty());
-        wfr.onEnter();
-        wfr.cancel();
-        assertThat(
-                ctx.getStateTransitions(),
-                contains(Tuple2.of(MockContext.States.FINISHED, JobStatus.CANCELED)));
-    }
-
-    @Test
-    public void testSuspend() {
-        MockContext ctx = new MockContext();
-        ctx.setHasEnoughResources(() -> false);
-
-        WaitingForResources wfr = new WaitingForResources(ctx, log, ResourceCounter.empty());
-        wfr.onEnter();
-        wfr.suspend(new Exception("test"));
-        assertThat(
-                ctx.getStateTransitions(),
-                contains(Tuple2.of(MockContext.States.FINISHED, JobStatus.SUSPENDED)));
-    } */
-
-    private class StateTestContext {
-        private final MockContext mockContext;
-        private WaitingForResources waitingForResources;
-
-        public StateTestContext(Consumer<MockContext> modifyContext) {
-            this.mockContext = new MockContext();
-            modifyContext.accept(mockContext);
-            this.waitingForResources =
-                    new WaitingForResources(mockContext, log, ResourceCounter.empty());
-            this.mockContext.setWaitingForResources(waitingForResources);
-            waitingForResources.onEnter();
-        }
-
-        public MockContext getMockContext() {
-            return mockContext;
-        }
-
-        public void assertStateTransitionTo(Class<? extends State> expected) {
-            Assert.assertThat(mockContext.getTransitionTo(), instanceOf(expected));
-        }
-
-        public void assertNoStateTransition() {
-            Assert.assertThat(mockContext.getTransitionTo(), nullValue());
-        }
-
-        public WaitingForResources getWaitingForResources() {
-            return waitingForResources;
+    public void testTransitionToExecuting() throws Exception {
+        try (MockContext ctx = new MockContext()) {
+            ctx.setHasEnoughResources(() -> true);
+            ctx.setExpectExecuting(assertNonNull());
+            WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
+            wfr.onEnter();
+            // try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {}
         }
     }
 
-    private static class MockContext implements WaitingForResources.Context {
+    @Test
+    public void testTransitionToFinishedOnFailure() throws Exception {
+        try (MockContext ctx = new MockContext()) {
+            ctx.setHasEnoughResources(() -> true);
+            ctx.setCreateExecutionGraphWithAvailableResources(
+                    () -> {
+                        throw new RuntimeException("Test exception");
+                    });
+            ctx.setExpectFinished(
+                    (archivedExecutionGraph -> {
+                        assertThat(archivedExecutionGraph.getState(), is(JobStatus.FAILED));
+                    }));
+            WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
 
-        private static final Logger LOG = LoggerFactory.getLogger(MockContext.class);
+            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {}
+        }
+    }
 
-        private WaitingForResources waitingForResources;
+    @Test
+    public void testNotEnoughResources() throws Exception {
+        try (MockContext ctx = new MockContext()) {
+            ctx.setHasEnoughResources(() -> false);
+            WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
 
-        private State transitionTo = null;
-        private Supplier<Boolean> hasEnoughResourcesSupplier = () -> false;
-        private Supplier<ExecutionGraph> createExecutionGraphWithAvailableResources =
-                () -> {
-                    try {
-                        return TestingExecutionGraphBuilder.newBuilder().build();
-                    } catch (Throwable e) {
-                        throw new RuntimeException("Error", e);
-                    }
-                };
-        private final List<Tuple3<State, Runnable, Duration>> actions = new ArrayList<>();
-
-        private void transitionToState(State target) {
-            if (transitionTo != null) {
-                Assert.fail("More than one state transition initiated");
+            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
+                wfr.notifyNewResourcesAvailable();
+                assertThat(ctx.didTransition(), is(false));
             }
-            transitionTo = target;
-            // waitingForResources.onLeave(target);
         }
+    }
 
-        private State getTransitionTo() {
-            return transitionTo;
-        }
+    @Test
+    public void testNotifyNewResourcesAvailable() throws Exception {
+        try (MockContext ctx = new MockContext()) {
+            ctx.setHasEnoughResources(() -> false); // initially, not enough resources
+            WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
 
-        @Override
-        public void goToFinished(ArchivedExecutionGraph archivedExecutionGraph) {
-            transitionToState(new Finished(null, archivedExecutionGraph, LOG));
+            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
+                ctx.setExpectExecuting(assertNonNull());
+                ctx.setHasEnoughResources(() -> true); // make resources available
+                wfr.notifyNewResourcesAvailable(); // .. and notify
+            }
         }
+    }
 
-        @Override
-        public void goToExecuting(ExecutionGraph executionGraph) {
-            Executing.Context mockExecutingContext = new MockExecutingContext();
-            transitionToState(
-                    new Executing(
-                            executionGraph,
-                            new ExecutionGraphHandler(
-                                    executionGraph, LOG, ForkJoinPool.commonPool()),
-                            new OperatorCoordinatorHandler(
-                                    executionGraph,
-                                    (throwable -> {
-                                        throw new RuntimeException("Error in test", throwable);
-                                    })),
-                            LOG,
-                            mockExecutingContext,
-                            ClassLoader.getSystemClassLoader()));
+    @Test
+    public void testResourceTimeout() throws Exception {
+        try (MockContext ctx = new MockContext()) {
+            ctx.setHasEnoughResources(() -> false);
+            WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
+
+            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
+                ctx.setExpectExecuting(assertNonNull());
+
+                // immediately execute all scheduled runnables
+                assertThat(ctx.getScheduledRunnables().size(), greaterThan(0));
+                for (ScheduledRunnable scheduledRunnable : ctx.getScheduledRunnables()) {
+                    if (scheduledRunnable.getExpectedState() == wfr) {
+                        scheduledRunnable.runAction();
+                    }
+                }
+            }
         }
+    }
+
+    @Test
+    public void testTransitionToFinishedOnGlobalFailure() throws Exception {
+        final String testExceptionString = "This is a test exception";
+        try (MockContext ctx = new MockContext()) {
+            ctx.setHasEnoughResources(() -> false);
+            WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
+
+            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
+                ctx.setExpectFinished(
+                        archivedExecutionGraph -> {
+                            assertThat(
+                                    archivedExecutionGraph.getState(), is(JobStatus.INITIALIZING));
+                            assertThat(archivedExecutionGraph.getFailureInfo(), notNullValue());
+                            assertTrue(
+                                    archivedExecutionGraph
+                                            .getFailureInfo()
+                                            .getExceptionAsString()
+                                            .contains(testExceptionString));
+                        });
+
+                wfr.handleGlobalFailure(new RuntimeException(testExceptionString));
+            }
+        }
+    }
+
+    @Test
+    public void testCancel() throws Exception {
+        try (MockContext ctx = new MockContext()) {
+            ctx.setHasEnoughResources(() -> true);
+            ctx.setExpectExecuting(assertNonNull());
+            ctx.setExpectFinished(
+                    (archivedExecutionGraph -> {
+                        assertThat(archivedExecutionGraph.getState(), is(JobStatus.CANCELED));
+                    }));
+            WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
+
+            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
+                wfr.cancel();
+            }
+        }
+    }
+
+    @Test
+    public void testSuspend() throws Exception {
+        try (MockContext ctx = new MockContext()) {
+            ctx.setHasEnoughResources(() -> true);
+            ctx.setExpectExecuting(assertNonNull());
+            ctx.setExpectFinished(
+                    (archivedExecutionGraph -> {
+                        assertThat(archivedExecutionGraph.getState(), is(JobStatus.SUSPENDED));
+                        assertThat(archivedExecutionGraph.getFailureInfo(), notNullValue());
+                    }));
+            WaitingForResources wfr = new WaitingForResources(ctx, log, RESOURCE_COUNTER);
+
+            try (StateTestEnvironment env = new StateTestEnvironment(ctx, wfr)) {
+                wfr.suspend(new RuntimeException("suspend"));
+            }
+        }
+    }
+
+    private static class MockContext implements WaitingForResources.Context, AutoCloseable {
+
+        private Supplier<Boolean> hasEnoughResourcesSupplier = () -> false;
+        private SupplierWithException<ExecutionGraph, FlinkException>
+                createExecutionGraphWithAvailableResources =
+                        () -> TestingExecutionGraphBuilder.newBuilder().build();
+        private final List<ScheduledRunnable> scheduledRunnables = new ArrayList<>();
+        private Runnable noFinishTrap = () -> {};
+        private Runnable noExecutingTrap = () -> {};
+        private boolean didTransition = false;
+        private Consumer<ExecutionGraph> goToExecutingConsumer;
+        private Consumer<ArchivedExecutionGraph> goToFinishingConsumer;
 
         @Override
         public ArchivedExecutionGraph getArchivedExecutionGraph(
@@ -250,79 +216,93 @@ public class WaitingForResourcesTest extends TestLogger {
         }
 
         @Override
-        public ExecutionGraph createExecutionGraphWithAvailableResources() throws Exception {
+        public ExecutionGraph createExecutionGraphWithAvailableResources() throws FlinkException {
             return createExecutionGraphWithAvailableResources.get();
         }
 
         @Override
         public void runIfState(State expectedState, Runnable action, Duration delay) {
-            actions.add(Tuple3.of(expectedState, action, delay));
+            scheduledRunnables.add(new ScheduledRunnable(expectedState, action, delay));
+        }
+
+        @Override
+        public void goToFinished(ArchivedExecutionGraph archivedExecutionGraph) {
+            this.noFinishTrap = () -> {};
+            this.didTransition = true;
+            this.goToFinishingConsumer.accept(archivedExecutionGraph);
+        }
+
+        @Override
+        public void goToExecuting(ExecutionGraph eg) {
+            this.noExecutingTrap = () -> {};
+            this.didTransition = true;
+            // assert arguments
+            this.goToExecutingConsumer.accept(eg);
         }
 
         // ---- Testing extensions ------
 
-        public void setWaitingForResources(WaitingForResources wfr) {
-            this.waitingForResources = wfr;
-        }
-
-        public List<Tuple3<State, Runnable, Duration>> getActions() {
-            return actions;
+        public List<ScheduledRunnable> getScheduledRunnables() {
+            return scheduledRunnables;
         }
 
         public void setHasEnoughResources(Supplier<Boolean> sup) {
             hasEnoughResourcesSupplier = sup;
         }
 
-        public void setCreateExecutionGraphWithAvailableResources(Supplier<ExecutionGraph> sup) {
+        public void setCreateExecutionGraphWithAvailableResources(
+                SupplierWithException<ExecutionGraph, FlinkException> sup) {
             this.createExecutionGraphWithAvailableResources = sup;
         }
 
-        private class MockExecutingContext implements Executing.Context {
-            @Override
-            public void goToCanceling(
-                    ExecutionGraph executionGraph,
-                    ExecutionGraphHandler executionGraphHandler,
-                    OperatorCoordinatorHandler operatorCoordinatorHandler) {}
-
-            @Override
-            public Executing.FailureResult howToHandleFailure(Throwable failure) {
-                return null;
-            }
-
-            @Override
-            public boolean canScaleUp(ExecutionGraph executionGraph) {
-                return false;
-            }
-
-            @Override
-            public void goToRestarting(
-                    ExecutionGraph executionGraph,
-                    ExecutionGraphHandler executionGraphHandler,
-                    OperatorCoordinatorHandler operatorCoordinatorHandler,
-                    Duration backoffTime) {}
-
-            @Override
-            public void goToFailing(
-                    ExecutionGraph executionGraph,
-                    ExecutionGraphHandler executionGraphHandler,
-                    OperatorCoordinatorHandler operatorCoordinatorHandler,
-                    Throwable failureCause) {}
-
-            @Override
-            public void runIfState(State expectedState, Runnable action) {}
-
-            @Override
-            public boolean isState(State expectedState) {
-                return false;
-            }
-
-            @Override
-            public Executor getMainThreadExecutor() {
-                return ForkJoinPool.commonPool();
-            }
-
-            @Override
-            public void goToFinished(ArchivedExecutionGraph archivedExecutionGraph) {}
+        void setExpectFinished(Consumer<ArchivedExecutionGraph> asserter) {
+            this.noFinishTrap =
+                    () -> {
+                        throw new AssertionError("no transition to finished");
+                    };
+            this.goToFinishingConsumer = asserter;
         }
+
+        void setExpectExecuting(Consumer<ExecutionGraph> asserter) {
+            this.noExecutingTrap =
+                    () -> {
+                        throw new AssertionError("no transition to executing");
+                    };
+            this.goToExecutingConsumer = asserter;
+        }
+
+        @Override
+        public void close() throws Exception {
+            noFinishTrap.run();
+            noExecutingTrap.run();
+        }
+
+        public boolean didTransition() {
+            return didTransition;
+        }
+    }
+
+    private static final class ScheduledRunnable {
+        private final Runnable action;
+        private final State expectedState;
+        private final Duration delay;
+
+        private ScheduledRunnable(State expectedState, Runnable action, Duration delay) {
+            this.expectedState = expectedState;
+            this.action = action;
+            this.delay = delay;
+        }
+
+        public void runAction() {
+            action.run();
+        }
+
+        public State getExpectedState() {
+            return expectedState;
+        }
+    }
+
+    private static <T> Consumer<T> assertNonNull() {
+        return (item) -> assertThat(item, notNullValue());
     }
 }
