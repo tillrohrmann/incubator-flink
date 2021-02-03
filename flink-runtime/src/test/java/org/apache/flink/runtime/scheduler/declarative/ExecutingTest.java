@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.scheduler.declarative;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.client.JobExecutionException;
@@ -49,6 +50,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.apache.flink.runtime.scheduler.declarative.WaitingForResourcesTest.assertNonNull;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.junit.Assert.assertThat;
@@ -106,6 +108,8 @@ public class ExecutingTest extends TestLogger {
             Executing exec = getExecutingState(ctx);
             ctx.setExpectedStateChecker((state) -> state == exec);
             exec.onEnter();
+            // transition EG into terminal state, which will notify the Executing state about the
+            // failure (async via the supplied executor)
             exec.getExecutionGraph().failJob(new RuntimeException("test failure"));
             executor.shutdown();
             executor.awaitTermination(10, TimeUnit.SECONDS);
@@ -130,6 +134,7 @@ public class ExecutingTest extends TestLogger {
         try (MockExecutingContext ctx = new MockExecutingContext()) {
             ctx.setExpectRestarting(
                     restartingArguments -> {
+                        // expect immediate restart on scale up
                         assertThat(restartingArguments.getBackoffTime(), is(Duration.ZERO));
                     });
             ctx.setCanScaleUp(() -> true);
@@ -173,6 +178,18 @@ public class ExecutingTest extends TestLogger {
         }
     }
 
+    @Test
+    public void testJobInformationMethods() throws Exception {
+        try (MockExecutingContext ctx = new MockExecutingContext()) {
+            Executing exec = getExecutingState(ctx);
+            final JobID jobId = exec.getExecutionGraph().getJobID();
+            exec.onEnter();
+            assertThat(exec.getJob(), instanceOf(ArchivedExecutionGraph.class));
+            assertThat(exec.getJob().getJobID(), is(jobId));
+            assertThat(exec.getJobStatus(), is(JobStatus.CREATED));
+        }
+    }
+
     public Executing getExecutingState(MockExecutingContext ctx)
             throws JobException, JobExecutionException {
         return getExecutingState(ctx, null);
@@ -181,8 +198,9 @@ public class ExecutingTest extends TestLogger {
     public Executing getExecutingState(MockExecutingContext ctx, @Nullable JobGraph jobGraph)
             throws JobException, JobExecutionException {
         ExecutionGraph executionGraph = TestingExecutionGraphBuilder.newBuilder().build();
-        if (jobGraph != null)
+        if (jobGraph != null) {
             executionGraph.attachJobGraph(jobGraph.getVerticesSortedTopologicallyFromSources());
+        }
         ExecutionGraphHandler executionGraphHandler =
                 new ExecutionGraphHandler(executionGraph, log, ForkJoinPool.commonPool());
         OperatorCoordinatorHandler operatorCoordinatorHandler =
