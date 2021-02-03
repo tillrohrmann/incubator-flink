@@ -325,7 +325,7 @@ public class ExecutingTest extends TestLogger {
 
         @Override
         public boolean isState(State expectedState) {
-            return false;
+            throw new UnsupportedOperationException("Not covered by this test at the moment");
         }
 
         @Override
@@ -374,10 +374,7 @@ public class ExecutingTest extends TestLogger {
         }
     }
 
-    private static class RestartingArguments {
-        private final ExecutionGraph executionGraph;
-        private final ExecutionGraphHandler executionGraphHandler;
-        private final OperatorCoordinatorHandler operatorCoordinatorHandler;
+    private static class RestartingArguments extends CancellingArguments {
         private final Duration backoffTime;
 
         public RestartingArguments(
@@ -385,22 +382,8 @@ public class ExecutingTest extends TestLogger {
                 ExecutionGraphHandler executionGraphHandler,
                 OperatorCoordinatorHandler operatorCoordinatorHandler,
                 Duration backoffTime) {
-            this.executionGraph = executionGraph;
-            this.executionGraphHandler = executionGraphHandler;
-            this.operatorCoordinatorHandler = operatorCoordinatorHandler;
+            super(executionGraph, executionGraphHandler, operatorCoordinatorHandler);
             this.backoffTime = backoffTime;
-        }
-
-        public ExecutionGraph getExecutionGraph() {
-            return executionGraph;
-        }
-
-        public ExecutionGraphHandler getExecutionGraphHandler() {
-            return executionGraphHandler;
-        }
-
-        public OperatorCoordinatorHandler getOperatorCoordinatorHandler() {
-            return operatorCoordinatorHandler;
         }
 
         public Duration getBackoffTime() {
@@ -408,10 +391,7 @@ public class ExecutingTest extends TestLogger {
         }
     }
 
-    private static class FailingArguments {
-        private final ExecutionGraph executionGraph;
-        private final ExecutionGraphHandler executionGraphHandler;
-        private final OperatorCoordinatorHandler operatorCoordinatorHandler;
+    private static class FailingArguments extends CancellingArguments {
         private final Throwable failureCause;
 
         public FailingArguments(
@@ -419,22 +399,8 @@ public class ExecutingTest extends TestLogger {
                 ExecutionGraphHandler executionGraphHandler,
                 OperatorCoordinatorHandler operatorCoordinatorHandler,
                 Throwable failureCause) {
-            this.executionGraph = executionGraph;
-            this.executionGraphHandler = executionGraphHandler;
-            this.operatorCoordinatorHandler = operatorCoordinatorHandler;
+            super(executionGraph, executionGraphHandler, operatorCoordinatorHandler);
             this.failureCause = failureCause;
-        }
-
-        public ExecutionGraph getExecutionGraph() {
-            return executionGraph;
-        }
-
-        public ExecutionGraphHandler getExecutionGraphHandler() {
-            return executionGraphHandler;
-        }
-
-        public OperatorCoordinatorHandler getOperatorCoordinatorHandler() {
-            return operatorCoordinatorHandler;
         }
 
         public Throwable getFailureCause() {

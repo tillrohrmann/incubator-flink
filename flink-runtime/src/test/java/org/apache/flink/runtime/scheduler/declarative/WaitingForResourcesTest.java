@@ -147,8 +147,7 @@ public class WaitingForResourcesTest extends TestLogger {
     @Test
     public void testCancel() throws Exception {
         try (MockContext ctx = new MockContext()) {
-            ctx.setHasEnoughResources(() -> true);
-            ctx.setExpectExecuting(assertNonNull());
+            ctx.setHasEnoughResources(() -> false);
             ctx.setExpectFinished(
                     (archivedExecutionGraph -> {
                         assertThat(archivedExecutionGraph.getState(), is(JobStatus.CANCELED));
@@ -163,8 +162,7 @@ public class WaitingForResourcesTest extends TestLogger {
     @Test
     public void testSuspend() throws Exception {
         try (MockContext ctx = new MockContext()) {
-            ctx.setHasEnoughResources(() -> true);
-            ctx.setExpectExecuting(assertNonNull());
+            ctx.setHasEnoughResources(() -> false);
             ctx.setExpectFinished(
                     (archivedExecutionGraph -> {
                         assertThat(archivedExecutionGraph.getState(), is(JobStatus.SUSPENDED));
