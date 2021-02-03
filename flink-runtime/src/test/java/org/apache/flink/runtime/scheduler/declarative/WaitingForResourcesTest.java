@@ -87,7 +87,6 @@ public class WaitingForResourcesTest extends TestLogger {
 
             wfr.onEnter();
             wfr.notifyNewResourcesAvailable();
-            assertThat(ctx.didTransition(), is(false));
         }
     }
 
@@ -180,56 +179,16 @@ public class WaitingForResourcesTest extends TestLogger {
 
     private static class MockContext implements WaitingForResources.Context, AutoCloseable {
 
-        private Supplier<Boolean> hasEnoughResourcesSupplier = () -> false;
-        private SupplierWithException<ExecutionGraph, FlinkException>
-                createExecutionGraphWithAvailableResources =
-                        () -> TestingExecutionGraphBuilder.newBuilder().build();
-        private final List<ScheduledRunnable> scheduledRunnables = new ArrayList<>();
-
         private final StateValidator<ExecutionGraph> executingStateValidator =
                 new StateValidator<>("executing");
         private final StateValidator<ArchivedExecutionGraph> finishingStateValidator =
                 new StateValidator<>("finishing");
 
-        private boolean didTransition = false;
-
-        @Override
-        public ArchivedExecutionGraph getArchivedExecutionGraph(
-                JobStatus jobStatus, @Nullable Throwable cause) {
-            return new ArchivedExecutionGraphBuilder()
-                    .setState(jobStatus)
-                    .setFailureCause(cause == null ? null : new ErrorInfo(cause, 1337))
-                    .build();
-        }
-
-        @Override
-        public boolean hasEnoughResources(ResourceCounter desiredResources) {
-            return hasEnoughResourcesSupplier.get();
-        }
-
-        @Override
-        public ExecutionGraph createExecutionGraphWithAvailableResources() throws FlinkException {
-            return createExecutionGraphWithAvailableResources.get();
-        }
-
-        @Override
-        public void runIfState(State expectedState, Runnable action, Duration delay) {
-            scheduledRunnables.add(new ScheduledRunnable(expectedState, action, delay));
-        }
-
-        @Override
-        public void goToFinished(ArchivedExecutionGraph archivedExecutionGraph) {
-            finishingStateValidator.validateInput(archivedExecutionGraph);
-            this.didTransition = true;
-        }
-
-        @Override
-        public void goToExecuting(ExecutionGraph executionGraph) {
-            executingStateValidator.validateInput(executionGraph);
-            this.didTransition = true;
-        }
-
-        // ---- Testing extensions ------
+        private Supplier<Boolean> hasEnoughResourcesSupplier = () -> false;
+        private SupplierWithException<ExecutionGraph, FlinkException>
+                createExecutionGraphWithAvailableResources =
+                        () -> TestingExecutionGraphBuilder.newBuilder().build();
+        private final List<ScheduledRunnable> scheduledRunnables = new ArrayList<>();
 
         public List<ScheduledRunnable> getScheduledRunnables() {
             return scheduledRunnables;
@@ -258,8 +217,38 @@ public class WaitingForResourcesTest extends TestLogger {
             finishingStateValidator.close();
         }
 
-        public boolean didTransition() {
-            return didTransition;
+        @Override
+        public ArchivedExecutionGraph getArchivedExecutionGraph(
+                JobStatus jobStatus, @Nullable Throwable cause) {
+            return new ArchivedExecutionGraphBuilder()
+                    .setState(jobStatus)
+                    .setFailureCause(cause == null ? null : new ErrorInfo(cause, 1337))
+                    .build();
+        }
+
+        @Override
+        public boolean hasEnoughResources(ResourceCounter desiredResources) {
+            return hasEnoughResourcesSupplier.get();
+        }
+
+        @Override
+        public ExecutionGraph createExecutionGraphWithAvailableResources() throws FlinkException {
+            return createExecutionGraphWithAvailableResources.get();
+        }
+
+        @Override
+        public void runIfState(State expectedState, Runnable action, Duration delay) {
+            scheduledRunnables.add(new ScheduledRunnable(expectedState, action, delay));
+        }
+
+        @Override
+        public void goToFinished(ArchivedExecutionGraph archivedExecutionGraph) {
+            finishingStateValidator.validateInput(archivedExecutionGraph);
+        }
+
+        @Override
+        public void goToExecuting(ExecutionGraph executionGraph) {
+            executingStateValidator.validateInput(executionGraph);
         }
     }
 

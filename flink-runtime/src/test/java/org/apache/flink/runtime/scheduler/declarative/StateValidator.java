@@ -23,7 +23,8 @@ import org.apache.flink.util.Preconditions;
 import java.util.function.Consumer;
 
 /**
- * TODO.
+ * Utility for state test classes (e.g. {@link ExecutingTest}) to track if correct input has been
+ * presented.
  *
  * @param <T>
  */
@@ -37,18 +38,18 @@ public class StateValidator<T> {
         this.stateName = stateName;
     }
 
-    public void validateInput(T input) {
-        Preconditions.checkNotNull(consumer, "no consumer set. Unexpected state transition?");
-        trap = () -> {};
-        consumer.accept(input);
-    }
-
     public void activate(Consumer<T> asserter) {
         consumer = Preconditions.checkNotNull(asserter);
         trap =
                 () -> {
                     throw new AssertionError("no transition to " + stateName);
                 };
+    }
+
+    public void validateInput(T input) {
+        Preconditions.checkNotNull(consumer, "no consumer set. Unexpected state transition?");
+        trap = () -> {};
+        consumer.accept(input);
     }
 
     public void close() {
