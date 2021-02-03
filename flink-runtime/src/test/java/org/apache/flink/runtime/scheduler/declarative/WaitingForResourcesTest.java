@@ -27,7 +27,6 @@ import org.apache.flink.runtime.executiongraph.TestingExecutionGraphBuilder;
 import org.apache.flink.runtime.jobmaster.slotpool.ResourceCounter;
 import org.apache.flink.runtime.rest.handler.legacy.utils.ArchivedExecutionGraphBuilder;
 import org.apache.flink.util.FlinkException;
-import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.function.SupplierWithException;
 
@@ -179,29 +178,6 @@ public class WaitingForResourcesTest extends TestLogger {
         }
     }
 
-    private static class StateValidator<T> {
-        private Runnable trap = () -> {};
-        private Consumer<T> consumer = null;
-
-        public void validateInput(T input) {
-            Preconditions.checkNotNull(consumer);
-            trap = () -> {};
-            consumer.accept(input);
-        }
-
-        public void activate(Consumer<T> asserter) {
-            consumer = Preconditions.checkNotNull(asserter);
-            trap =
-                    () -> {
-                        throw new AssertionError("no transition to executing");
-                    };
-        }
-
-        public void close() {
-            trap.run();
-        }
-    }
-
     private static class MockContext implements WaitingForResources.Context, AutoCloseable {
 
         private Supplier<Boolean> hasEnoughResourcesSupplier = () -> false;
@@ -210,9 +186,10 @@ public class WaitingForResourcesTest extends TestLogger {
                         () -> TestingExecutionGraphBuilder.newBuilder().build();
         private final List<ScheduledRunnable> scheduledRunnables = new ArrayList<>();
 
-        private StateValidator<ExecutionGraph> executingStateValidator = new StateValidator<>();
-        private StateValidator<ArchivedExecutionGraph> finishingStateValidator =
-                new StateValidator<>();
+        private final StateValidator<ExecutionGraph> executingStateValidator =
+                new StateValidator<>("executing");
+        private final StateValidator<ArchivedExecutionGraph> finishingStateValidator =
+                new StateValidator<>("finishing");
 
         private boolean didTransition = false;
 
@@ -306,7 +283,7 @@ public class WaitingForResourcesTest extends TestLogger {
         }
     }
 
-    private static <T> Consumer<T> assertNonNull() {
+    static <T> Consumer<T> assertNonNull() {
         return (item) -> assertThat(item, notNullValue());
     }
 }
