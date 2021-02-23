@@ -74,7 +74,7 @@ public class StopWithSavepointTerminationManagerTest extends TestLogger {
         final TestingStopWithSavepointTerminationHandler stopWithSavepointTerminationHandler =
                 new TestingStopWithSavepointTerminationHandler();
         new StopWithSavepointTerminationManager(stopWithSavepointTerminationHandler)
-                .stopWithSavepoint(
+                .trackStopWithSavepoint(
                         completedSavepointFuture,
                         terminatedExecutionStateFuture.thenApply(Collections::singleton),
                         ComponentMainThreadExecutorServiceAdapter.forMainThread());

@@ -22,7 +22,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.core.testutils.FlinkMatchers;
 import org.apache.flink.runtime.checkpoint.CheckpointProperties;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
-import org.apache.flink.runtime.checkpoint.TestingCheckpointScheduling;
+import org.apache.flink.runtime.checkpoint.TestingStopWithSavepointOperations;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.TestingSchedulerNG;
@@ -56,8 +56,8 @@ public class StopWithSavepointTerminationHandlerImplTest extends TestLogger {
 
     private static final JobID JOB_ID = new JobID();
 
-    private final TestingCheckpointScheduling checkpointScheduling =
-            new TestingCheckpointScheduling(false);
+    private final TestingStopWithSavepointOperations checkpointScheduling =
+            new TestingStopWithSavepointOperations(false);
 
     private StopWithSavepointTerminationHandlerImpl createTestInstanceFailingOnGlobalFailOver() {
         return createTestInstance(

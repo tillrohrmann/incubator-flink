@@ -16,17 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.checkpoint;
+package org.apache.flink.runtime.scheduler.adaptive;
 
-/**
- * {@code CheckpointScheduling} provides methods for starting and stopping the periodic scheduling
- * of checkpoints.
- */
-public interface CheckpointScheduling {
-
-    /** Starts the periodic scheduling if possible. */
-    void startCheckpointScheduler();
-
-    /** Stops the periodic scheduling if possible. */
-    void stopCheckpointScheduler();
+/** Interface for schedulers to notify them about global failures. */
+public interface SchedulerFailureHandler {
+    /** Notify scheduler about a global failure. */
+    void handleGlobalFailure(Throwable cause);
 }

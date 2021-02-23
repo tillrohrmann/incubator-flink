@@ -430,14 +430,28 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
             final TaskExecutionState taskExecutionState) {
         checkNotNull(taskExecutionState, "taskExecutionState");
 
-        if (schedulerNG.updateTaskExecutionState(taskExecutionState)) {
-            return CompletableFuture.completedFuture(Acknowledge.get());
-        } else {
-            return FutureUtils.completedExceptionally(
-                    new ExecutionGraphException(
-                            "The execution attempt "
-                                    + taskExecutionState.getID()
-                                    + " was not found."));
+        try {
+            if (schedulerNG.updateTaskExecutionState(taskExecutionState)) {
+                return CompletableFuture.completedFuture(Acknowledge.get());
+            } else {
+                return FutureUtils.completedExceptionally(
+                        new ExecutionGraphException(
+                                "The execution attempt "
+                                        + taskExecutionState.getID()
+                                        + " was not found."));
+            }
+        } catch (Throwable throwable) {
+            // if the taskExecutionState contains an error, it does not make sense to let the RPC
+            // system notify the sender about the failure, because the sender is failed already and
+            // will ignore this error.
+            if (taskExecutionState.getError(userCodeLoader) != null) {
+                fatalErrorHandler.onFatalError(
+                        new RuntimeException(
+                                "Unexpected error while updating task execution state", throwable));
+            } else {
+                throw throwable;
+            }
+            return FutureUtils.completedExceptionally(throwable);
         }
     }
 

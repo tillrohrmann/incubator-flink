@@ -19,13 +19,13 @@
 package org.apache.flink.runtime.scheduler.stopwithsavepoint;
 
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
-import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.util.Preconditions;
 
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /**
  * {@code StopWithSavepointTerminationManager} fulfills the contract given by {@link
@@ -51,10 +51,10 @@ public class StopWithSavepointTerminationManager {
      *     operations run on.
      * @return A {@code CompletableFuture} containing the path to the created savepoint.
      */
-    public CompletableFuture<String> stopWithSavepoint(
+    public CompletableFuture<String> trackStopWithSavepoint(
             CompletableFuture<CompletedCheckpoint> completedSavepointFuture,
             CompletableFuture<Collection<ExecutionState>> terminatedExecutionStatesFuture,
-            ComponentMainThreadExecutor mainThreadExecutor) {
+            Executor mainThreadExecutor) {
         FutureUtils.assertNoException(
                 completedSavepointFuture
                         // the completedSavepointFuture could also be completed by

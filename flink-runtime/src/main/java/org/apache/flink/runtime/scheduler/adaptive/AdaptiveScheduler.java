@@ -151,7 +151,8 @@ public class AdaptiveScheduler
                 Executing.Context,
                 Restarting.Context,
                 Failing.Context,
-                Finished.Context {
+                Finished.Context,
+                StopWithSavepoint.Context {
 
     private static final Logger LOG = LoggerFactory.getLogger(AdaptiveScheduler.class);
 
@@ -509,12 +510,11 @@ public class AdaptiveScheduler
     }
 
     @Override
-    public CompletableFuture<String> stopWithSavepoint(String targetDirectory, boolean terminate) {
+    public CompletableFuture<String> stopWithSavepoint(
+            @Nullable String targetDirectory, boolean terminate) {
         return state.tryCall(
-                        StateWithExecutionGraph.class,
-                        stateWithExecutionGraph ->
-                                stateWithExecutionGraph.stopWithSavepoint(
-                                        targetDirectory, terminate),
+                        Executing.class,
+                        executing -> executing.stopWithSavepoint(targetDirectory, terminate),
                         "stopWithSavepoint")
                 .orElse(
                         FutureUtils.completedExceptionally(
@@ -798,6 +798,37 @@ public class AdaptiveScheduler
     }
 
     @Override
+    public CompletableFuture<String> goToStopWithSavepoint(
+            ExecutionGraph executionGraph,
+            ExecutionGraphHandler executionGraphHandler,
+            OperatorCoordinatorHandler operatorCoordinatorHandler,
+            String targetDirectory,
+            boolean advanceToEndOfEventTime) {
+
+        transitionToState(
+                new StopWithSavepoint.Factory(
+                        this,
+                        executionGraph,
+                        executionGraphHandler,
+                        operatorCoordinatorHandler,
+                        LOG,
+                        userCodeClassLoader,
+                        targetDirectory,
+                        advanceToEndOfEventTime));
+
+        Optional<StopWithSavepoint> maybeStopWithSavepoint = state.as(StopWithSavepoint.class);
+        if (maybeStopWithSavepoint.isPresent()) {
+            return maybeStopWithSavepoint.get().getOperationCompletionFuture();
+        } else {
+            final Throwable error =
+                    new IllegalStateException(
+                            "Scheduler not in StopWithSavepoint after transitioning to it");
+            fatalErrorHandler.onFatalError(error);
+            return FutureUtils.completedExceptionally(error);
+        }
+    }
+
+    @Override
     public void goToFinished(ArchivedExecutionGraph archivedExecutionGraph) {
         transitionToState(new Finished.Factory(this, archivedExecutionGraph, LOG));
     }
@@ -895,7 +926,7 @@ public class AdaptiveScheduler
     }
 
     @Override
-    public Executor getMainThreadExecutor() {
+    public ComponentMainThreadExecutor getMainThreadExecutor() {
         return componentMainThreadExecutor;
     }
 

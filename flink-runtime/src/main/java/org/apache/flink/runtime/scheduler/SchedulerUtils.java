@@ -28,10 +28,20 @@ import org.apache.flink.runtime.checkpoint.CompletedCheckpointStore;
 import org.apache.flink.runtime.checkpoint.DeactivatedCheckpointCompletedCheckpointStore;
 import org.apache.flink.runtime.checkpoint.DeactivatedCheckpointIDCounter;
 import org.apache.flink.runtime.client.JobExecutionException;
+import org.apache.flink.runtime.concurrent.FutureUtils;
+import org.apache.flink.runtime.execution.ExecutionState;
+import org.apache.flink.runtime.executiongraph.Execution;
+import org.apache.flink.runtime.executiongraph.ExecutionGraph;
 import org.apache.flink.runtime.executiongraph.DefaultExecutionGraphBuilder;
+import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 
 import org.slf4j.Logger;
+
+import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /** Utils class for Flink's scheduler implementations. */
 public final class SchedulerUtils {
@@ -111,5 +121,22 @@ public final class SchedulerUtils {
     private static CheckpointIDCounter createCheckpointIdCounter(
             CheckpointRecoveryFactory recoveryFactory, JobID jobId) throws Exception {
         return recoveryFactory.createCheckpointIDCounter(jobId);
+    }
+
+    /**
+     * Returns a {@code CompletableFuture} collecting the termination states of all {@link Execution
+     * Executions} of the given {@link ExecutionGraph}.
+     *
+     * @return a {@code CompletableFuture} that completes after all underlying {@code Executions}
+     *     have been terminated.
+     * @param executionGraph
+     */
+    public static CompletableFuture<Collection<ExecutionState>>
+            getCombinedExecutionTerminationFuture(ExecutionGraph executionGraph) {
+        return FutureUtils.combineAll(
+                StreamSupport.stream(executionGraph.getAllExecutionVertices().spliterator(), false)
+                        .map(ExecutionVertex::getCurrentExecutionAttempt)
+                        .map(Execution::getTerminalStateFuture)
+                        .collect(Collectors.toList()));
     }
 }

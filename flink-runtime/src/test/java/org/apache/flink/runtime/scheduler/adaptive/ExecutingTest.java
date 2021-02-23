@@ -419,6 +419,16 @@ public class ExecutingTest extends TestLogger {
         }
 
         @Override
+        public CompletableFuture<String> goToStopWithSavepoint(
+                ExecutionGraph executionGraph,
+                ExecutionGraphHandler executionGraphHandler,
+                OperatorCoordinatorHandler operatorCoordinatorHandler,
+                String targetDirectory,
+                boolean terminate) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void close() throws Exception {
             super.close();
             failingStateValidator.close();

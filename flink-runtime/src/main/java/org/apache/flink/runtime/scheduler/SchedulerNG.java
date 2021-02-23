@@ -45,6 +45,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
+import org.apache.flink.runtime.scheduler.adaptive.SchedulerFailureHandler;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
 import org.apache.flink.util.FlinkException;
@@ -64,7 +65,7 @@ import java.util.concurrent.CompletableFuture;
  * <p>Implementations can expect that methods will not be invoked concurrently. In fact, all
  * invocations will originate from a thread in the {@link ComponentMainThreadExecutor}.
  */
-public interface SchedulerNG {
+public interface SchedulerNG extends SchedulerFailureHandler {
 
     void startScheduling();
 
@@ -73,8 +74,6 @@ public interface SchedulerNG {
     void cancel();
 
     CompletableFuture<Void> getTerminationFuture();
-
-    void handleGlobalFailure(Throwable cause);
 
     default boolean updateTaskExecutionState(TaskExecutionState taskExecutionState) {
         return updateTaskExecutionState(new TaskExecutionStateTransition(taskExecutionState));

@@ -35,10 +35,10 @@ import org.apache.flink.runtime.checkpoint.CheckpointFailureReason;
 import org.apache.flink.runtime.checkpoint.CheckpointIDCounter;
 import org.apache.flink.runtime.checkpoint.CheckpointMetrics;
 import org.apache.flink.runtime.checkpoint.CheckpointRecoveryFactory;
-import org.apache.flink.runtime.checkpoint.CheckpointScheduling;
 import org.apache.flink.runtime.checkpoint.CheckpointsCleaner;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpointStore;
+import org.apache.flink.runtime.checkpoint.StopWithSavepointOperations;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
@@ -116,13 +116,12 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.Preconditions.checkState;
 
 /** Base class which can be used to implement {@link SchedulerNG}. */
-public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling {
+public abstract class SchedulerBase implements SchedulerNG, StopWithSavepointOperations {
 
     private final Logger log;
 
@@ -944,7 +943,7 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
 
     @Override
     public CompletableFuture<String> stopWithSavepoint(
-            final String targetDirectory, final boolean terminate) {
+            @Nullable final String targetDirectory, final boolean terminate) {
         mainThreadExecutor.assertRunningInMainThread();
 
         final CheckpointCoordinator checkpointCoordinator =
@@ -980,33 +979,26 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
         stopCheckpointScheduler();
 
         final CompletableFuture<Collection<ExecutionState>> executionTerminationsFuture =
-                getCombinedExecutionTerminationFuture();
+                SchedulerUtils.getCombinedExecutionTerminationFuture(executionGraph);
 
         final CompletableFuture<CompletedCheckpoint> savepointFuture =
-                checkpointCoordinator.triggerSynchronousSavepoint(terminate, targetDirectory);
+                triggerSynchronousSavepoint(terminate, targetDirectory);
 
         final StopWithSavepointTerminationManager stopWithSavepointTerminationManager =
                 new StopWithSavepointTerminationManager(
                         new StopWithSavepointTerminationHandlerImpl(
                                 jobGraph.getJobID(), this, log));
 
-        return stopWithSavepointTerminationManager.stopWithSavepoint(
+        return stopWithSavepointTerminationManager.trackStopWithSavepoint(
                 savepointFuture, executionTerminationsFuture, mainThreadExecutor);
     }
 
-    /**
-     * Returns a {@code CompletableFuture} collecting the termination states of all {@link Execution
-     * Executions} of the underlying {@link ExecutionGraph}.
-     *
-     * @return a {@code CompletableFuture} that completes after all underlying {@code Executions}
-     *     have been terminated.
-     */
-    private CompletableFuture<Collection<ExecutionState>> getCombinedExecutionTerminationFuture() {
-        return FutureUtils.combineAll(
-                StreamSupport.stream(executionGraph.getAllExecutionVertices().spliterator(), false)
-                        .map(ExecutionVertex::getCurrentExecutionAttempt)
-                        .map(Execution::getTerminalStateFuture)
-                        .collect(Collectors.toList()));
+    @Override
+    public CompletableFuture<CompletedCheckpoint> triggerSynchronousSavepoint(
+            boolean terminate, @Nullable String targetLocation) {
+        return executionGraph
+                .getCheckpointCoordinator()
+                .triggerSynchronousSavepoint(terminate, targetLocation);
     }
 
     // ------------------------------------------------------------------------

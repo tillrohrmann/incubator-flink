@@ -18,12 +18,11 @@
 
 package org.apache.flink.runtime.scheduler.stopwithsavepoint;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.runtime.checkpoint.CheckpointScheduling;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
+import org.apache.flink.runtime.checkpoint.StopWithSavepointOperations;
 import org.apache.flink.runtime.execution.ExecutionState;
-import org.apache.flink.runtime.scheduler.SchedulerNG;
+import org.apache.flink.runtime.scheduler.adaptive.SchedulerFailureHandler;
 import org.apache.flink.util.FlinkException;
 
 import org.apache.commons.lang3.StringUtils;
@@ -56,28 +55,28 @@ public class StopWithSavepointTerminationHandlerImpl
 
     private final Logger log;
 
-    private final SchedulerNG scheduler;
-    private final CheckpointScheduling checkpointScheduling;
+    private final SchedulerFailureHandler schedulerFailureHandler;
+    private final StopWithSavepointOperations stopWithSavepointOperations;
     private final JobID jobId;
 
     private final CompletableFuture<String> result = new CompletableFuture<>();
 
     private State state = new WaitingForSavepoint();
 
-    public <S extends SchedulerNG & CheckpointScheduling> StopWithSavepointTerminationHandlerImpl(
-            JobID jobId, S schedulerWithCheckpointing, Logger log) {
+    public <S extends SchedulerFailureHandler & StopWithSavepointOperations>
+            StopWithSavepointTerminationHandlerImpl(
+                    JobID jobId, S schedulerWithCheckpointing, Logger log) {
         this(jobId, schedulerWithCheckpointing, schedulerWithCheckpointing, log);
     }
 
-    @VisibleForTesting
-    StopWithSavepointTerminationHandlerImpl(
+    public StopWithSavepointTerminationHandlerImpl(
             JobID jobId,
-            SchedulerNG scheduler,
-            CheckpointScheduling checkpointScheduling,
+            SchedulerFailureHandler schedulerFailureHandler,
+            StopWithSavepointOperations stopWithSavepointOperations,
             Logger log) {
         this.jobId = checkNotNull(jobId);
-        this.scheduler = checkNotNull(scheduler);
-        this.checkpointScheduling = checkNotNull(checkpointScheduling);
+        this.schedulerFailureHandler = checkNotNull(schedulerFailureHandler);
+        this.stopWithSavepointOperations = checkNotNull(stopWithSavepointOperations);
         this.log = checkNotNull(log);
     }
 
@@ -179,7 +178,7 @@ public class StopWithSavepointTerminationHandlerImpl
                 jobId,
                 inconsistentFinalStateException);
 
-        scheduler.handleGlobalFailure(inconsistentFinalStateException);
+        schedulerFailureHandler.handleGlobalFailure(inconsistentFinalStateException);
 
         result.completeExceptionally(inconsistentFinalStateException);
     }
@@ -192,7 +191,7 @@ public class StopWithSavepointTerminationHandlerImpl
      * @param throwable the error that caused the exceptional termination.
      */
     private void terminateExceptionally(Throwable throwable) {
-        checkpointScheduling.startCheckpointScheduler();
+        stopWithSavepointOperations.startCheckpointScheduler();
         result.completeExceptionally(throwable);
     }
 
