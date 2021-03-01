@@ -66,7 +66,7 @@ stages:
     jobs:
       - template: tools/azure-pipelines/jobs-template.yml
         parameters: # see template file for a definition of the parameters.
-          stage_name: ci_build
+          stage_name: ci_build_default
           test_pool_definition:
             vmImage: 'ubuntu-16.04'
           e2e_pool_definition:
@@ -75,6 +75,17 @@ stages:
           run_end_to_end: false
           container: flink-build-container
           jdk: jdk8
+      - template: tools/azure-pipelines/jobs-template.yml
+        parameters: # see template file for a definition of the parameters.
+         stage_name: ci_build_adaptive
+         test_pool_definition:
+           vmImage: 'ubuntu-16.04'
+         e2e_pool_definition:
+           vmImage: 'ubuntu-16.04'
+         environment: PROFILE="-Dhadoop.version=2.8.3 -Dinclude_hadoop_aws -Dscala-2.11 -Penable-adaptive-scheduler"
+         run_end_to_end: false
+         container: flink-build-container
+         jdk: jdk8
       - job: docs_404_check # run on a MSFT provided machine
         pool:
           vmImage: 'ubuntu-16.04'
