@@ -19,9 +19,7 @@
 package org.apache.flink.runtime.scheduler.adaptive;
 
 import org.apache.flink.api.common.JobStatus;
-import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.runtime.JobException;
-import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
@@ -31,6 +29,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.TaskExecutionStateTransition;
 import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
+import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointOperationManager;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -38,6 +37,7 @@ import org.slf4j.Logger;
 import javax.annotation.Nullable;
 
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /** State which represents a running job with an {@link ExecutionGraph} and assigned slots. */
@@ -150,30 +150,15 @@ class Executing extends StateWithExecutionGraph implements ResourceConsumer {
     CompletableFuture<String> stopWithSavepoint(
             @Nullable final String targetDirectory, boolean terminate) {
         final ExecutionGraph executionGraph = getExecutionGraph();
-        final CheckpointCoordinator checkpointCoordinator =
-                executionGraph.getCheckpointCoordinator();
 
-        if (checkpointCoordinator == null) {
-            return FutureUtils.completedExceptionally(
-                    new IllegalStateException(
-                            String.format(
-                                    "Job %s is not a streaming job.", executionGraph.getJobID())));
-        }
-
-        if (targetDirectory == null
-                && !checkpointCoordinator.getCheckpointStorage().hasDefaultSavepointLocation()) {
-            getLogger()
-                    .info(
-                            "Trying to cancel job {} with savepoint, but no savepoint directory configured.",
-                            executionGraph.getJobID());
-
-            return FutureUtils.completedExceptionally(
-                    new IllegalStateException(
-                            "No savepoint directory configured. You can either specify a directory "
-                                    + "while cancelling via -s :targetDirectory or configure a cluster-wide "
-                                    + "default via key '"
-                                    + CheckpointingOptions.SAVEPOINT_DIRECTORY.key()
-                                    + "'."));
+        Optional<IllegalStateException> argumentCheckException =
+                StopWithSavepointOperationManager.checkStopWithSavepointPreconditions(
+                        executionGraph.getCheckpointCoordinator(),
+                        targetDirectory,
+                        executionGraph.getJobID(),
+                        getLogger());
+        if (argumentCheckException.isPresent()) {
+            return FutureUtils.completedExceptionally(argumentCheckException.get());
         }
 
         getLogger().info("Triggering stop-with-savepoint for job {}.", executionGraph.getJobID());
@@ -255,7 +240,7 @@ class Executing extends StateWithExecutionGraph implements ResourceConsumer {
                 ExecutionGraph executionGraph,
                 ExecutionGraphHandler executionGraphHandler,
                 OperatorCoordinatorHandler operatorCoordinatorHandler,
-                String targetDirectory,
+                @Nullable String targetDirectory,
                 boolean terminate);
     }
 

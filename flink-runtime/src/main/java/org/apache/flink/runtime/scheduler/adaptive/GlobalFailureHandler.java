@@ -18,8 +18,8 @@
 
 package org.apache.flink.runtime.scheduler.adaptive;
 
-/** Interface for schedulers to notify them about global failures. */
-public interface SchedulerFailureHandler {
-    /** Notify scheduler about a global failure. */
+/** Interface for notifying components about global failures. */
+public interface GlobalFailureHandler {
+    /** Notify component about a global failure. */
     void handleGlobalFailure(Throwable cause);
 }

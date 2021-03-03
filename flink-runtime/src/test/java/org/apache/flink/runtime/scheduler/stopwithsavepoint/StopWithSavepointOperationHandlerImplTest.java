@@ -50,21 +50,21 @@ import static org.junit.Assert.fail;
 
 /**
  * {@code StopWithSavepointTerminationHandlerImplTest} tests {@link
- * StopWithSavepointTerminationHandlerImpl}.
+ * StopWithSavepointOperationHandlerImpl}.
  */
-public class StopWithSavepointTerminationHandlerImplTest extends TestLogger {
+public class StopWithSavepointOperationHandlerImplTest extends TestLogger {
 
     private static final JobID JOB_ID = new JobID();
 
     private final TestingStopWithSavepointOperations checkpointScheduling =
             new TestingStopWithSavepointOperations(false);
 
-    private StopWithSavepointTerminationHandlerImpl createTestInstanceFailingOnGlobalFailOver() {
+    private StopWithSavepointOperationHandlerImpl createTestInstanceFailingOnGlobalFailOver() {
         return createTestInstance(
                 throwableCausingGlobalFailOver -> fail("No global failover should be triggered."));
     }
 
-    private StopWithSavepointTerminationHandlerImpl createTestInstance(
+    private StopWithSavepointOperationHandlerImpl createTestInstance(
             Consumer<Throwable> handleGlobalFailureConsumer) {
         // checkpointing should be always stopped before initiating stop-with-savepoint
         checkpointScheduling.stopCheckpointScheduler();
@@ -73,13 +73,13 @@ public class StopWithSavepointTerminationHandlerImplTest extends TestLogger {
                 TestingSchedulerNG.newBuilder()
                         .setHandleGlobalFailureConsumer(handleGlobalFailureConsumer)
                         .build();
-        return new StopWithSavepointTerminationHandlerImpl(
+        return new StopWithSavepointOperationHandlerImpl(
                 JOB_ID, scheduler, checkpointScheduling, log);
     }
 
     @Test
     public void testHappyPath() throws ExecutionException, InterruptedException {
-        final StopWithSavepointTerminationHandlerImpl testInstance =
+        final StopWithSavepointOperationHandlerImpl testInstance =
                 createTestInstanceFailingOnGlobalFailOver();
 
         final EmptyStreamStateHandle streamStateHandle = new EmptyStreamStateHandle();
@@ -122,7 +122,7 @@ public class StopWithSavepointTerminationHandlerImplTest extends TestLogger {
 
     public void assertSavepointCreationFailure(
             Consumer<StopWithSavepointTerminationHandler> handleExecutionsTermination) {
-        final StopWithSavepointTerminationHandlerImpl testInstance =
+        final StopWithSavepointOperationHandlerImpl testInstance =
                 createTestInstanceFailingOnGlobalFailOver();
 
         final String expectedErrorMessage = "Expected exception during savepoint creation.";
@@ -147,7 +147,7 @@ public class StopWithSavepointTerminationHandlerImplTest extends TestLogger {
     @Test
     public void testFailedTerminationHandling() throws ExecutionException, InterruptedException {
         final CompletableFuture<Throwable> globalFailOverTriggered = new CompletableFuture<>();
-        final StopWithSavepointTerminationHandlerImpl testInstance =
+        final StopWithSavepointOperationHandlerImpl testInstance =
                 createTestInstance(globalFailOverTriggered::complete);
 
         final ExecutionState expectedNonFinishedState = ExecutionState.FAILED;

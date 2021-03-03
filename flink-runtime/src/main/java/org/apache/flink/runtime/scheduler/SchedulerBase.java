@@ -83,8 +83,8 @@ import org.apache.flink.runtime.operators.coordination.OperatorCoordinatorHolder
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.query.KvStateLocation;
 import org.apache.flink.runtime.query.UnknownKvStateLocation;
-import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointTerminationHandlerImpl;
-import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointTerminationManager;
+import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointOperationHandlerImpl;
+import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointOperationManager;
 import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.scheduler.strategy.SchedulingExecutionVertex;
 import org.apache.flink.runtime.scheduler.strategy.SchedulingTopology;
@@ -949,48 +949,25 @@ public abstract class SchedulerBase implements SchedulerNG, StopWithSavepointOpe
         final CheckpointCoordinator checkpointCoordinator =
                 executionGraph.getCheckpointCoordinator();
 
-        if (checkpointCoordinator == null) {
-            return FutureUtils.completedExceptionally(
-                    new IllegalStateException(
-                            String.format("Job %s is not a streaming job.", jobGraph.getJobID())));
-        }
-
-        if (targetDirectory == null
-                && !checkpointCoordinator.getCheckpointStorage().hasDefaultSavepointLocation()) {
-            log.info(
-                    "Trying to cancel job {} with savepoint, but no savepoint directory configured.",
-                    jobGraph.getJobID());
-
-            return FutureUtils.completedExceptionally(
-                    new IllegalStateException(
-                            "No savepoint directory configured. You can either specify a directory "
-                                    + "while cancelling via -s :targetDirectory or configure a cluster-wide "
-                                    + "default via key '"
-                                    + CheckpointingOptions.SAVEPOINT_DIRECTORY.key()
-                                    + "'."));
+        Optional<IllegalStateException> argumentCheckException =
+                StopWithSavepointOperationManager.checkStopWithSavepointPreconditions(
+                        checkpointCoordinator, targetDirectory, executionGraph.getJobID(), log);
+        if (argumentCheckException.isPresent()) {
+            return FutureUtils.completedExceptionally(argumentCheckException.get());
         }
 
         log.info("Triggering stop-with-savepoint for job {}.", jobGraph.getJobID());
 
-        // we stop the checkpoint coordinator so that we are guaranteed
-        // to have only the data of the synchronous savepoint committed.
-        // in case of failure, and if the job restarts, the coordinator
-        // will be restarted by the CheckpointCoordinatorDeActivator.
-        stopCheckpointScheduler();
-
         final CompletableFuture<Collection<ExecutionState>> executionTerminationsFuture =
                 SchedulerUtils.getCombinedExecutionTerminationFuture(executionGraph);
 
-        final CompletableFuture<CompletedCheckpoint> savepointFuture =
-                triggerSynchronousSavepoint(terminate, targetDirectory);
+        final StopWithSavepointOperationManager stopWithSavepointOperationManager =
+                new StopWithSavepointOperationManager(
+                        this,
+                        new StopWithSavepointOperationHandlerImpl(jobGraph.getJobID(), this, log));
 
-        final StopWithSavepointTerminationManager stopWithSavepointTerminationManager =
-                new StopWithSavepointTerminationManager(
-                        new StopWithSavepointTerminationHandlerImpl(
-                                jobGraph.getJobID(), this, log));
-
-        return stopWithSavepointTerminationManager.trackStopWithSavepoint(
-                savepointFuture, executionTerminationsFuture, mainThreadExecutor);
+        return stopWithSavepointOperationManager.trackStopWithSavepoint(
+                terminate, targetDirectory, executionTerminationsFuture, mainThreadExecutor);
     }
 
     @Override

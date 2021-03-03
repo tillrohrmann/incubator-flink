@@ -38,7 +38,6 @@ import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.configuration.UnmodifiableConfiguration;
 import org.apache.flink.core.testutils.OneShotLatch;
 import org.apache.flink.runtime.checkpoint.CheckpointException;
-import org.apache.flink.runtime.checkpoint.CheckpointFailureReason;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
@@ -119,12 +118,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.concurrent.CompletableFuture.allOf;
-import static org.apache.flink.configuration.ClusterOptions.isAdaptiveSchedulerEnabled;
 import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
 import static org.apache.flink.runtime.checkpoint.CheckpointFailureReason.CHECKPOINT_COORDINATOR_SHUTDOWN;
 import static org.apache.flink.test.util.TestUtils.submitJobAndWaitForResult;
-import static org.hamcrest.CoreMatchers.either;
-import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
@@ -588,22 +584,16 @@ public class SavepointITCase extends TestLogger {
 
     private static BiConsumer<JobID, ExecutionException> assertAfterSnapshotCreationFailure() {
         return (jobId, actualException) -> {
-            if (isAdaptiveSchedulerEnabled(new Configuration())) {
-                assertThat(
-                        actualException, containsMessage("Failure while stopping with savepoint"));
-            } else {
+            Optional<FlinkException> actualFlinkException =
+                    ExceptionUtils.findThrowable(actualException, FlinkException.class);
+            assertTrue(actualFlinkException.isPresent());
 
-                Optional<FlinkException> actualFlinkException =
-                        ExceptionUtils.findThrowable(actualException, FlinkException.class);
-                assertTrue(actualFlinkException.isPresent());
-
-                assertThat(
-                        actualFlinkException.get(),
-                        containsMessage(
-                                String.format(
-                                        "Inconsistent execution state after stopping with savepoint. At least one execution is still in one of the following states: FAILED. A global fail-over is triggered to recover the job %s.",
-                                        jobId)));
-            }
+            assertThat(
+                    actualFlinkException.get(),
+                    containsMessage(
+                            String.format(
+                                    "A global fail-over is triggered to recover the job %s.",
+                                    jobId)));
         };
     }
 
@@ -612,10 +602,6 @@ public class SavepointITCase extends TestLogger {
             Optional<CheckpointException> actualFailureCause =
                     ExceptionUtils.findThrowable(actualException, CheckpointException.class);
             assertTrue(actualFailureCause.isPresent());
-            assertThat(
-                    actualFailureCause.get().getCheckpointFailureReason(),
-                    either(is(CheckpointFailureReason.JOB_FAILOVER_REGION))
-                            .or(is(CheckpointFailureReason.CHECKPOINT_DECLINED)));
         };
     }
 

@@ -30,9 +30,9 @@ import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
 import org.apache.flink.runtime.scheduler.SchedulerBase;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
-import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointTerminationHandlerImpl;
-import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointTerminationManager;
-import org.apache.flink.util.FlinkException;
+import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointOperationHandlerImpl;
+import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointOperationManager;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 
@@ -46,12 +46,9 @@ import java.util.concurrent.CompletableFuture;
  * When a "stop with savepoint" operation (wait until savepoint has been created, then cancel job)
  * is triggered on the {@link Executing} state, we transition into this state. This state is
  * delegating the tracking of the stop with savepoint operation to the {@link
- * StopWithSavepointTerminationManager}, which is shared with {@link SchedulerBase}. What remains
- * for this state is reacting to signals from the termination manager, and tracking the
- * "operationCompletionFuture" (notify the user if we got cancelled, suspended etc. in the meantime)
+ * StopWithSavepointOperationManager}, which is shared with {@link SchedulerBase}.
  */
-public class StopWithSavepoint extends StateWithExecutionGraph
-        implements StopWithSavepointOperations {
+class StopWithSavepoint extends StateWithExecutionGraph implements StopWithSavepointOperations {
 
     private final CompletableFuture<String> operationCompletionFuture;
     private final Context context;
@@ -64,7 +61,7 @@ public class StopWithSavepoint extends StateWithExecutionGraph
             OperatorCoordinatorHandler operatorCoordinatorHandler,
             Logger logger,
             ClassLoader userCodeClassLoader,
-            String targetDirectory,
+            @Nullable String targetDirectory,
             boolean terminate) {
         super(context, executionGraph, executionGraphHandler, operatorCoordinatorHandler, logger);
         this.context = context;
@@ -75,30 +72,24 @@ public class StopWithSavepoint extends StateWithExecutionGraph
         final CompletableFuture<Collection<ExecutionState>> executionTerminationsFuture =
                 SchedulerUtils.getCombinedExecutionTerminationFuture(executionGraph);
 
-        // do not trigger checkpoints while creating the final savepoint
-        stopCheckpointScheduler();
-
-        // trigger savepoint. This operation will also terminate/suspend the job once the savepoint
-        // has been created.
-        final CompletableFuture<CompletedCheckpoint> savepointFuture =
-                triggerSynchronousSavepoint(terminate, targetDirectory);
-
-        final StopWithSavepointTerminationManager stopWithSavepointTerminationManager =
-                new StopWithSavepointTerminationManager(
-                        new StopWithSavepointTerminationHandlerImpl(
+        final StopWithSavepointOperationManager stopWithSavepointOperationManager =
+                new StopWithSavepointOperationManager(
+                        this,
+                        new StopWithSavepointOperationHandlerImpl(
                                 executionGraph.getJobID(), context, this, logger));
 
         this.operationCompletionFuture =
-                stopWithSavepointTerminationManager.trackStopWithSavepoint(
-                        savepointFuture,
+                stopWithSavepointOperationManager.trackStopWithSavepoint(
+                        terminate,
+                        targetDirectory,
                         executionTerminationsFuture,
                         context.getMainThreadExecutor());
     }
 
     @Override
     public void cancel() {
-        // the canceling state will cancel the execution graph, which will eventually lead to a call
-        // of handleAnyFailure(), completing the operationCompletionFuture.
+        // the canceling state will cancel the execution graph, which will fail the stop with
+        // savepoint operation.
         context.goToCanceling(
                 getExecutionGraph(), getExecutionGraphHandler(), getOperatorCoordinatorHandler());
     }
@@ -113,6 +104,10 @@ public class StopWithSavepoint extends StateWithExecutionGraph
         handleAnyFailure(cause);
     }
 
+    /**
+     * The {@code executionTerminationsFuture} will complete if a task reached a terminal state, and
+     * {@link StopWithSavepointOperationManager} will act accordingly.
+     */
     @Override
     boolean updateTaskExecutionState(TaskExecutionStateTransition taskExecutionStateTransition) {
         final boolean successfulUpdate =
@@ -134,12 +129,9 @@ public class StopWithSavepoint extends StateWithExecutionGraph
     }
 
     private void handleAnyFailure(Throwable cause) {
-        operationCompletionFuture.completeExceptionally(
-                new FlinkException("Failure while stopping with savepoint", cause));
         final Executing.FailureResult failureResult = context.howToHandleFailure(cause);
 
         if (failureResult.canRestart()) {
-            startCheckpointScheduler();
             context.goToRestarting(
                     getExecutionGraph(),
                     getExecutionGraphHandler(),
@@ -191,12 +183,15 @@ public class StopWithSavepoint extends StateWithExecutionGraph
     @Override
     public CompletableFuture<CompletedCheckpoint> triggerSynchronousSavepoint(
             boolean terminate, @Nullable String targetLocation) {
+        Preconditions.checkNotNull(
+                getExecutionGraph().getCheckpointCoordinator(),
+                "Checkpoint coordinator must be set for this operation. Is this a streaming job?");
         return getExecutionGraph()
                 .getCheckpointCoordinator()
                 .triggerSynchronousSavepoint(terminate, targetLocation);
     }
 
-    interface Context extends StateWithExecutionGraph.Context, SchedulerFailureHandler {
+    interface Context extends StateWithExecutionGraph.Context, GlobalFailureHandler {
         /**
          * Asks how to handle the failure.
          *
@@ -264,18 +259,18 @@ public class StopWithSavepoint extends StateWithExecutionGraph
 
         private final ClassLoader userCodeClassLoader;
 
-        private final String targetDirectory;
+        @Nullable private final String targetDirectory;
 
         private final boolean terminate;
 
-        public Factory(
+        Factory(
                 Context context,
                 ExecutionGraph executionGraph,
                 ExecutionGraphHandler executionGraphHandler,
                 OperatorCoordinatorHandler operatorCoordinatorHandler,
                 Logger logger,
                 ClassLoader userCodeClassLoader,
-                String targetDirectory,
+                @Nullable String targetDirectory,
                 boolean terminate) {
             this.context = context;
             this.executionGraph = executionGraph;

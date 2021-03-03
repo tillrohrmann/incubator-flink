@@ -129,7 +129,6 @@ public final class SchedulerUtils {
      *
      * @return a {@code CompletableFuture} that completes after all underlying {@code Executions}
      *     have been terminated.
-     * @param executionGraph
      */
     public static CompletableFuture<Collection<ExecutionState>>
             getCombinedExecutionTerminationFuture(ExecutionGraph executionGraph) {

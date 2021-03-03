@@ -18,12 +18,21 @@
 
 package org.apache.flink.runtime.scheduler.stopwithsavepoint;
 
+import org.apache.flink.api.common.JobID;
+import org.apache.flink.configuration.CheckpointingOptions;
+import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
+import org.apache.flink.runtime.checkpoint.StopWithSavepointOperations;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.util.Preconditions;
 
+import org.slf4j.Logger;
+
+import javax.annotation.Nullable;
+
 import java.util.Collection;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
@@ -31,12 +40,15 @@ import java.util.concurrent.Executor;
  * {@code StopWithSavepointTerminationManager} fulfills the contract given by {@link
  * StopWithSavepointTerminationHandler} to run the stop-with-savepoint steps in a specific order.
  */
-public class StopWithSavepointTerminationManager {
+public class StopWithSavepointOperationManager {
 
     private final StopWithSavepointTerminationHandler stopWithSavepointTerminationHandler;
+    private final StopWithSavepointOperations stopWithSavepointOperations;
 
-    public StopWithSavepointTerminationManager(
+    public StopWithSavepointOperationManager(
+            StopWithSavepointOperations stopWithSavepointOperations,
             StopWithSavepointTerminationHandler stopWithSavepointTerminationHandler) {
+        this.stopWithSavepointOperations = stopWithSavepointOperations;
         this.stopWithSavepointTerminationHandler =
                 Preconditions.checkNotNull(stopWithSavepointTerminationHandler);
     }
@@ -45,18 +57,28 @@ public class StopWithSavepointTerminationManager {
      * Enforces the correct completion order of the passed {@code CompletableFuture} instances in
      * accordance to the contract of {@link StopWithSavepointTerminationHandler}.
      *
-     * @param completedSavepointFuture The {@code CompletableFuture} of the savepoint creation step.
+     * @param terminate Flag indicating whether to terminate or suspend the job.
+     * @param targetDirectory Target for the savepoint.
      * @param terminatedExecutionStatesFuture The {@code CompletableFuture} of the termination step.
      * @param mainThreadExecutor The executor the {@code StopWithSavepointTerminationHandler}
      *     operations run on.
      * @return A {@code CompletableFuture} containing the path to the created savepoint.
      */
     public CompletableFuture<String> trackStopWithSavepoint(
-            CompletableFuture<CompletedCheckpoint> completedSavepointFuture,
+            boolean terminate,
+            @Nullable String targetDirectory,
             CompletableFuture<Collection<ExecutionState>> terminatedExecutionStatesFuture,
             Executor mainThreadExecutor) {
+
+        // do not trigger checkpoints while creating the final savepoint
+        stopWithSavepointOperations.stopCheckpointScheduler();
+
+        // trigger savepoint. This operation will also terminate/suspend the job once the savepoint
+        // has been created.
+        final CompletableFuture<CompletedCheckpoint> savepointFuture =
+                stopWithSavepointOperations.triggerSynchronousSavepoint(terminate, targetDirectory);
         FutureUtils.assertNoException(
-                completedSavepointFuture
+                savepointFuture
                         // the completedSavepointFuture could also be completed by
                         // CheckpointCanceller which doesn't run in the mainThreadExecutor
                         .handleAsync(
@@ -78,5 +100,33 @@ public class StopWithSavepointTerminationManager {
                                                         mainThreadExecutor))));
 
         return stopWithSavepointTerminationHandler.getSavepointPath();
+    }
+
+    public static Optional<IllegalStateException> checkStopWithSavepointPreconditions(
+            CheckpointCoordinator checkpointCoordinator,
+            @Nullable String targetDirectory,
+            JobID jobId,
+            Logger logger) {
+        if (checkpointCoordinator == null) {
+            return Optional.of(
+                    new IllegalStateException(
+                            String.format("Job %s is not a streaming job.", jobId)));
+        }
+
+        if (targetDirectory == null
+                && !checkpointCoordinator.getCheckpointStorage().hasDefaultSavepointLocation()) {
+            logger.info(
+                    "Trying to cancel job {} with savepoint, but no savepoint directory configured.",
+                    jobId);
+
+            return Optional.of(
+                    new IllegalStateException(
+                            "No savepoint directory configured. You can either specify a directory "
+                                    + "while cancelling via -s :targetDirectory or configure a cluster-wide "
+                                    + "default via key '"
+                                    + CheckpointingOptions.SAVEPOINT_DIRECTORY.key()
+                                    + "'."));
+        }
+        return Optional.empty();
     }
 }

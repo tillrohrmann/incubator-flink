@@ -28,6 +28,7 @@ import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.runtime.checkpoint.CheckpointException;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.runtime.testutils.CommonTestUtils;
@@ -59,6 +60,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
@@ -89,14 +91,14 @@ public class AdaptiveSchedulerITCase extends TestLogger {
     public static final MiniClusterResource MINI_CLUSTER_WITH_CLIENT_RESOURCE =
             new MiniClusterWithClientResource(
                     new MiniClusterResourceConfiguration.Builder()
-                            .setConfiguration(getConfiguration())
+                            .setConfiguration(configuration)
                             .setNumberTaskManagers(NUMBER_TASK_MANAGERS)
                             .setNumberSlotsPerTaskManager(NUMBER_SLOTS_PER_TASK_MANAGER)
                             .build());
 
     @Before
-    public void ensureDeclarativeResourceManagement() {
-        assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
+    public void ensureAdaptiveSchedulerEnabled() {
+        assumeTrue(ClusterOptions.isAdaptiveSchedulerEnabled(configuration));
     }
 
     @After
@@ -159,7 +161,7 @@ public class AdaptiveSchedulerITCase extends TestLogger {
                     .get();
             fail("Expect exception");
         } catch (ExecutionException e) {
-            assertThat(e.getMessage(), containsString("Failure while stopping with savepoint"));
+            assertThat(e, containsCause(CheckpointException.class));
         }
         // expect job to run again (maybe restart)
         CommonTestUtils.waitUntilCondition(
@@ -183,7 +185,7 @@ public class AdaptiveSchedulerITCase extends TestLogger {
                     .get();
             fail("Expect exception");
         } catch (ExecutionException e) {
-            assertThat(e.getMessage(), containsString("Failure while stopping with savepoint"));
+            assertThat(e, containsCause(FlinkException.class));
         }
         // expect job to run again (maybe restart)
         CommonTestUtils.waitUntilCondition(
@@ -193,8 +195,6 @@ public class AdaptiveSchedulerITCase extends TestLogger {
 
     @Test
     public void testStopWithSavepointFailOnFirstSavepointSucceedOnSecond() throws Exception {
-        assumeTrue(ClusterOptions.isDeclarativeResourceManagementEnabled(configuration));
-
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setRestartStrategy(RestartStrategies.fixedDelayRestart(1, 0L));
 
@@ -213,7 +213,7 @@ public class AdaptiveSchedulerITCase extends TestLogger {
             client.stopWithSavepoint(false, savepointDirectory.getAbsolutePath()).get();
             fail("Expect failure of operation");
         } catch (ExecutionException e) {
-            assertThat(e.getMessage(), containsString("Failure while stopping with savepoint"));
+            assertThat(e, containsCause(CheckpointException.class));
         }
 
         // trigger second savepoint
@@ -235,7 +235,7 @@ public class AdaptiveSchedulerITCase extends TestLogger {
             implements CheckpointedFunction, CheckpointListener {
         private final StopWithSavepointTestBehavior behavior;
         private volatile boolean running = true;
-        private static CountDownLatch instancesRunning;
+        private static volatile CountDownLatch instancesRunning;
         private volatile boolean checkpointComplete = false;
 
         public DummySource(StopWithSavepointTestBehavior behavior) {
@@ -258,7 +258,9 @@ public class AdaptiveSchedulerITCase extends TestLogger {
             int i = Integer.MIN_VALUE;
             while (running) {
                 Thread.sleep(10L);
-                ctx.collect(i++);
+                synchronized (ctx.getCheckpointLock()) {
+                    ctx.collect(i++);
+                }
             }
         }
 

@@ -802,7 +802,7 @@ public class AdaptiveScheduler
             ExecutionGraph executionGraph,
             ExecutionGraphHandler executionGraphHandler,
             OperatorCoordinatorHandler operatorCoordinatorHandler,
-            String targetDirectory,
+            @Nullable String targetDirectory,
             boolean advanceToEndOfEventTime) {
 
         transitionToState(
@@ -926,7 +926,7 @@ public class AdaptiveScheduler
     }
 
     @Override
-    public ComponentMainThreadExecutor getMainThreadExecutor() {
+    public Executor getMainThreadExecutor() {
         return componentMainThreadExecutor;
     }
 

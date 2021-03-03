@@ -22,7 +22,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
 import org.apache.flink.runtime.checkpoint.StopWithSavepointOperations;
 import org.apache.flink.runtime.execution.ExecutionState;
-import org.apache.flink.runtime.scheduler.adaptive.SchedulerFailureHandler;
+import org.apache.flink.runtime.scheduler.adaptive.GlobalFailureHandler;
 import org.apache.flink.util.FlinkException;
 
 import org.apache.commons.lang3.StringUtils;
@@ -48,14 +48,13 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * <p>The implementation expects the savepoint creation being completed before the executions
  * terminate.
  *
- * @see StopWithSavepointTerminationManager
+ * @see StopWithSavepointOperationManager
  */
-public class StopWithSavepointTerminationHandlerImpl
-        implements StopWithSavepointTerminationHandler {
+public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointTerminationHandler {
 
     private final Logger log;
 
-    private final SchedulerFailureHandler schedulerFailureHandler;
+    private final GlobalFailureHandler globalFailureHandler;
     private final StopWithSavepointOperations stopWithSavepointOperations;
     private final JobID jobId;
 
@@ -63,19 +62,19 @@ public class StopWithSavepointTerminationHandlerImpl
 
     private State state = new WaitingForSavepoint();
 
-    public <S extends SchedulerFailureHandler & StopWithSavepointOperations>
-            StopWithSavepointTerminationHandlerImpl(
+    public <S extends GlobalFailureHandler & StopWithSavepointOperations>
+            StopWithSavepointOperationHandlerImpl(
                     JobID jobId, S schedulerWithCheckpointing, Logger log) {
         this(jobId, schedulerWithCheckpointing, schedulerWithCheckpointing, log);
     }
 
-    public StopWithSavepointTerminationHandlerImpl(
+    public StopWithSavepointOperationHandlerImpl(
             JobID jobId,
-            SchedulerFailureHandler schedulerFailureHandler,
+            GlobalFailureHandler globalFailureHandler,
             StopWithSavepointOperations stopWithSavepointOperations,
             Logger log) {
         this.jobId = checkNotNull(jobId);
-        this.schedulerFailureHandler = checkNotNull(schedulerFailureHandler);
+        this.globalFailureHandler = checkNotNull(globalFailureHandler);
         this.stopWithSavepointOperations = checkNotNull(stopWithSavepointOperations);
         this.log = checkNotNull(log);
     }
@@ -178,7 +177,7 @@ public class StopWithSavepointTerminationHandlerImpl
                 jobId,
                 inconsistentFinalStateException);
 
-        schedulerFailureHandler.handleGlobalFailure(inconsistentFinalStateException);
+        globalFailureHandler.handleGlobalFailure(inconsistentFinalStateException);
 
         result.completeExceptionally(inconsistentFinalStateException);
     }
