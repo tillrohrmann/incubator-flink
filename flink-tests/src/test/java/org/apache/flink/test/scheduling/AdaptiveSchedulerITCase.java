@@ -57,8 +57,10 @@ import javax.annotation.Nullable;
 import java.io.File;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -216,11 +218,20 @@ public class AdaptiveSchedulerITCase extends TestLogger {
             assertThat(e, containsCause(CheckpointException.class));
         }
 
-        // ensure no files have been created
-        assertThat(savepointDirectory.listFiles().length, is(0));
+        DummySource.awaitRunning();
+
+        // ensure failed savepoint files have been removed by now (this check is intentionally after
+        // the wait for the sources to be running again, due to instabilities observed)
+        File[] files = savepointDirectory.listFiles();
+        if (files.length > 0) {
+            fail(
+                    "Found unexpected files: "
+                            + Arrays.stream(files)
+                                    .map(File::getAbsolutePath)
+                                    .collect(Collectors.joining(", ")));
+        }
 
         // trigger second savepoint
-        DummySource.awaitRunning();
         final String savepoint =
                 client.stopWithSavepoint(false, savepointDirectory.getAbsolutePath()).get();
         assertThat(savepoint, containsString(savepointDirectory.getAbsolutePath()));

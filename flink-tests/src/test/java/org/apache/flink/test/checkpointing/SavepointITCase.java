@@ -32,7 +32,6 @@ import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.client.program.ClusterClient;
 import org.apache.flink.configuration.CheckpointingOptions;
-import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.configuration.TaskManagerOptions;
@@ -119,7 +118,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.concurrent.CompletableFuture.allOf;
-import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
 import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
 import static org.apache.flink.runtime.checkpoint.CheckpointFailureReason.CHECKPOINT_COORDINATOR_SHUTDOWN;
 import static org.apache.flink.test.util.TestUtils.submitJobAndWaitForResult;
@@ -559,7 +557,6 @@ public class SavepointITCase extends TestLogger {
     }
 
     @Test
-    @Category(FailsWithAdaptiveScheduler.class) // FLINK-21333
     public void testStopWithSavepointFailingInSnapshotCreation() throws Exception {
         testStopWithFailingSourceInOnePipeline(
                 new SnapshotFailingInfiniteTestSource(),
@@ -572,7 +569,6 @@ public class SavepointITCase extends TestLogger {
     }
 
     @Test
-    @Category(FailsWithAdaptiveScheduler.class) // FLINK-21333
     public void testStopWithSavepointFailingAfterSnapshotCreation() throws Exception {
         testStopWithFailingSourceInOnePipeline(
                 new CancelFailingInfiniteTestSource(),
@@ -586,24 +582,16 @@ public class SavepointITCase extends TestLogger {
 
     private static BiConsumer<JobID, ExecutionException> assertAfterSnapshotCreationFailure() {
         return (jobId, actualException) -> {
-            if (ClusterOptions.isAdaptiveSchedulerEnabled(new Configuration())) {
-                // Adaptive Scheduler is cancelling the stop with savepoint operation on the
-                // incoming "update task execution state" call, not on the completion of the
-                // Execution state transition futures, that's why we have a different exception type
-                // here.
-                assertThat(actualException, containsCause(CheckpointException.class));
-            } else {
-                Optional<FlinkException> actualFlinkException =
-                        ExceptionUtils.findThrowable(actualException, FlinkException.class);
-                assertTrue(actualFlinkException.isPresent());
+            Optional<FlinkException> actualFlinkException =
+                    ExceptionUtils.findThrowable(actualException, FlinkException.class);
+            assertTrue(actualFlinkException.isPresent());
 
-                assertThat(
-                        actualFlinkException.get(),
-                        containsMessage(
-                                String.format(
-                                        "A global fail-over is triggered to recover the job %s.",
-                                        jobId)));
-            }
+            assertThat(
+                    actualFlinkException.get(),
+                    containsMessage(
+                            String.format(
+                                    "A global fail-over is triggered to recover the job %s.",
+                                    jobId)));
         };
     }
 
