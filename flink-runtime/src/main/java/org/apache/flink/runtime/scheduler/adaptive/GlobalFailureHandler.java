@@ -20,6 +20,10 @@ package org.apache.flink.runtime.scheduler.adaptive;
 
 /** Interface for notifying components about global failures. */
 public interface GlobalFailureHandler {
-    /** Notify component about a global failure. */
+    /**
+     * Notify component about a global failure.
+     *
+     * @param cause Cause of the failure
+     */
     void handleGlobalFailure(Throwable cause);
 }

@@ -41,9 +41,9 @@ import java.util.function.BiConsumer;
 import static org.junit.Assert.assertThat;
 
 /**
- * {@code StopWithSavepointTerminationManagerTest} tests that {@link
+ * {@code StopWithSavepointOperationManagerTest} tests that {@link
  * StopWithSavepointOperationManager} applies the correct order expected by {@link
- * StopWithSavepointTerminationHandler} regardless of the completion of the provided {@code
+ * StopWithSavepointOperationHandler} regardless of the completion of the provided {@code
  * CompletableFutures}.
  */
 public class StopWithSavepointOperationManagerTest extends TestLogger {
@@ -76,8 +76,8 @@ public class StopWithSavepointOperationManagerTest extends TestLogger {
 
         final TestingStopWithSavepointOperations testingStopWithSavepointOperations =
                 new TestingStopWithSavepointOperations(completedSavepointFuture);
-        final TestingStopWithSavepointTerminationHandler stopWithSavepointTerminationHandler =
-                new TestingStopWithSavepointTerminationHandler();
+        final TestingStopWithSavepointOperationHandler stopWithSavepointTerminationHandler =
+                new TestingStopWithSavepointOperationHandler();
         new StopWithSavepointOperationManager(
                         testingStopWithSavepointOperations, stopWithSavepointTerminationHandler)
                 .trackStopWithSavepoint(
@@ -97,11 +97,12 @@ public class StopWithSavepointOperationManagerTest extends TestLogger {
 
     private enum MethodCall {
         SavepointCreationTermination,
+        AbortOperation,
         ExecutionTermination
     }
 
-    private static class TestingStopWithSavepointTerminationHandler
-            implements StopWithSavepointTerminationHandler {
+    private static class TestingStopWithSavepointOperationHandler
+            implements StopWithSavepointOperationHandler {
 
         private final List<MethodCall> methodCalls = new ArrayList<>(2);
 
@@ -121,6 +122,11 @@ public class StopWithSavepointOperationManagerTest extends TestLogger {
         public void handleExecutionsTermination(
                 Collection<ExecutionState> terminatedExecutionStates) {
             methodCalls.add(MethodCall.ExecutionTermination);
+        }
+
+        @Override
+        public void abortOperation(Throwable cause) {
+            methodCalls.add(MethodCall.AbortOperation);
         }
 
         public List<MethodCall> getActualMethodCallOrder() {

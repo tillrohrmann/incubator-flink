@@ -27,15 +27,15 @@ import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * {@code StopWithSavepointTerminationHandler} handles the termination steps necessary for the
- * stop-with-savepoint operation to finish. The order of the terminations matter:
+ * {@code StopWithSavepointOperationHandler} handles the steps necessary for the stop-with-savepoint
+ * operation to finish. The order of the operations matter:
  *
  * <ol>
  *   <li>Creating a savepoint needs to be completed
  *   <li>Waiting for the executions of the underlying job to finish
  * </ol>
  */
-public interface StopWithSavepointTerminationHandler {
+public interface StopWithSavepointOperationHandler {
 
     /**
      * Returns the a {@code CompletableFuture} referring to the result of the stop-with-savepoint
@@ -68,4 +68,11 @@ public interface StopWithSavepointTerminationHandler {
      * @throws NullPointerException if {@code null} is passed.
      */
     void handleExecutionsTermination(Collection<ExecutionState> terminatedExecutionStates);
+
+    /**
+     * Abort the operation for any cause.
+     *
+     * @param cause Failure cause.
+     */
+    void abortOperation(Throwable cause);
 }

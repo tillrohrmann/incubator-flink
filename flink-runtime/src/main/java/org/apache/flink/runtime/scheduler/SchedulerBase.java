@@ -949,12 +949,8 @@ public abstract class SchedulerBase implements SchedulerNG, StopWithSavepointOpe
         final CheckpointCoordinator checkpointCoordinator =
                 executionGraph.getCheckpointCoordinator();
 
-        Optional<IllegalStateException> argumentCheckException =
-                StopWithSavepointOperationManager.checkStopWithSavepointPreconditions(
-                        checkpointCoordinator, targetDirectory, executionGraph.getJobID(), log);
-        if (argumentCheckException.isPresent()) {
-            return FutureUtils.completedExceptionally(argumentCheckException.get());
-        }
+        StopWithSavepointOperationManager.checkStopWithSavepointPreconditions(
+                checkpointCoordinator, targetDirectory, executionGraph.getJobID(), log);
 
         log.info("Triggering stop-with-savepoint for job {}.", jobGraph.getJobID());
 

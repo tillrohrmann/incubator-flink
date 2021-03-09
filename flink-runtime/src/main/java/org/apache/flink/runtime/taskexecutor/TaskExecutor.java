@@ -1703,7 +1703,10 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
                 log.error("Could not fail task {}.", executionAttemptID, t);
             }
         } else {
-            log.debug("Cannot find task to fail for execution {}.", executionAttemptID);
+            log.info(
+                    "Cannot find task to fail for execution {} with exception:",
+                    executionAttemptID,
+                    cause);
         }
     }
 

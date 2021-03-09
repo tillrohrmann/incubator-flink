@@ -185,7 +185,7 @@ public class AdaptiveSchedulerITCase extends TestLogger {
                     .get();
             fail("Expect exception");
         } catch (ExecutionException e) {
-            assertThat(e, containsCause(FlinkException.class));
+            assertThat(e, containsCause(CheckpointException.class));
         }
         // expect job to run again (maybe restart)
         CommonTestUtils.waitUntilCondition(
@@ -215,6 +215,9 @@ public class AdaptiveSchedulerITCase extends TestLogger {
         } catch (ExecutionException e) {
             assertThat(e, containsCause(CheckpointException.class));
         }
+
+        // ensure no files have been created
+        assertThat(savepointDirectory.listFiles().length, is(0));
 
         // trigger second savepoint
         DummySource.awaitRunning();

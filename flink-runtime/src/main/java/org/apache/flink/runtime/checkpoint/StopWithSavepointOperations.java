@@ -34,6 +34,14 @@ public interface StopWithSavepointOperations {
     /** Stops the periodic scheduling if possible. */
     void stopCheckpointScheduler();
 
+    /**
+     * Triggers a synchronous savepoint with the given savepoint directory as a target.
+     *
+     * @param terminate flag indicating if the job should terminate or just suspend
+     * @param targetLocation Target location for the savepoint, optional. If null, the state
+     *     backend's configured default will be used.
+     * @return A future to the completed checkpoint
+     */
     CompletableFuture<CompletedCheckpoint> triggerSynchronousSavepoint(
             final boolean terminate, @Nullable final String targetLocation);
 }

@@ -20,6 +20,8 @@ package org.apache.flink.runtime.scheduler.adaptive;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.checkpoint.CheckpointCoordinator;
+import org.apache.flink.runtime.checkpoint.CheckpointException;
+import org.apache.flink.runtime.checkpoint.CheckpointFailureReason;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
 import org.apache.flink.runtime.checkpoint.StopWithSavepointOperations;
 import org.apache.flink.runtime.execution.ExecutionState;
@@ -53,6 +55,7 @@ class StopWithSavepoint extends StateWithExecutionGraph implements StopWithSavep
     private final CompletableFuture<String> operationCompletionFuture;
     private final Context context;
     private final ClassLoader userCodeClassLoader;
+    private final StopWithSavepointOperationManager stopWithSavepointOperationManager;
 
     StopWithSavepoint(
             Context context,
@@ -72,7 +75,7 @@ class StopWithSavepoint extends StateWithExecutionGraph implements StopWithSavep
         final CompletableFuture<Collection<ExecutionState>> executionTerminationsFuture =
                 SchedulerUtils.getCombinedExecutionTerminationFuture(executionGraph);
 
-        final StopWithSavepointOperationManager stopWithSavepointOperationManager =
+        stopWithSavepointOperationManager =
                 new StopWithSavepointOperationManager(
                         this,
                         new StopWithSavepointOperationHandlerImpl(
@@ -87,9 +90,24 @@ class StopWithSavepoint extends StateWithExecutionGraph implements StopWithSavep
     }
 
     @Override
+    public void onLeave(Class<? extends State> newState) {
+        // we need to delay the execution because this may trigger a state transition of the
+        // AdaptiveScheduler.
+        context.getMainThreadExecutor()
+                .execute(
+                        () ->
+                                stopWithSavepointOperationManager.abortOperation(
+                                        new CheckpointException(
+                                                "Aborting stop with savepoint operation for transition to state "
+                                                        + newState.getSimpleName()
+                                                        + ".",
+                                                CheckpointFailureReason.CHECKPOINT_ABORTED)));
+
+        super.onLeave(newState);
+    }
+
+    @Override
     public void cancel() {
-        // the canceling state will cancel the execution graph, which will fail the stop with
-        // savepoint operation.
         context.goToCanceling(
                 getExecutionGraph(), getExecutionGraphHandler(), getOperatorCoordinatorHandler());
     }
@@ -164,11 +182,7 @@ class StopWithSavepoint extends StateWithExecutionGraph implements StopWithSavep
             return;
         }
         if (coordinator.isPeriodicCheckpointingConfigured()) {
-            try {
-                coordinator.startCheckpointScheduler();
-            } catch (IllegalStateException ignored) {
-                // Concurrent shut down of the coordinator
-            }
+            coordinator.startCheckpointScheduler();
         }
     }
 

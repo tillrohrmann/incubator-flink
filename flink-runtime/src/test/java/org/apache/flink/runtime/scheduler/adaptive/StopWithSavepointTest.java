@@ -22,7 +22,7 @@ import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
-import org.apache.flink.runtime.executiongraph.TestingExecutionGraphBuilder;
+import org.apache.flink.runtime.executiongraph.TestingDefaultExecutionGraphBuilder;
 import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
 import org.apache.flink.util.TestLogger;
@@ -66,7 +66,7 @@ public class StopWithSavepointTest extends TestLogger {
 
     private TestingStopWithSavepoint createStopWithSavepoint(MockStopWithSavepointContext ctx)
             throws JobException, JobExecutionException {
-        ExecutionGraph executionGraph = TestingExecutionGraphBuilder.newBuilder().build();
+        ExecutionGraph executionGraph = TestingDefaultExecutionGraphBuilder.newBuilder().build();
         final ExecutionGraphHandler executionGraphHandler =
                 new ExecutionGraphHandler(
                         executionGraph,

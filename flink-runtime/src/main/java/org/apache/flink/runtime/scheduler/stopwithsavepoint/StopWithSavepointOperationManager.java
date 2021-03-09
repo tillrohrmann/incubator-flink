@@ -32,35 +32,34 @@ import org.slf4j.Logger;
 import javax.annotation.Nullable;
 
 import java.util.Collection;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
- * {@code StopWithSavepointTerminationManager} fulfills the contract given by {@link
- * StopWithSavepointTerminationHandler} to run the stop-with-savepoint steps in a specific order.
+ * {@code StopWithSavepointOperationManager} fulfills the contract given by {@link
+ * StopWithSavepointOperationHandler} to run the stop-with-savepoint steps in a specific order.
  */
 public class StopWithSavepointOperationManager {
 
-    private final StopWithSavepointTerminationHandler stopWithSavepointTerminationHandler;
+    private final StopWithSavepointOperationHandler stopWithSavepointOperationHandler;
     private final StopWithSavepointOperations stopWithSavepointOperations;
 
     public StopWithSavepointOperationManager(
             StopWithSavepointOperations stopWithSavepointOperations,
-            StopWithSavepointTerminationHandler stopWithSavepointTerminationHandler) {
+            StopWithSavepointOperationHandler stopWithSavepointOperationHandler) {
         this.stopWithSavepointOperations = stopWithSavepointOperations;
-        this.stopWithSavepointTerminationHandler =
-                Preconditions.checkNotNull(stopWithSavepointTerminationHandler);
+        this.stopWithSavepointOperationHandler =
+                Preconditions.checkNotNull(stopWithSavepointOperationHandler);
     }
 
     /**
      * Enforces the correct completion order of the passed {@code CompletableFuture} instances in
-     * accordance to the contract of {@link StopWithSavepointTerminationHandler}.
+     * accordance to the contract of {@link StopWithSavepointOperationHandler}.
      *
      * @param terminate Flag indicating whether to terminate or suspend the job.
      * @param targetDirectory Target for the savepoint.
      * @param terminatedExecutionStatesFuture The {@code CompletableFuture} of the termination step.
-     * @param mainThreadExecutor The executor the {@code StopWithSavepointTerminationHandler}
+     * @param mainThreadExecutor The executor the {@code StopWithSavepointOperationHandler}
      *     operations run on.
      * @return A {@code CompletableFuture} containing the path to the created savepoint.
      */
@@ -83,7 +82,7 @@ public class StopWithSavepointOperationManager {
                         // CheckpointCanceller which doesn't run in the mainThreadExecutor
                         .handleAsync(
                                 (completedSavepoint, throwable) -> {
-                                    stopWithSavepointTerminationHandler.handleSavepointCreation(
+                                    stopWithSavepointOperationHandler.handleSavepointCreation(
                                             completedSavepoint, throwable);
                                     return null;
                                 },
@@ -95,22 +94,29 @@ public class StopWithSavepointOperationManager {
                                                 // separate Runnable to disconnect it from any
                                                 // previous task failure handling
                                                 terminatedExecutionStatesFuture.thenAcceptAsync(
-                                                        stopWithSavepointTerminationHandler
+                                                        stopWithSavepointOperationHandler
                                                                 ::handleExecutionsTermination,
                                                         mainThreadExecutor))));
 
-        return stopWithSavepointTerminationHandler.getSavepointPath();
+        return stopWithSavepointOperationHandler.getSavepointPath();
     }
 
-    public static Optional<IllegalStateException> checkStopWithSavepointPreconditions(
+    /**
+     * Abort the ongoing stop with savepoint operation for any reason.
+     *
+     * @param cause Failure cause for the abortion of the operation.
+     */
+    public void abortOperation(Throwable cause) {
+        stopWithSavepointOperationHandler.abortOperation(cause);
+    }
+
+    public static void checkStopWithSavepointPreconditions(
             CheckpointCoordinator checkpointCoordinator,
             @Nullable String targetDirectory,
             JobID jobId,
             Logger logger) {
         if (checkpointCoordinator == null) {
-            return Optional.of(
-                    new IllegalStateException(
-                            String.format("Job %s is not a streaming job.", jobId)));
+            throw new IllegalStateException(String.format("Job %s is not a streaming job.", jobId));
         }
 
         if (targetDirectory == null
@@ -119,14 +125,12 @@ public class StopWithSavepointOperationManager {
                     "Trying to cancel job {} with savepoint, but no savepoint directory configured.",
                     jobId);
 
-            return Optional.of(
-                    new IllegalStateException(
-                            "No savepoint directory configured. You can either specify a directory "
-                                    + "while cancelling via -s :targetDirectory or configure a cluster-wide "
-                                    + "default via key '"
-                                    + CheckpointingOptions.SAVEPOINT_DIRECTORY.key()
-                                    + "'."));
+            throw new IllegalStateException(
+                    "No savepoint directory configured. You can either specify a directory "
+                            + "while cancelling via -s :targetDirectory or configure a cluster-wide "
+                            + "default via key '"
+                            + CheckpointingOptions.SAVEPOINT_DIRECTORY.key()
+                            + "'.");
         }
-        return Optional.empty();
     }
 }

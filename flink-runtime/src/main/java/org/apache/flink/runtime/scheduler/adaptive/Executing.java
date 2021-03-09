@@ -20,7 +20,6 @@ package org.apache.flink.runtime.scheduler.adaptive;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.JobException;
-import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
@@ -37,7 +36,6 @@ import org.slf4j.Logger;
 import javax.annotation.Nullable;
 
 import java.time.Duration;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /** State which represents a running job with an {@link ExecutionGraph} and assigned slots. */
@@ -151,15 +149,11 @@ class Executing extends StateWithExecutionGraph implements ResourceConsumer {
             @Nullable final String targetDirectory, boolean terminate) {
         final ExecutionGraph executionGraph = getExecutionGraph();
 
-        Optional<IllegalStateException> argumentCheckException =
-                StopWithSavepointOperationManager.checkStopWithSavepointPreconditions(
-                        executionGraph.getCheckpointCoordinator(),
-                        targetDirectory,
-                        executionGraph.getJobID(),
-                        getLogger());
-        if (argumentCheckException.isPresent()) {
-            return FutureUtils.completedExceptionally(argumentCheckException.get());
-        }
+        StopWithSavepointOperationManager.checkStopWithSavepointPreconditions(
+                executionGraph.getCheckpointCoordinator(),
+                targetDirectory,
+                executionGraph.getJobID(),
+                getLogger());
 
         getLogger().info("Triggering stop-with-savepoint for job {}.", executionGraph.getJobID());
 
@@ -235,7 +229,19 @@ class Executing extends StateWithExecutionGraph implements ResourceConsumer {
                 OperatorCoordinatorHandler operatorCoordinatorHandler,
                 Throwable failureCause);
 
-        /** Transitions into the {@link StopWithSavepoint} state. */
+        /**
+         * Transitions into the {@link StopWithSavepoint} state.
+         *
+         * @param executionGraph executionGraph to pass to the {@link StopWithSavepoint} state
+         * @param executionGraphHandler executionGraphHandler to pass to the {@link
+         *     StopWithSavepoint} state
+         * @param operatorCoordinatorHandler operatorCoordinatorHandler to pass to the {@link
+         *     StopWithSavepoint} state
+         * @param targetDirectory target for the savepoint
+         * @param terminate flag indicating whether to suspend to terminate after savepoint
+         *     completion.
+         * @return Location of the savepoint.
+         */
         CompletableFuture<String> goToStopWithSavepoint(
                 ExecutionGraph executionGraph,
                 ExecutionGraphHandler executionGraphHandler,

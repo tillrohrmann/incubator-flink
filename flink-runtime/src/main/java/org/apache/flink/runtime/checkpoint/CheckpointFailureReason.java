@@ -81,7 +81,9 @@ public enum CheckpointFailureReason {
 
     FINALIZE_CHECKPOINT_FAILURE(false, "Failure to finalize checkpoint."),
 
-    TRIGGER_CHECKPOINT_FAILURE(false, "Trigger checkpoint failure.");
+    TRIGGER_CHECKPOINT_FAILURE(false, "Trigger checkpoint failure."),
+
+    CHECKPOINT_ABORTED(false, "Checkpoint aborted.");
 
     // ------------------------------------------------------------------------
 

@@ -803,29 +803,20 @@ public class AdaptiveScheduler
             ExecutionGraphHandler executionGraphHandler,
             OperatorCoordinatorHandler operatorCoordinatorHandler,
             @Nullable String targetDirectory,
-            boolean advanceToEndOfEventTime) {
+            boolean terminate) {
 
-        transitionToState(
-                new StopWithSavepoint.Factory(
-                        this,
-                        executionGraph,
-                        executionGraphHandler,
-                        operatorCoordinatorHandler,
-                        LOG,
-                        userCodeClassLoader,
-                        targetDirectory,
-                        advanceToEndOfEventTime));
-
-        Optional<StopWithSavepoint> maybeStopWithSavepoint = state.as(StopWithSavepoint.class);
-        if (maybeStopWithSavepoint.isPresent()) {
-            return maybeStopWithSavepoint.get().getOperationCompletionFuture();
-        } else {
-            final Throwable error =
-                    new IllegalStateException(
-                            "Scheduler not in StopWithSavepoint after transitioning to it");
-            fatalErrorHandler.onFatalError(error);
-            return FutureUtils.completedExceptionally(error);
-        }
+        StopWithSavepoint stopWithSavepoint =
+                transitionToState(
+                        new StopWithSavepoint.Factory(
+                                this,
+                                executionGraph,
+                                executionGraphHandler,
+                                operatorCoordinatorHandler,
+                                LOG,
+                                userCodeClassLoader,
+                                targetDirectory,
+                                terminate));
+        return stopWithSavepoint.getOperationCompletionFuture();
     }
 
     @Override
@@ -961,7 +952,7 @@ public class AdaptiveScheduler
 
     /** Note: Do not call this method from a State constructor or State#onLeave. */
     @VisibleForTesting
-    void transitionToState(StateFactory<?> targetState) {
+    <T extends State> T transitionToState(StateFactory<T> targetState) {
         Preconditions.checkState(
                 !isTransitioningState,
                 "State transitions must not be triggered while another state transition is in progress.");
@@ -977,7 +968,9 @@ public class AdaptiveScheduler
                     targetState.getStateClass().getSimpleName());
 
             state.onLeave(targetState.getStateClass());
-            state = targetState.getState();
+            T targetStateInstance = targetState.getState();
+            state = targetStateInstance;
+            return targetStateInstance;
         } finally {
             isTransitioningState = false;
         }

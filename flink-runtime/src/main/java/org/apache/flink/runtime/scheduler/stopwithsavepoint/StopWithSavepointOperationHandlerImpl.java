@@ -24,6 +24,7 @@ import org.apache.flink.runtime.checkpoint.StopWithSavepointOperations;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.scheduler.adaptive.GlobalFailureHandler;
 import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.Preconditions;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -31,14 +32,15 @@ import org.slf4j.Logger;
 import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 /**
- * {@code StopWithSavepointTerminationHandlerImpl} implements {@link
- * StopWithSavepointTerminationHandler}.
+ * {@code StopWithSavepointOperationHandlerImpl} implements {@link
+ * StopWithSavepointOperationHandler}.
  *
  * <p>The operation only succeeds if both steps, the savepoint creation and the successful
  * termination of the job, succeed. If the former step fails, the operation fails exceptionally
@@ -50,7 +52,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  *
  * @see StopWithSavepointOperationManager
  */
-public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointTerminationHandler {
+public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointOperationHandler {
 
     private final Logger log;
 
@@ -62,10 +64,12 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointT
 
     private State state = new WaitingForSavepoint();
 
-    public <S extends GlobalFailureHandler & StopWithSavepointOperations>
+    private boolean inStateTransition = false;
+
+    public <H extends GlobalFailureHandler & StopWithSavepointOperations>
             StopWithSavepointOperationHandlerImpl(
-                    JobID jobId, S schedulerWithCheckpointing, Logger log) {
-        this(jobId, schedulerWithCheckpointing, schedulerWithCheckpointing, log);
+                    JobID jobId, H failureHandlerAndOperations, Logger log) {
+        this(jobId, failureHandlerAndOperations, failureHandlerAndOperations, log);
     }
 
     public StopWithSavepointOperationHandlerImpl(
@@ -111,59 +115,65 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointT
         }
     }
 
-    private void handleSavepointCreationSuccess(CompletedCheckpoint completedCheckpoint) {
-        final State oldState = state;
-        state = state.onSavepointCreation(completedCheckpoint);
+    @Override
+    public void abortOperation(Throwable cause) {
+        transitionToState(() -> state.onAbort(cause), String.format("on abort for job %s.", jobId));
+    }
 
-        log.debug(
-                "Stop-with-savepoint transitioned from {} to {} on savepoint creation handling for job {}.",
-                oldState.getName(),
-                state.getName(),
-                jobId);
+    private void handleSavepointCreationSuccess(CompletedCheckpoint completedCheckpoint) {
+        transitionToState(
+                () -> state.onSavepointCreation(completedCheckpoint),
+                String.format("savepoint creation handling for job %s.", jobId));
     }
 
     private void handleSavepointCreationFailure(Throwable throwable) {
-        final State oldState = state;
-        state = state.onSavepointCreationFailure(throwable);
-
-        log.debug(
-                "Stop-with-savepoint transitioned from {} to {} on savepoint creation failure handling for job {}.",
-                oldState.getName(),
-                state.getName(),
-                jobId);
+        transitionToState(
+                () -> state.onSavepointCreationFailure(throwable),
+                String.format("savepoint creation failure handling for job %s.", jobId));
     }
 
     private void handleExecutionsFinished() {
-        final State oldState = state;
-        state = state.onExecutionsFinished();
-
-        log.debug(
-                "Stop-with-savepoint transitioned from {} to {} on execution termination handling with all executions being finished for job {}.",
-                oldState.getName(),
-                state.getName(),
-                jobId);
+        transitionToState(
+                () -> state.onExecutionsFinished(),
+                String.format(
+                        "execution termination handling with all executions being finished for job %s.",
+                        jobId));
     }
 
     private void handleAnyExecutionNotFinished(Set<ExecutionState> notFinishedExecutionStates) {
-        final State oldState = state;
-        state = state.onAnyExecutionNotFinished(notFinishedExecutionStates);
+        transitionToState(
+                () -> state.onAnyExecutionNotFinished(notFinishedExecutionStates),
+                String.format(
+                        "execution termination handling for job %s with some executions being in an not-finished state: %s",
+                        jobId, notFinishedExecutionStates));
+    }
 
-        log.warn(
-                "Stop-with-savepoint transitioned from {} to {} on execution termination handling for job {} with some executions being in an not-finished state: {}",
-                oldState.getName(),
-                state.getName(),
-                jobId,
-                notFinishedExecutionStates);
+    private void transitionToState(Supplier<? extends State> targetState, String message) {
+        Preconditions.checkState(
+                !inStateTransition,
+                "Can not transition to new state because we are already in a state transition");
+        final State oldState = state;
+        inStateTransition = true;
+        try {
+            state = targetState.get();
+        } finally {
+            inStateTransition = false;
+        }
+
+        log.debug(
+                String.format(
+                        "Stop-with-savepoint transitioned from %s to %s on %s",
+                        oldState.getName(), state.getName(), message));
     }
 
     /**
-     * Handles the termination of the {@code StopWithSavepointTerminationHandler} exceptionally
+     * Handles the termination of the {@code StopWithSavepointOperationHandlerImpl} exceptionally
      * after triggering a global job fail-over.
      *
      * @param unfinishedExecutionStates the unfinished states that caused the failure.
      * @param savepointPath the path to the successfully created savepoint.
      */
-    private void terminateExceptionallyWithGlobalFailover(
+    private void terminateExceptionallyWithGlobalFailoverOnUnfinishedExecution(
             Iterable<ExecutionState> unfinishedExecutionStates, String savepointPath) {
         String errorMessage =
                 String.format(
@@ -171,19 +181,22 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointT
                         StringUtils.join(unfinishedExecutionStates, ", "), jobId);
         FlinkException inconsistentFinalStateException = new FlinkException(errorMessage);
 
+        terminateExceptionallyWithGlobalFailover(inconsistentFinalStateException, savepointPath);
+    }
+
+    private void terminateExceptionallyWithGlobalFailover(Throwable cause, String savepointPath) {
         log.warn(
                 "A savepoint was created at {} but the corresponding job {} didn't terminate successfully.",
                 savepointPath,
                 jobId,
-                inconsistentFinalStateException);
+                cause);
 
-        globalFailureHandler.handleGlobalFailure(inconsistentFinalStateException);
-
-        result.completeExceptionally(inconsistentFinalStateException);
+        globalFailureHandler.handleGlobalFailure(cause);
+        result.completeExceptionally(cause);
     }
 
     /**
-     * Handles the termination of the {@code StopWithSavepointTerminationHandler} exceptionally
+     * Handles the termination of the {@code StopWithSavepointOperationHandlerImpl} exceptionally
      * without triggering a global job fail-over but restarting the checkpointing. It does restart
      * the checkpoint scheduling.
      *
@@ -195,7 +208,7 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointT
     }
 
     /**
-     * Handles the successful termination of the {@code StopWithSavepointTerminationHandler}.
+     * Handles the successful termination of the {@code StopWithSavepointOperationHandlerImpl}.
      *
      * @param completedSavepoint the completed savepoint
      */
@@ -213,6 +226,12 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointT
         @Override
         public State onSavepointCreationFailure(Throwable throwable) {
             terminateExceptionally(throwable);
+            return new FinalState();
+        }
+
+        @Override
+        public State onAbort(Throwable cause) {
+            terminateExceptionally(cause);
             return new FinalState();
         }
     }
@@ -234,8 +253,15 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointT
         @Override
         public State onAnyExecutionNotFinished(
                 Iterable<ExecutionState> notFinishedExecutionStates) {
-            terminateExceptionallyWithGlobalFailover(
+            terminateExceptionallyWithGlobalFailoverOnUnfinishedExecution(
                     notFinishedExecutionStates, completedSavepoint.getExternalPointer());
+            return new FinalState();
+        }
+
+        @Override
+        public State onAbort(Throwable cause) {
+            terminateExceptionallyWithGlobalFailover(
+                    cause, completedSavepoint.getExternalPointer());
             return new FinalState();
         }
     }
@@ -250,6 +276,16 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointT
         @Override
         public State onAnyExecutionNotFinished(
                 Iterable<ExecutionState> notFinishedExecutionStates) {
+            return this;
+        }
+
+        @Override
+        public State onSavepointCreationFailure(Throwable throwable) {
+            return this;
+        }
+
+        @Override
+        public State onAbort(Throwable cause) {
             return this;
         }
     }
@@ -283,6 +319,11 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointT
 
         default String getName() {
             return this.getClass().getSimpleName();
+        }
+
+        default State onAbort(Throwable cause) {
+            throw new UnsupportedOperationException(
+                    this.getClass().getSimpleName() + " state does not support onAbort.");
         }
     }
 }

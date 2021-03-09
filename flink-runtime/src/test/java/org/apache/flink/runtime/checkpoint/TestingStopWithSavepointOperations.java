@@ -49,7 +49,7 @@ public class TestingStopWithSavepointOperations implements StopWithSavepointOper
     @Override
     public CompletableFuture<CompletedCheckpoint> triggerSynchronousSavepoint(
             boolean terminate, @Nullable String targetLocation) {
-        throw new UnsupportedOperationException("yolo");
+        throw new UnsupportedOperationException();
     }
 
     public boolean isEnabled() {

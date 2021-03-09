@@ -30,9 +30,9 @@ import org.apache.flink.runtime.checkpoint.DeactivatedCheckpointIDCounter;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
+import org.apache.flink.runtime.executiongraph.DefaultExecutionGraphBuilder;
 import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
-import org.apache.flink.runtime.executiongraph.DefaultExecutionGraphBuilder;
 import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 
@@ -127,6 +127,7 @@ public final class SchedulerUtils {
      * Returns a {@code CompletableFuture} collecting the termination states of all {@link Execution
      * Executions} of the given {@link ExecutionGraph}.
      *
+     * @param executionGraph ExecutionGraph to collect the state termination futures from.
      * @return a {@code CompletableFuture} that completes after all underlying {@code Executions}
      *     have been terminated.
      */

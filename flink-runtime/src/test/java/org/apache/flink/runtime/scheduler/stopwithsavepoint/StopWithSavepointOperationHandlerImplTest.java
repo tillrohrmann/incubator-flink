@@ -49,7 +49,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
- * {@code StopWithSavepointTerminationHandlerImplTest} tests {@link
+ * {@code StopWithSavepointOperationHandlerImplTest} tests {@link
  * StopWithSavepointOperationHandlerImpl}.
  */
 public class StopWithSavepointOperationHandlerImplTest extends TestLogger {
@@ -121,7 +121,7 @@ public class StopWithSavepointOperationHandlerImplTest extends TestLogger {
     }
 
     public void assertSavepointCreationFailure(
-            Consumer<StopWithSavepointTerminationHandler> handleExecutionsTermination) {
+            Consumer<StopWithSavepointOperationHandler> handleExecutionsTermination) {
         final StopWithSavepointOperationHandlerImpl testInstance =
                 createTestInstanceFailingOnGlobalFailOver();
 
