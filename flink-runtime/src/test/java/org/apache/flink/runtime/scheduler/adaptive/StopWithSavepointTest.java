@@ -19,11 +19,16 @@
 package org.apache.flink.runtime.scheduler.adaptive;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.api.common.JobStatus;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.JobException;
 import org.apache.flink.runtime.checkpoint.CheckpointProperties;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
 import org.apache.flink.runtime.client.JobExecutionException;
+import org.apache.flink.runtime.execution.ExecutionState;
+import org.apache.flink.runtime.executiongraph.Execution;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
+import org.apache.flink.runtime.executiongraph.ExecutionVertex;
 import org.apache.flink.runtime.executiongraph.TestingDefaultExecutionGraphBuilder;
 import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
@@ -37,11 +42,15 @@ import org.slf4j.Logger;
 import javax.annotation.Nullable;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static org.apache.flink.core.testutils.FlinkMatchers.containsCause;
+import static org.apache.flink.runtime.scheduler.adaptive.ExecutingTest.createFailingStateTransition;
 import static org.apache.flink.runtime.scheduler.adaptive.WaitingForResourcesTest.assertNonNull;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -60,12 +69,81 @@ public class StopWithSavepointTest extends TestLogger {
         }
     }
 
+    @Test
     public void testSuspend() throws Exception {
         try (MockStopWithSavepointContext ctx = new MockStopWithSavepointContext()) {
             TestingStopWithSavepoint sws = createStopWithSavepoint(ctx);
-            ctx.setExpectFinished(assertNonNull());
+            ctx.setExpectFinished(
+                    archivedExecutionGraph -> {
+                        assertThat(archivedExecutionGraph.getState(), is(JobStatus.SUSPENDED));
+                    });
 
             sws.suspend(new RuntimeException());
+        }
+    }
+
+    @Test
+    public void testRestartOnGlobalFailureIfRestartConfigured() throws Exception {
+        try (MockStopWithSavepointContext ctx = new MockStopWithSavepointContext()) {
+            TestingStopWithSavepoint sws = createStopWithSavepoint(ctx);
+            ctx.setHowToHandleFailure(
+                    (ignore) -> Executing.FailureResult.canRestart(Duration.ZERO));
+
+            ctx.setExpectRestarting(assertNonNull());
+
+            sws.handleGlobalFailure(new RuntimeException());
+        }
+    }
+
+    @Test
+    public void testFailingOnGlobalFailureIfNoRestartConfigured() throws Exception {
+        try (MockStopWithSavepointContext ctx = new MockStopWithSavepointContext()) {
+
+            TestingStopWithSavepoint sws = createStopWithSavepoint(ctx);
+            ctx.setHowToHandleFailure(Executing.FailureResult::canNotRestart);
+
+            ctx.setExpectFailing(
+                    failingArguments -> {
+                        assertThat(
+                                failingArguments.getFailureCause(),
+                                containsCause(RuntimeException.class));
+                    });
+
+            sws.handleGlobalFailure(new RuntimeException());
+        }
+    }
+
+    @Test
+    public void testFailingOnUpdateTaskExecutionStateWithNoRestart() throws Exception {
+        try (MockStopWithSavepointContext ctx = new MockStopWithSavepointContext()) {
+
+            TestingStopWithSavepoint sws =
+                    createStopWithSavepoint(ctx, new StateTrackingMockExecutionGraph());
+            ctx.setHowToHandleFailure(Executing.FailureResult::canNotRestart);
+
+            ctx.setExpectFailing(
+                    failingArguments -> {
+                        assertThat(
+                                failingArguments.getFailureCause(),
+                                containsCause(RuntimeException.class));
+                    });
+
+            sws.updateTaskExecutionState(createFailingStateTransition());
+        }
+    }
+
+    @Test
+    public void testRestartingOnUpdateTaskExecutionStateWithRestart() throws Exception {
+        try (MockStopWithSavepointContext ctx = new MockStopWithSavepointContext()) {
+
+            TestingStopWithSavepoint sws =
+                    createStopWithSavepoint(ctx, new StateTrackingMockExecutionGraph());
+            ctx.setHowToHandleFailure(
+                    (ignore) -> Executing.FailureResult.canRestart(Duration.ZERO));
+
+            ctx.setExpectRestarting(assertNonNull());
+
+            sws.updateTaskExecutionState(createFailingStateTransition());
         }
     }
 
@@ -86,7 +164,7 @@ public class StopWithSavepointTest extends TestLogger {
             throws Exception {
         MockStopWithSavepointContext ctx = new MockStopWithSavepointContext();
         TestingStopWithSavepoint sws = createStopWithSavepoint(ctx);
-        ctx.setState(sws);
+        ctx.setGlobalFailureHandler(sws);
         ctx.setHowToHandleFailure((ignore) -> Executing.FailureResult.canRestart(Duration.ZERO));
         ctx.setExpectRestarting(assertNonNull());
         sws.getSavepointFuture().complete(createCompletedSavepoint());
@@ -110,6 +188,25 @@ public class StopWithSavepointTest extends TestLogger {
     }
 
     @Test
+    public void testRestartOnTaskFailureAfterSavepointCompletion() throws Exception {
+        MockStopWithSavepointContext ctx = new MockStopWithSavepointContext();
+        TerminateExecutionFutureMockedExecutionGraph executionGraph =
+                new TerminateExecutionFutureMockedExecutionGraph();
+
+        TestingStopWithSavepoint sws = createStopWithSavepoint(ctx, executionGraph);
+        ctx.setGlobalFailureHandler(sws);
+
+        ctx.setHowToHandleFailure((ignore) -> Executing.FailureResult.canRestart(Duration.ZERO));
+
+        ctx.setExpectRestarting(assertNonNull());
+
+        sws.getSavepointFuture().complete(createCompletedSavepoint());
+        executionGraph.getExecutionFuture().complete(ExecutionState.FAILED);
+
+        ctx.close();
+    }
+
+    @Test
     public void testEnsureCheckpointSchedulerLifecycle() throws Exception {
         try (MockStopWithSavepointContext ctx = new MockStopWithSavepointContext()) {
             TestingStopWithSavepoint sws = createStopWithSavepoint(ctx);
@@ -124,7 +221,12 @@ public class StopWithSavepointTest extends TestLogger {
 
     private TestingStopWithSavepoint createStopWithSavepoint(MockStopWithSavepointContext ctx)
             throws JobException, JobExecutionException {
-        ExecutionGraph executionGraph = TestingDefaultExecutionGraphBuilder.newBuilder().build();
+        return createStopWithSavepoint(
+                ctx, TestingDefaultExecutionGraphBuilder.newBuilder().build());
+    }
+
+    private TestingStopWithSavepoint createStopWithSavepoint(
+            MockStopWithSavepointContext ctx, ExecutionGraph executionGraph) {
         final ExecutionGraphHandler executionGraphHandler =
                 new ExecutionGraphHandler(
                         executionGraph,
@@ -151,7 +253,8 @@ public class StopWithSavepointTest extends TestLogger {
                 true);
     }
 
-    private static class TestingStopWithSavepoint extends StopWithSavepoint {
+    private static class TestingStopWithSavepoint extends StopWithSavepoint
+            implements GlobalFailureHandler {
 
         private CompletableFuture<CompletedCheckpoint> savepointFuture;
         private boolean checkpointSchedulerStarted = false;
@@ -218,10 +321,10 @@ public class StopWithSavepointTest extends TestLogger {
         private final StateValidator<ExecutingTest.CancellingArguments> cancellingStateValidator =
                 new StateValidator<>("cancelling");
 
-        private StopWithSavepoint state = null;
+        private GlobalFailureHandler globalFailureHandler = null;
 
-        public void setState(StopWithSavepoint setState) {
-            this.state = setState;
+        public void setGlobalFailureHandler(GlobalFailureHandler failureHandler) {
+            this.globalFailureHandler = failureHandler;
         }
 
         public void setExpectFailing(Consumer<ExecutingTest.FailingArguments> asserter) {
@@ -242,8 +345,8 @@ public class StopWithSavepointTest extends TestLogger {
 
         @Override
         public void handleGlobalFailure(Throwable cause) {
-            assertThat(state, is(notNullValue()));
-            state.handleGlobalFailure(cause);
+            assertThat(globalFailureHandler, is(notNullValue()));
+            globalFailureHandler.handleGlobalFailure(cause);
         }
 
         @Override
@@ -312,5 +415,44 @@ public class StopWithSavepointTest extends TestLogger {
                 CheckpointProperties.forSavepoint(true),
                 new TestCompletedCheckpointStorageLocation(
                         new TestingStreamStateHandle(), "savepoint-path"));
+    }
+
+    private static class TerminateExecutionFutureMockedExecutionGraph
+            extends StateTrackingMockExecutionGraph {
+
+        private final Iterable<ExecutionVertex> executionVerticesIterator;
+        private final CompletableFuture<ExecutionState> terminationFuture =
+                new CompletableFuture<>();
+
+        private TerminateExecutionFutureMockedExecutionGraph() throws JobException {
+            this.executionVerticesIterator =
+                    Collections.singletonList(
+                            new ExecutingTest.MockExecutionVertex(
+                                    new ExecutingTest.MockExecutionJobVertex()) {
+                                @Override
+                                public Execution getCurrentExecutionAttempt() {
+                                    return new Execution(
+                                            ForkJoinPool.commonPool(),
+                                            this,
+                                            0,
+                                            0,
+                                            Time.milliseconds(0L)) {
+                                        @Override
+                                        public CompletableFuture<ExecutionState>
+                                                getTerminalStateFuture() {
+                                            return terminationFuture;
+                                        }
+                                    };
+                                }
+                            });
+        }
+
+        public CompletableFuture<ExecutionState> getExecutionFuture() {
+            return terminationFuture;
+        }
+
+        public Iterable<ExecutionVertex> getAllExecutionVertices() {
+            return executionVerticesIterator;
+        }
     }
 }

@@ -226,6 +226,11 @@ class StateTrackingMockExecutionGraph implements ExecutionGraph {
         return new StringifiedAccumulatorResult[0];
     }
 
+    @Override
+    public Iterable<ExecutionVertex> getAllExecutionVertices() {
+        return Collections.emptyList();
+    }
+
     // -- remaining interface implementations: all unsupported
 
     @Override
@@ -274,11 +279,6 @@ class StateTrackingMockExecutionGraph implements ExecutionGraph {
 
     @Override
     public Throwable getFailureCause() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Iterable<ExecutionVertex> getAllExecutionVertices() {
         throw new UnsupportedOperationException();
     }
 

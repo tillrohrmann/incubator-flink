@@ -273,7 +273,7 @@ public class ExecutingTest extends TestLogger {
         }
     }
 
-    private static TaskExecutionStateTransition createFailingStateTransition() {
+    static TaskExecutionStateTransition createFailingStateTransition() {
         return new TaskExecutionStateTransition(
                 new TaskExecutionState(
                         new ExecutionAttemptID(), ExecutionState.FAILED, new RuntimeException()));
