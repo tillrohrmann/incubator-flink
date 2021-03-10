@@ -187,7 +187,7 @@ public class AdaptiveSchedulerITCase extends TestLogger {
                     .get();
             fail("Expect exception");
         } catch (ExecutionException e) {
-            assertThat(e, containsCause(CheckpointException.class));
+            assertThat(e, containsCause(RuntimeException.class));
         }
         // expect job to run again (maybe restart)
         CommonTestUtils.waitUntilCondition(

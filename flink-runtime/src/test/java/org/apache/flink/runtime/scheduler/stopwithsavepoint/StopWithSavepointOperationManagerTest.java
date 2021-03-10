@@ -80,7 +80,7 @@ public class StopWithSavepointOperationManagerTest extends TestLogger {
                 new TestingStopWithSavepointOperationHandler();
         new StopWithSavepointOperationManager(
                         testingStopWithSavepointOperations, stopWithSavepointTerminationHandler)
-                .trackStopWithSavepoint(
+                .trackStopWithSavepointWithTerminationFutures(
                         false,
                         "",
                         terminatedExecutionStateFuture.thenApply(Collections::singleton),
@@ -107,7 +107,7 @@ public class StopWithSavepointOperationManagerTest extends TestLogger {
         private final List<MethodCall> methodCalls = new ArrayList<>(2);
 
         @Override
-        public CompletableFuture<String> getSavepointPath() {
+        public CompletableFuture<String> getSavepointPathFuture() {
             return FutureUtils.completedExceptionally(
                     new Exception("The result is not relevant in this test."));
         }

@@ -32,6 +32,7 @@ import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.client.program.ClusterClient;
 import org.apache.flink.configuration.CheckpointingOptions;
+import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.configuration.TaskManagerOptions;
@@ -582,16 +583,22 @@ public class SavepointITCase extends TestLogger {
 
     private static BiConsumer<JobID, ExecutionException> assertAfterSnapshotCreationFailure() {
         return (jobId, actualException) -> {
-            Optional<FlinkException> actualFlinkException =
-                    ExceptionUtils.findThrowable(actualException, FlinkException.class);
-            assertTrue(actualFlinkException.isPresent());
+            if (ClusterOptions.isAdaptiveSchedulerEnabled(new Configuration())) {
+                assertThat(
+                        actualException,
+                        containsMessage("Expected RuntimeException after snapshot creation"));
+            } else {
+                Optional<FlinkException> actualFlinkException =
+                        ExceptionUtils.findThrowable(actualException, FlinkException.class);
+                assertTrue(actualFlinkException.isPresent());
 
-            assertThat(
-                    actualFlinkException.get(),
-                    containsMessage(
-                            String.format(
-                                    "A global fail-over is triggered to recover the job %s.",
-                                    jobId)));
+                assertThat(
+                        actualFlinkException.get(),
+                        containsMessage(
+                                String.format(
+                                        "A global fail-over is triggered to recover the job %s.",
+                                        jobId)));
+            }
         };
     }
 

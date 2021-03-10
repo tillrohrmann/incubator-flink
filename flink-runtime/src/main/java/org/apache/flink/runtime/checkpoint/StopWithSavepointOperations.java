@@ -23,8 +23,8 @@ import javax.annotation.Nullable;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * {@code StopWithSavepointOperations} provides methods for the stop-with-savepoint operation, such
- * as starting and stopping the periodic scheduling of checkpoints, or triggering a savepoint.
+ * {@code StopWithSavepointOperations} provides all checkpoint coordinator related methods for doing
+ * a stop with savepoint operation.
  */
 public interface StopWithSavepointOperations {
 

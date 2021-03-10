@@ -231,6 +231,11 @@ class StateTrackingMockExecutionGraph implements ExecutionGraph {
         return Collections.emptyList();
     }
 
+    @Override
+    public Map<ExecutionAttemptID, Execution> getRegisteredExecutions() {
+        return Collections.emptyMap();
+    }
+
     // -- remaining interface implementations: all unsupported
 
     @Override
@@ -335,11 +340,6 @@ class StateTrackingMockExecutionGraph implements ExecutionGraph {
 
     @Override
     public void notifyPartitionDataAvailable(ResultPartitionID partitionId) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Map<ExecutionAttemptID, Execution> getRegisteredExecutions() {
         throw new UnsupportedOperationException();
     }
 

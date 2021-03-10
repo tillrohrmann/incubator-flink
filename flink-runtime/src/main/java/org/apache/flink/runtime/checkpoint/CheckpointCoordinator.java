@@ -1751,6 +1751,10 @@ public class CheckpointCoordinator {
         }
     }
 
+    public boolean isPeriodicCheckpointingStarted() {
+        return periodicScheduling;
+    }
+
     /**
      * Aborts all the pending checkpoints due to en exception.
      *

@@ -133,7 +133,6 @@ public class CheckpointFailureManager {
             case UNKNOWN_TASK_CHECKPOINT_NOTIFICATION_FAILURE:
             case TRIGGER_CHECKPOINT_FAILURE:
             case FINALIZE_CHECKPOINT_FAILURE:
-            case CHECKPOINT_ABORTED:
                 // ignore
                 break;
 

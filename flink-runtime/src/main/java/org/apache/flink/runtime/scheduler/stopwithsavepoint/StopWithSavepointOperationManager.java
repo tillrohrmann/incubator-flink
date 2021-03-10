@@ -63,7 +63,7 @@ public class StopWithSavepointOperationManager {
      *     operations run on.
      * @return A {@code CompletableFuture} containing the path to the created savepoint.
      */
-    public CompletableFuture<String> trackStopWithSavepoint(
+    public CompletableFuture<String> trackStopWithSavepointWithTerminationFutures(
             boolean terminate,
             @Nullable String targetDirectory,
             CompletableFuture<Collection<ExecutionState>> terminatedExecutionStatesFuture,
@@ -98,16 +98,7 @@ public class StopWithSavepointOperationManager {
                                                                 ::handleExecutionsTermination,
                                                         mainThreadExecutor))));
 
-        return stopWithSavepointOperationHandler.getSavepointPath();
-    }
-
-    /**
-     * Abort the ongoing stop with savepoint operation for any reason.
-     *
-     * @param cause Failure cause for the abortion of the operation.
-     */
-    public void abortOperation(Throwable cause) {
-        stopWithSavepointOperationHandler.abortOperation(cause);
+        return stopWithSavepointOperationHandler.getSavepointPathFuture();
     }
 
     public static void checkStopWithSavepointPreconditions(

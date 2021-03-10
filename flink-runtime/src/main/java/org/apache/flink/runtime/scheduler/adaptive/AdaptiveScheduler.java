@@ -812,6 +812,7 @@ public class AdaptiveScheduler
                                 executionGraph,
                                 executionGraphHandler,
                                 operatorCoordinatorHandler,
+                                new StopWithSavepointOperationsProvider(executionGraph),
                                 LOG,
                                 userCodeClassLoader,
                                 targetDirectory,
@@ -950,7 +951,15 @@ public class AdaptiveScheduler
 
     // ----------------------------------------------------------------
 
-    /** Note: Do not call this method from a State constructor or State#onLeave. */
+    /**
+     * Transition the scheduler to another state. This method guards against state transitions while
+     * there is already a transition ongoing. This effectively means that you can not call this
+     * method from a State constructor or State#onLeave.
+     *
+     * @param targetState State to transition to
+     * @param <T> Type of the target state
+     * @return A target state instance
+     */
     @VisibleForTesting
     <T extends State> T transitionToState(StateFactory<T> targetState) {
         Preconditions.checkState(

@@ -88,7 +88,8 @@ public class StopWithSavepointOperationHandlerImplTest extends TestLogger {
         testInstance.handleExecutionsTermination(Collections.singleton(ExecutionState.FINISHED));
 
         assertThat(
-                testInstance.getSavepointPath().get(), is(completedSavepoint.getExternalPointer()));
+                testInstance.getSavepointPathFuture().get(),
+                is(completedSavepoint.getExternalPointer()));
 
         assertFalse(
                 "The savepoint should not have been discarded.", streamStateHandle.isDisposed());
@@ -130,7 +131,7 @@ public class StopWithSavepointOperationHandlerImplTest extends TestLogger {
         handleExecutionsTermination.accept(testInstance);
 
         try {
-            testInstance.getSavepointPath().get();
+            testInstance.getSavepointPathFuture().get();
             fail("An ExecutionException is expected.");
         } catch (Throwable e) {
             final Optional<Throwable> actualException =
@@ -164,7 +165,7 @@ public class StopWithSavepointOperationHandlerImplTest extends TestLogger {
                 Collections.singletonList(expectedNonFinishedState));
 
         try {
-            testInstance.getSavepointPath().get();
+            testInstance.getSavepointPathFuture().get();
             fail("An ExecutionException is expected.");
         } catch (Throwable e) {
             final Optional<FlinkException> actualFlinkException =

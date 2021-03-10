@@ -24,7 +24,6 @@ import org.apache.flink.runtime.checkpoint.StopWithSavepointOperations;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.scheduler.adaptive.GlobalFailureHandler;
 import org.apache.flink.util.FlinkException;
-import org.apache.flink.util.Preconditions;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -32,7 +31,6 @@ import org.slf4j.Logger;
 import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
@@ -64,8 +62,6 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointO
 
     private State state = new WaitingForSavepoint();
 
-    private boolean inStateTransition = false;
-
     public <H extends GlobalFailureHandler & StopWithSavepointOperations>
             StopWithSavepointOperationHandlerImpl(
                     JobID jobId, H failureHandlerAndOperations, Logger log) {
@@ -84,7 +80,7 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointO
     }
 
     @Override
-    public CompletableFuture<String> getSavepointPath() {
+    public CompletableFuture<String> getSavepointPathFuture() {
         return result;
     }
 
@@ -115,55 +111,61 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointO
         }
     }
 
-    @Override
-    public void abortOperation(Throwable cause) {
-        transitionToState(() -> state.onAbort(cause), String.format("abort for job %s.", jobId));
-    }
-
     private void handleSavepointCreationSuccess(CompletedCheckpoint completedCheckpoint) {
-        transitionToState(
-                () -> state.onSavepointCreation(completedCheckpoint),
-                String.format("savepoint creation handling for job %s.", jobId));
+        final State oldState = state;
+        state = state.onSavepointCreation(completedCheckpoint);
+
+        log.debug(
+                "Stop-with-savepoint transitioned from {} to {} on savepoint creation handling for job {}.",
+                oldState.getName(),
+                state.getName(),
+                jobId);
     }
 
     private void handleSavepointCreationFailure(Throwable throwable) {
-        transitionToState(
-                () -> state.onSavepointCreationFailure(throwable),
-                String.format("savepoint creation failure handling for job %s.", jobId));
+        final State oldState = state;
+        state = state.onSavepointCreationFailure(throwable);
+
+        log.debug(
+                "Stop-with-savepoint transitioned from {} to {} on savepoint creation failure handling for job {}.",
+                oldState.getName(),
+                state.getName(),
+                jobId);
     }
 
     private void handleExecutionsFinished() {
-        transitionToState(
-                () -> state.onExecutionsFinished(),
-                String.format(
-                        "execution termination handling with all executions being finished for job %s.",
-                        jobId));
+        final State oldState = state;
+        state = state.onExecutionsFinished();
+
+        log.debug(
+                "Stop-with-savepoint transitioned from {} to {} on execution termination handling with all executions being finished for job {}.",
+                oldState.getName(),
+                state.getName(),
+                jobId);
     }
 
     private void handleAnyExecutionNotFinished(Set<ExecutionState> notFinishedExecutionStates) {
-        transitionToState(
-                () -> state.onAnyExecutionNotFinished(notFinishedExecutionStates),
-                String.format(
-                        "execution termination handling for job %s with some executions being in an not-finished state: %s",
-                        jobId, notFinishedExecutionStates));
+        final State oldState = state;
+        state = state.onAnyExecutionNotFinished(notFinishedExecutionStates);
+
+        log.warn(
+                "Stop-with-savepoint transitioned from {} to {} on execution termination handling for job {} with some executions being in an not-finished state: {}",
+                oldState.getName(),
+                state.getName(),
+                jobId,
+                notFinishedExecutionStates);
     }
 
-    private void transitionToState(Supplier<? extends State> targetState, String message) {
-        Preconditions.checkState(
-                !inStateTransition,
-                "Can not transition to new state because we are already in a state transition");
+    @Override
+    public void abortOperation(Throwable cause) {
         final State oldState = state;
-        inStateTransition = true;
-        try {
-            state = targetState.get();
-        } finally {
-            inStateTransition = false;
-        }
+        state = state.onAbort(cause);
 
         log.debug(
-                String.format(
-                        "Stop-with-savepoint transitioned from %s to %s on %s",
-                        oldState.getName(), state.getName(), message));
+                "Stop-with-savepoint transitioned from {} to {} on abort for job {}",
+                oldState.getName(),
+                state.getName(),
+                jobId);
     }
 
     /**
@@ -231,8 +233,13 @@ public class StopWithSavepointOperationHandlerImpl implements StopWithSavepointO
 
         @Override
         public State onAbort(Throwable cause) {
-            terminateExceptionally(cause);
-            return new FinalState();
+            return onSavepointCreationFailure(cause);
+        }
+
+        @Override
+        public State onExecutionsFinished() {
+            return onSavepointCreationFailure(
+                    new FlinkException("Job has been stopped before savepoint was created."));
         }
     }
 

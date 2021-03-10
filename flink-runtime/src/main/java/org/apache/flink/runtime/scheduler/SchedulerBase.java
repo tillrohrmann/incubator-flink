@@ -962,7 +962,7 @@ public abstract class SchedulerBase implements SchedulerNG, StopWithSavepointOpe
                         this,
                         new StopWithSavepointOperationHandlerImpl(jobGraph.getJobID(), this, log));
 
-        return stopWithSavepointOperationManager.trackStopWithSavepoint(
+        return stopWithSavepointOperationManager.trackStopWithSavepointWithTerminationFutures(
                 terminate, targetDirectory, executionTerminationsFuture, mainThreadExecutor);
     }
 

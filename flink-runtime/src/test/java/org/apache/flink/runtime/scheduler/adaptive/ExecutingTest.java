@@ -251,7 +251,7 @@ public class ExecutingTest extends TestLogger {
     }
 
     @Test
-    public void testStopWithSavepoint() throws Exception {
+    public void testTransitionToStopWithSavepointState() throws Exception {
         try (MockExecutingContext ctx = new MockExecutingContext()) {
             CheckpointCoordinator coordinator =
                     new CheckpointCoordinatorTestingUtils.CheckpointCoordinatorBuilder().build();

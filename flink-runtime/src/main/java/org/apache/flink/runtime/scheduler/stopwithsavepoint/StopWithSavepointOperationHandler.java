@@ -44,7 +44,7 @@ public interface StopWithSavepointOperationHandler {
      * @return the {@code CompletableFuture} containing the path to the created savepoint in case of
      *     success.
      */
-    CompletableFuture<String> getSavepointPath();
+    CompletableFuture<String> getSavepointPathFuture();
 
     /**
      * Handles the result of a {@code CompletableFuture} holding a {@link CompletedCheckpoint}. Only

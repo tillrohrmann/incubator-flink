@@ -237,7 +237,8 @@ class Executing extends StateWithExecutionGraph implements ResourceConsumer {
          *     StopWithSavepoint} state
          * @param operatorCoordinatorHandler operatorCoordinatorHandler to pass to the {@link
          *     StopWithSavepoint} state
-         * @param targetDirectory target for the savepoint
+         * @param targetDirectory target for the savepoint, if provided. Otherwise the default
+         *     savepoint location will be used.
          * @param terminate flag indicating whether to suspend to terminate after savepoint
          *     completion.
          * @return Location of the savepoint.
