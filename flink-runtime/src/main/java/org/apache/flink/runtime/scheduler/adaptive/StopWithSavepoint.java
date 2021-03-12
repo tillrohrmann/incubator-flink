@@ -96,8 +96,7 @@ class StopWithSavepoint extends StateWithExecutionGraph {
                 throw new IllegalStateException(
                         "A savepoint should never fail after a job has been terminated via stop-with-savepoint.");
             } else {
-                operationFuture.complete(savepoint);
-                context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
+                completeOperationAndGoToFinished(savepoint);
             }
         } else {
             if (throwable != null) {
@@ -159,20 +158,20 @@ class StopWithSavepoint extends StateWithExecutionGraph {
     void onGloballyTerminalState(JobStatus globallyTerminalState) {
         // this is a bit ugly because we have to order the savepoint and globally terminal state
         // signals
-        if (savepoint == null) {
-            if (globallyTerminalState == JobStatus.FINISHED) {
+        if (globallyTerminalState == JobStatus.FINISHED) {
+            if (savepoint == null) {
                 hasFullyFinished = true;
             } else {
-                handleAnyFailure(new FlinkException("Job did not finish properly."));
+                completeOperationAndGoToFinished(savepoint);
             }
         } else {
-            if (globallyTerminalState == JobStatus.FINISHED) {
-                operationFuture.complete(savepoint);
-                context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
-            } else {
-                handleAnyFailure(new FlinkException("Job did not finish properly."));
-            }
+            handleAnyFailure(new FlinkException("Job did not finish properly."));
         }
+    }
+
+    private void completeOperationAndGoToFinished(String savepoint) {
+        operationFuture.complete(savepoint);
+        context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
     }
 
     private void handleAnyFailure(Throwable cause) {
