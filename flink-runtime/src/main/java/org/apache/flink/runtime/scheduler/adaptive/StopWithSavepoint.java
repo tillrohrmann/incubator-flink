@@ -20,6 +20,7 @@ package org.apache.flink.runtime.scheduler.adaptive;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.checkpoint.StopWithSavepointOperations;
+import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
 import org.apache.flink.runtime.executiongraph.ExecutionGraph;
@@ -28,6 +29,7 @@ import org.apache.flink.runtime.scheduler.ExecutionGraphHandler;
 import org.apache.flink.runtime.scheduler.OperatorCoordinatorHandler;
 import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointOperationHandler;
 import org.apache.flink.runtime.scheduler.stopwithsavepoint.StopWithSavepointOperationManager;
+import org.apache.flink.util.FlinkException;
 
 import org.slf4j.Logger;
 
@@ -49,8 +51,14 @@ class StopWithSavepoint extends StateWithExecutionGraph {
     private final Context context;
     private final ClassLoader userCodeClassLoader;
 
-    private final StopWithSavepointOperationManagerForAdaptiveScheduler
-            stopWithSavepointOperationManager;
+    private final CompletableFuture<String> savepointFuture;
+    private final CompletableFuture<String> operationFuture;
+
+    private final StopWithSavepointOperations stopWithSavepointOperations;
+
+    private boolean hasFullyFinished = false;
+
+    @Nullable private String savepoint = null;
 
     StopWithSavepoint(
             Context context,
@@ -60,25 +68,54 @@ class StopWithSavepoint extends StateWithExecutionGraph {
             StopWithSavepointOperations stopWithSavepointOperations,
             Logger logger,
             ClassLoader userCodeClassLoader,
-            @Nullable String targetDirectory,
-            boolean terminate) {
+            CompletableFuture<String> savepointFuture) {
         super(context, executionGraph, executionGraphHandler, operatorCoordinatorHandler, logger);
         this.context = context;
         this.userCodeClassLoader = userCodeClassLoader;
+        this.stopWithSavepointOperations = stopWithSavepointOperations;
+        this.savepointFuture = savepointFuture;
+        this.operationFuture = new CompletableFuture<>();
 
-        stopWithSavepointOperationManager =
-                new StopWithSavepointOperationManagerForAdaptiveScheduler(
-                        executionGraph,
-                        stopWithSavepointOperations,
-                        terminate,
-                        targetDirectory,
-                        context.getMainThreadExecutor(),
-                        logger);
+        FutureUtils.assertNoException(
+                savepointFuture.handle(
+                        (savepoint, throwable) -> {
+                            context.runIfState(
+                                    this,
+                                    () -> handleSavepointCompletion(savepoint, throwable),
+                                    Duration.ZERO);
+                            return null;
+                        }));
+    }
+
+    private void handleSavepointCompletion(
+            @Nullable String savepoint, @Nullable Throwable throwable) {
+        // this is a bit ugly because we have to order the savepoint and globally terminal state
+        // signals
+        if (hasFullyFinished) {
+            if (throwable != null) {
+                throw new IllegalStateException(
+                        "A savepoint should never fail after a job has been terminated via stop-with-savepoint.");
+            } else {
+                operationFuture.complete(savepoint);
+                context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
+            }
+        } else {
+            if (throwable != null) {
+                stopWithSavepointOperations.startCheckpointScheduler();
+                context.goToExecuting(
+                        getExecutionGraph(),
+                        getExecutionGraphHandler(),
+                        getOperatorCoordinatorHandler());
+            } else {
+                this.savepoint = savepoint;
+            }
+        }
     }
 
     @Override
     public void onLeave(Class<? extends State> newState) {
-        stopWithSavepointOperationManager.onLeave();
+        this.operationFuture.completeExceptionally(
+                new FlinkException("Stop with savepoint operation could not be completed."));
 
         super.onLeave(newState);
     }
@@ -120,12 +157,25 @@ class StopWithSavepoint extends StateWithExecutionGraph {
 
     @Override
     void onGloballyTerminalState(JobStatus globallyTerminalState) {
-        context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
+        // this is a bit ugly because we have to order the savepoint and globally terminal state
+        // signals
+        if (savepoint == null) {
+            if (globallyTerminalState == JobStatus.FINISHED) {
+                hasFullyFinished = true;
+            } else {
+                handleAnyFailure(new FlinkException("Job did not finish properly."));
+            }
+        } else {
+            if (globallyTerminalState == JobStatus.FINISHED) {
+                operationFuture.complete(savepoint);
+                context.goToFinished(ArchivedExecutionGraph.createFrom(getExecutionGraph()));
+            } else {
+                handleAnyFailure(new FlinkException("Job did not finish properly."));
+            }
+        }
     }
 
     private void handleAnyFailure(Throwable cause) {
-        stopWithSavepointOperationManager.onError(cause);
-
         final Executing.FailureResult failureResult = context.howToHandleFailure(cause);
 
         if (failureResult.canRestart()) {
@@ -144,7 +194,7 @@ class StopWithSavepoint extends StateWithExecutionGraph {
     }
 
     CompletableFuture<String> getOperationCompletionFuture() {
-        return stopWithSavepointOperationManager.getSavepointPathFuture();
+        return operationFuture;
     }
 
     interface Context extends StateWithExecutionGraph.Context {
@@ -200,6 +250,13 @@ class StopWithSavepoint extends StateWithExecutionGraph {
                 ExecutionGraphHandler executionGraphHandler,
                 OperatorCoordinatorHandler operatorCoordinatorHandler,
                 Throwable failureCause);
+
+        void goToExecuting(
+                ExecutionGraph executionGraph,
+                ExecutionGraphHandler executionGraphHandler,
+                OperatorCoordinatorHandler operatorCoordinatorHandler);
+
+        void runIfState(State state, Runnable runnable, Duration delay);
     }
 
     static class Factory implements StateFactory<StopWithSavepoint> {
@@ -217,9 +274,7 @@ class StopWithSavepoint extends StateWithExecutionGraph {
 
         private final ClassLoader userCodeClassLoader;
 
-        @Nullable private final String targetDirectory;
-
-        private final boolean terminate;
+        private final CompletableFuture<String> savepointFuture;
 
         Factory(
                 Context context,
@@ -229,8 +284,7 @@ class StopWithSavepoint extends StateWithExecutionGraph {
                 StopWithSavepointOperations stopWithSavepointOperations,
                 Logger logger,
                 ClassLoader userCodeClassLoader,
-                @Nullable String targetDirectory,
-                boolean terminate) {
+                CompletableFuture<String> savepointFuture) {
             this.context = context;
             this.executionGraph = executionGraph;
             this.executionGraphHandler = executionGraphHandler;
@@ -238,8 +292,7 @@ class StopWithSavepoint extends StateWithExecutionGraph {
             this.stopWithSavepointOperations = stopWithSavepointOperations;
             this.logger = logger;
             this.userCodeClassLoader = userCodeClassLoader;
-            this.targetDirectory = targetDirectory;
-            this.terminate = terminate;
+            this.savepointFuture = savepointFuture;
         }
 
         @Override
@@ -257,8 +310,7 @@ class StopWithSavepoint extends StateWithExecutionGraph {
                     stopWithSavepointOperations,
                     logger,
                     userCodeClassLoader,
-                    targetDirectory,
-                    terminate);
+                    savepointFuture);
         }
     }
 }
