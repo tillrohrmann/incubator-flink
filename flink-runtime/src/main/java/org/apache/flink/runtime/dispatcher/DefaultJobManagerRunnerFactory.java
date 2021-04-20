@@ -25,10 +25,12 @@ import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmaster.DefaultSlotPoolServiceSchedulerFactory;
+import org.apache.flink.runtime.jobmaster.JobManagerLeadershipRunner;
 import org.apache.flink.runtime.jobmaster.JobManagerRunner;
 import org.apache.flink.runtime.jobmaster.JobManagerRunnerImpl;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.JobMasterConfiguration;
+import org.apache.flink.runtime.jobmaster.JobMasterServiceProcessFactory;
 import org.apache.flink.runtime.jobmaster.SlotPoolServiceSchedulerFactory;
 import org.apache.flink.runtime.jobmaster.factories.DefaultJobMasterServiceFactory;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
@@ -87,14 +89,35 @@ public enum DefaultJobManagerRunnerFactory implements JobManagerRunnerFactory {
                         fatalErrorHandler,
                         shuffleMaster);
 
-        return new JobManagerRunnerImpl(
+        /*return new JobManagerRunnerImpl(
+        jobGraph,
+        jobMasterFactory,
+        highAvailabilityServices,
+        jobManagerServices
+                .getLibraryCacheManager()
+                .registerClassLoaderLease(jobGraph.getJobID()),
+        jobManagerServices.getScheduledExecutorService(),
+        fatalErrorHandler,
+        initializationTimestamp);*/
+        final JobMasterServiceProcessFactory jobMasterServiceProcessFactory =
+                new DefaultJobMasterServiceProcessFactory(
+                        jobMasterConfiguration,
+                        slotPoolServiceSchedulerFactory,
+                        rpcService,
+                        highAvailabilityServices,
+                        jobManagerServices,
+                        heartbeatServices,
+                        jobManagerJobMetricGroupFactory,
+                        fatalErrorHandler,
+                        shuffleMaster);
+
+        return new JobManagerLeadershipRunner(
                 jobGraph,
-                jobMasterFactory,
-                highAvailabilityServices,
+                jobMasterServiceProcessFactory,
                 jobManagerServices
                         .getLibraryCacheManager()
                         .registerClassLoaderLease(jobGraph.getJobID()),
-                jobManagerServices.getScheduledExecutorService(),
+                highAvailabilityServices.getJobManagerLeaderElectionService(jobGraph.getJobID()),
                 fatalErrorHandler,
                 initializationTimestamp);
     }

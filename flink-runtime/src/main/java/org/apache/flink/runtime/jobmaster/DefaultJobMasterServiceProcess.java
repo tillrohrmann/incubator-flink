@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.jobmaster;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.util.FlinkException;
 
@@ -43,14 +44,18 @@ public class DefaultJobMasterServiceProcess implements JobMasterServiceProcess {
 
     public DefaultJobMasterServiceProcess(
             CompletableFuture<JobMasterService> jobMasterServiceFuture) {
-        this.jobMasterServiceFuture = jobMasterServiceFuture;
-
-        FutureUtils.forward(
-                jobMasterServiceFuture.thenApply(JobMasterService::getGateway),
-                jobMasterGatewayFuture);
-        FutureUtils.forward(
-                jobMasterServiceFuture.thenApply(JobMasterService::getAddress),
-                leaderAddressFuture);
+        this.jobMasterServiceFuture =
+                jobMasterServiceFuture.whenComplete(
+                        (jobMasterService, initializationError) -> {
+                            if (jobMasterService == null) {
+                                resultFuture.complete(
+                                        JobManagerRunnerResult.forInitializationFailure(
+                                                initializationError));
+                            } else {
+                                jobMasterGatewayFuture.complete(jobMasterService.getGateway());
+                                leaderAddressFuture.complete(jobMasterService.getAddress());
+                            }
+                        });
     }
 
     @Override
@@ -59,16 +64,24 @@ public class DefaultJobMasterServiceProcess implements JobMasterServiceProcess {
             if (isRunning) {
                 isRunning = false;
 
-                resultFuture.complete(JobManagerRunnerResult.jobNotFinished());
+                resultFuture.complete(JobManagerRunnerResult.forJobNotFinished());
                 jobMasterGatewayFuture.completeExceptionally(
                         new FlinkException("Process has been closed."));
 
-                FutureUtils.forward(
-                        jobMasterServiceFuture.thenCompose(JobMasterService::closeAsync),
-                        terminationFuture);
+                if (isInitializationFailed()) {
+                    terminationFuture.complete(null);
+                } else {
+                    FutureUtils.forward(
+                            jobMasterServiceFuture.thenCompose(JobMasterService::closeAsync),
+                            terminationFuture);
+                }
             }
         }
         return terminationFuture;
+    }
+
+    private boolean isInitializationFailed() {
+        return jobMasterGatewayFuture.isCompletedExceptionally();
     }
 
     @Override
@@ -89,5 +102,10 @@ public class DefaultJobMasterServiceProcess implements JobMasterServiceProcess {
     @Override
     public CompletableFuture<String> getLeaderAddressFuture() {
         return leaderAddressFuture;
+    }
+
+    @Override
+    public JobID getJobId() {
+        return null;
     }
 }

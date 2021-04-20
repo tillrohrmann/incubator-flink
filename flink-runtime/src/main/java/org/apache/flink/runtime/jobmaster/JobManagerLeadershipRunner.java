@@ -22,7 +22,10 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.concurrent.FutureUtils;
+import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
+import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.leaderelection.LeaderContender;
 import org.apache.flink.runtime.leaderelection.LeaderElectionService;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -34,13 +37,17 @@ import org.apache.flink.util.Preconditions;
 
 import javax.annotation.concurrent.GuardedBy;
 
+import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
+import static org.apache.flink.util.Preconditions.checkArgument;
+
 /** Leadership runner for the {@link JobMasterServiceProcess}. */
-public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderContender {
+public class JobManagerLeadershipRunner
+        implements JobManagerRunner, LeaderContender, OnCompletionActions {
 
     private final Object lock = new Object();
 
@@ -54,6 +61,10 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
 
     private final CompletableFuture<JobManagerRunnerResult> resultFuture =
             new CompletableFuture<>();
+    private final LibraryCacheManager.ClassLoaderHandle classLoaderLease;
+    private final ClassLoader userCodeClassLoader;
+    private final long initializationTimestamp;
+    private final JobGraph jobGraph;
 
     @GuardedBy("lock")
     private State state = State.RUNNING;
@@ -69,12 +80,32 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
     private CompletableFuture<JobMasterGateway> jobMasterGatewayFuture = new CompletableFuture<>();
 
     public JobManagerLeadershipRunner(
+            JobGraph jobGraph,
             JobMasterServiceProcessFactory jobMasterServiceProcessFactory,
+            LibraryCacheManager.ClassLoaderLease classLoaderLease,
             LeaderElectionService leaderElectionService,
-            FatalErrorHandler fatalErrorHandler) {
+            FatalErrorHandler fatalErrorHandler,
+            long initializationTimestamp)
+            throws Exception {
+
+        checkArgument(jobGraph.getNumberOfVertices() > 0, "The given job is empty");
+
+        this.jobGraph = jobGraph;
         this.jobMasterServiceProcessFactory = jobMasterServiceProcessFactory;
+        this.classLoaderLease = classLoaderLease;
         this.leaderElectionService = leaderElectionService;
         this.fatalErrorHandler = fatalErrorHandler;
+        this.initializationTimestamp = initializationTimestamp;
+        // libraries and class loader first
+        try {
+            this.userCodeClassLoader =
+                    classLoaderLease
+                            .getOrResolveClassLoader(
+                                    jobGraph.getUserJarBlobKeys(), jobGraph.getClasspaths())
+                            .asClassLoader();
+        } catch (IOException e) {
+            throw new Exception("Cannot set up the user code libraries: " + e.getMessage(), e);
+        }
     }
 
     @Override
@@ -86,7 +117,7 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
                 jobMasterGatewayFuture.completeExceptionally(
                         new FlinkException(
                                 "JobManagerLeadershipRunner is closed. Therefore, the corresponding JobMaster will never acquire the leadership."));
-                resultFuture.complete(JobManagerRunnerResult.jobNotFinished());
+                resultFuture.complete(JobManagerRunnerResult.forJobNotFinished());
 
                 final CompletableFuture<Void> processTerminationFuture =
                         jobMasterServiceProcess.closeAsync();
@@ -121,7 +152,7 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
 
     @Override
     public JobID getJobID() {
-        return jobMasterServiceProcessFactory.getJobId();
+        return jobMasterServiceProcess.getJobId();
     }
 
     @Override
@@ -158,8 +189,8 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
                     return CompletableFuture.completedFuture(
                             new ExecutionGraphInfo(
                                     ArchivedExecutionGraph.createFromInitializingJob(
-                                            getJobID(),
-                                            null,
+                                            jobGraph.getJobID(),
+                                            jobGraph.getName(),
                                             JobStatus.INITIALIZING,
                                             null,
                                             initializationTimestamp)));
@@ -196,7 +227,13 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
     private void createNewJobMasterProcess(UUID leaderSessionId) {
         Preconditions.checkState(jobMasterServiceProcess.closeAsync().isDone());
 
-        jobMasterServiceProcess = jobMasterServiceProcessFactory.create(leaderSessionId);
+        jobMasterServiceProcess =
+                jobMasterServiceProcessFactory.create(
+                        jobGraph,
+                        new JobMasterId(leaderSessionId),
+                        this,
+                        userCodeClassLoader,
+                        initializationTimestamp);
 
         forwardIfValidLeader(
                 leaderSessionId,
@@ -322,6 +359,21 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
                         }
                     }
                 });
+    }
+
+    @Override
+    public void jobReachedGloballyTerminalState(ExecutionGraphInfo executionGraphInfo) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void jobFinishedByOther() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void jobMasterFailed(Throwable cause) {
+        throw new UnsupportedOperationException();
     }
 
     enum State {

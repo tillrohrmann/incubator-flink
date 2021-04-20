@@ -18,12 +18,14 @@
 
 package org.apache.flink.runtime.jobmaster;
 
-import org.apache.flink.api.common.JobID;
-
-import java.util.UUID;
+import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 
 public interface JobMasterServiceProcessFactory {
-    JobMasterServiceProcess create(UUID leaderSessionId);
-
-    JobID getJobId();
+    JobMasterServiceProcess create(
+            JobGraph jobGraph,
+            JobMasterId jobMasterId,
+            OnCompletionActions jobCompletionActions,
+            ClassLoader userCodeClassloader,
+            long initializationTimestamp);
 }

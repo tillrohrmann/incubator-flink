@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.jobmaster;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.util.AutoCloseableAsync;
 
 import java.util.concurrent.CompletableFuture;
@@ -25,7 +26,7 @@ import java.util.concurrent.CompletableFuture;
 public interface JobMasterServiceProcess extends AutoCloseableAsync {
 
     static JobMasterServiceProcess waitingForLeadership() {
-        return null;
+        return new WaitingForLeadershipJobMasterServiceProcess();
     }
 
     boolean isInitialized();
@@ -35,4 +36,39 @@ public interface JobMasterServiceProcess extends AutoCloseableAsync {
     CompletableFuture<JobManagerRunnerResult> getResultFuture();
 
     CompletableFuture<String> getLeaderAddressFuture();
+
+    JobID getJobId();
+
+    class WaitingForLeadershipJobMasterServiceProcess implements JobMasterServiceProcess {
+
+        @Override
+        public boolean isInitialized() {
+            return false;
+        }
+
+        @Override
+        public CompletableFuture<JobMasterGateway> getJobMasterGatewayFuture() {
+            throw new IllegalStateException();
+        }
+
+        @Override
+        public CompletableFuture<JobManagerRunnerResult> getResultFuture() {
+            throw new IllegalStateException();
+        }
+
+        @Override
+        public CompletableFuture<String> getLeaderAddressFuture() {
+            throw new IllegalStateException();
+        }
+
+        @Override
+        public JobID getJobId() {
+            throw new IllegalStateException();
+        }
+
+        @Override
+        public CompletableFuture<Void> closeAsync() {
+            return CompletableFuture.completedFuture(null);
+        }
+    }
 }
