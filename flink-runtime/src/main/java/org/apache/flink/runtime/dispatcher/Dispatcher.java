@@ -453,6 +453,9 @@ public abstract class Dispatcher extends PermanentlyFencedRpcEndpoint<Dispatcher
                 return jobReachedGloballyTerminalState(
                         new ExecutionGraphInfo(archivedExecutionGraph));
             }
+        } else if (jobManagerRunnerResult.isJobNotFinished()) {
+            jobNotFinished(jobGraph.getJobID());
+            return CleanupJobState.LOCAL;
         } else {
             return jobReachedGloballyTerminalState(jobManagerRunnerResult.getExecutionGraphInfo());
         }
@@ -650,11 +653,17 @@ public abstract class Dispatcher extends PermanentlyFencedRpcEndpoint<Dispatcher
         } else {
             return job.getResultFuture()
                     .thenApply(
-                            jobManagerRunnerResult ->
-                                    JobResult.createFrom(
+                            jobManagerRunnerResult -> {
+                                if (jobManagerRunnerResult.isJobNotFinished()) {
+                                    throw new CompletionException(
+                                            new JobNotFinishedException(jobId));
+                                } else {
+                                    return JobResult.createFrom(
                                             jobManagerRunnerResult
                                                     .getExecutionGraphInfo()
-                                                    .getArchivedExecutionGraph()));
+                                                    .getArchivedExecutionGraph());
+                                }
+                            });
         }
     }
 

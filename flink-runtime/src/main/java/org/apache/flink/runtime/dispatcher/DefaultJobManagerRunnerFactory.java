@@ -32,9 +32,7 @@ import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.JobMasterConfiguration;
 import org.apache.flink.runtime.jobmaster.JobMasterServiceProcessFactory;
 import org.apache.flink.runtime.jobmaster.SlotPoolServiceSchedulerFactory;
-import org.apache.flink.runtime.jobmaster.factories.DefaultJobMasterServiceFactory;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
-import org.apache.flink.runtime.jobmaster.factories.JobMasterServiceFactory;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
@@ -77,28 +75,6 @@ public enum DefaultJobManagerRunnerFactory implements JobManagerRunnerFactory {
                 ShuffleServiceLoader.loadShuffleServiceFactory(configuration)
                         .createShuffleMaster(configuration);
 
-        final JobMasterServiceFactory jobMasterFactory =
-                new DefaultJobMasterServiceFactory(
-                        jobMasterConfiguration,
-                        slotPoolServiceSchedulerFactory,
-                        rpcService,
-                        highAvailabilityServices,
-                        jobManagerServices,
-                        heartbeatServices,
-                        jobManagerJobMetricGroupFactory,
-                        fatalErrorHandler,
-                        shuffleMaster);
-
-        /*return new JobManagerRunnerImpl(
-        jobGraph,
-        jobMasterFactory,
-        highAvailabilityServices,
-        jobManagerServices
-                .getLibraryCacheManager()
-                .registerClassLoaderLease(jobGraph.getJobID()),
-        jobManagerServices.getScheduledExecutorService(),
-        fatalErrorHandler,
-        initializationTimestamp);*/
         final JobMasterServiceProcessFactory jobMasterServiceProcessFactory =
                 new DefaultJobMasterServiceProcessFactory(
                         jobMasterConfiguration,
@@ -117,7 +93,7 @@ public enum DefaultJobManagerRunnerFactory implements JobManagerRunnerFactory {
                 jobManagerServices
                         .getLibraryCacheManager()
                         .registerClassLoaderLease(jobGraph.getJobID()),
-                highAvailabilityServices.getJobManagerLeaderElectionService(jobGraph.getJobID()),
+                highAvailabilityServices,
                 fatalErrorHandler,
                 initializationTimestamp);
     }

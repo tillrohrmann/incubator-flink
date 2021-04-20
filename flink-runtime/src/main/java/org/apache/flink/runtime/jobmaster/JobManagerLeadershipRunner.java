@@ -24,6 +24,8 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
 import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
+import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
+import org.apache.flink.runtime.highavailability.RunningJobsRegistry;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.leaderelection.LeaderContender;
@@ -34,6 +36,9 @@ import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -48,6 +53,8 @@ import static org.apache.flink.util.Preconditions.checkArgument;
 /** Leadership runner for the {@link JobMasterServiceProcess}. */
 public class JobManagerLeadershipRunner
         implements JobManagerRunner, LeaderContender, OnCompletionActions {
+
+    private static final Logger log = LoggerFactory.getLogger(JobManagerLeadershipRunner.class);
 
     private final Object lock = new Object();
 
@@ -65,6 +72,7 @@ public class JobManagerLeadershipRunner
     private final ClassLoader userCodeClassLoader;
     private final long initializationTimestamp;
     private final JobGraph jobGraph;
+    private final RunningJobsRegistry runningJobsRegistry;
 
     @GuardedBy("lock")
     private State state = State.RUNNING;
@@ -79,11 +87,14 @@ public class JobManagerLeadershipRunner
     @GuardedBy("lock")
     private CompletableFuture<JobMasterGateway> jobMasterGatewayFuture = new CompletableFuture<>();
 
+    @GuardedBy("lock")
+    private JobStatus jobStatusDuringInitialization = JobStatus.INITIALIZING;
+
     public JobManagerLeadershipRunner(
             JobGraph jobGraph,
             JobMasterServiceProcessFactory jobMasterServiceProcessFactory,
             LibraryCacheManager.ClassLoaderLease classLoaderLease,
-            LeaderElectionService leaderElectionService,
+            final HighAvailabilityServices haServices,
             FatalErrorHandler fatalErrorHandler,
             long initializationTimestamp)
             throws Exception {
@@ -93,10 +104,12 @@ public class JobManagerLeadershipRunner
         this.jobGraph = jobGraph;
         this.jobMasterServiceProcessFactory = jobMasterServiceProcessFactory;
         this.classLoaderLease = classLoaderLease;
-        this.leaderElectionService = leaderElectionService;
+        this.leaderElectionService =
+                haServices.getJobManagerLeaderElectionService(jobGraph.getJobID());
         this.fatalErrorHandler = fatalErrorHandler;
         this.initializationTimestamp = initializationTimestamp;
-        // libraries and class loader first
+        this.runningJobsRegistry = haServices.getRunningJobsRegistry();
+
         try {
             this.userCodeClassLoader =
                     classLoaderLease
@@ -147,6 +160,17 @@ public class JobManagerLeadershipRunner
 
     @Override
     public CompletableFuture<JobManagerRunnerResult> getResultFuture() {
+        // TODO: reconsider -- purpose is to stick to the existing contract(s)
+        /* return resultFuture.thenApply(
+                result -> {
+                    if (result.isJobNotFinished()) {
+                        throw new RuntimeException(
+                                new JobNotFinishedException(jobGraph.getJobID()));
+                    }
+                    return result;
+                }); /
+
+        */
         return resultFuture;
     }
 
@@ -157,6 +181,9 @@ public class JobManagerLeadershipRunner
 
     @Override
     public CompletableFuture<Acknowledge> cancel(Time timeout) {
+        synchronized (lock) {
+            jobStatusDuringInitialization = JobStatus.CANCELLING;
+        }
         return getJobMasterGateway()
                 .thenCompose(jobMasterGateway -> jobMasterGateway.cancel(timeout));
     }
@@ -191,7 +218,7 @@ public class JobManagerLeadershipRunner
                                     ArchivedExecutionGraph.createFromInitializingJob(
                                             jobGraph.getJobID(),
                                             jobGraph.getName(),
-                                            JobStatus.INITIALIZING,
+                                            jobStatusDuringInitialization,
                                             null,
                                             initializationTimestamp)));
                 }
@@ -361,9 +388,12 @@ public class JobManagerLeadershipRunner
                 });
     }
 
+    /** Job completion notification triggered by JobManager. */
     @Override
     public void jobReachedGloballyTerminalState(ExecutionGraphInfo executionGraphInfo) {
-        throw new UnsupportedOperationException();
+        unregisterJobFromHighAvailability();
+        // complete the result future with the information of the information of the terminated job
+        resultFuture.complete(JobManagerRunnerResult.forSuccess(executionGraphInfo));
     }
 
     @Override
@@ -374,6 +404,25 @@ public class JobManagerLeadershipRunner
     @Override
     public void jobMasterFailed(Throwable cause) {
         throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Marks this runner's job as not running. Other JobManager will not recover the job after this
+     * call.
+     *
+     * <p>This method never throws an exception.
+     */
+    private void unregisterJobFromHighAvailability() {
+        try {
+            runningJobsRegistry.setJobFinished(jobGraph.getJobID());
+        } catch (Throwable t) {
+            log.error(
+                    "Could not un-register from high-availability services job {} ({})."
+                            + "Other JobManager's may attempt to recover it and re-execute it.",
+                    jobGraph.getName(),
+                    jobGraph.getJobID(),
+                    t);
+        }
     }
 
     enum State {

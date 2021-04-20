@@ -671,6 +671,7 @@ public class DispatcherTest extends TestLogger {
             jobResultFuture.get();
             fail("Expected the job result to throw an exception.");
         } catch (ExecutionException ee) {
+            log.info("caught", ee);
             assertThat(
                     ExceptionUtils.findThrowable(ee, JobNotFinishedException.class).isPresent(),
                     is(true));
