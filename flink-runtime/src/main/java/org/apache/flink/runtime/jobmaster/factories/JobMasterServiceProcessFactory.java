@@ -16,9 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.jobmaster;
+package org.apache.flink.runtime.jobmaster.factories;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
+import org.apache.flink.runtime.jobmaster.JobMasterServiceProcess;
 
 import java.util.UUID;
 
@@ -26,4 +28,6 @@ public interface JobMasterServiceProcessFactory {
     JobMasterServiceProcess create(UUID leaderSessionId);
 
     JobID getJobId();
+
+    ArchivedExecutionGraph createInitializingArchivedExecutionGraph();
 }

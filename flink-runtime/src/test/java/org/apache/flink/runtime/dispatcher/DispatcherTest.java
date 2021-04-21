@@ -681,7 +681,7 @@ public class DispatcherTest extends TestLogger {
     public void testShutDownClusterShouldCompleteShutDownFuture() throws Exception {
         dispatcher =
                 createAndStartDispatcher(
-                        heartbeatServices, haServices, DefaultJobManagerRunnerFactory.INSTANCE);
+                        heartbeatServices, haServices, JobManagerLeadershipRunnerFactory.INSTANCE);
         final DispatcherGateway dispatcherGateway =
                 dispatcher.getSelfGateway(DispatcherGateway.class);
 
@@ -909,7 +909,7 @@ public class DispatcherTest extends TestLogger {
         private HighAvailabilityServices haServices = DispatcherTest.this.haServices;
 
         private JobManagerRunnerFactory jobManagerRunnerFactory =
-                DefaultJobManagerRunnerFactory.INSTANCE;
+                JobManagerLeadershipRunnerFactory.INSTANCE;
 
         private JobGraphWriter jobGraphWriter = NoOpJobGraphWriter.INSTANCE;
 
@@ -1011,7 +1011,7 @@ public class DispatcherTest extends TestLogger {
 
             createdJobManagerRunnerLatch.countDown();
 
-            return DefaultJobManagerRunnerFactory.INSTANCE.createJobManagerRunner(
+            return JobManagerLeadershipRunnerFactory.INSTANCE.createJobManagerRunner(
                     jobGraph,
                     configuration,
                     rpcService,

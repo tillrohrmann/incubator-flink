@@ -54,7 +54,7 @@ public enum JobDispatcherFactory implements DispatcherFactory {
                 fencingToken,
                 DispatcherServices.from(
                         partialDispatcherServicesWithJobGraphStore,
-                        DefaultJobManagerRunnerFactory.INSTANCE),
+                        JobManagerLeadershipRunnerFactory.INSTANCE),
                 jobGraph,
                 dispatcherBootstrapFactory,
                 executionMode);

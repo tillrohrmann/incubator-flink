@@ -18,14 +18,26 @@
 
 package org.apache.flink.runtime.jobmaster;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.concurrent.FutureUtils;
+import org.apache.flink.runtime.jobmanager.OnCompletionActions;
+import org.apache.flink.runtime.jobmaster.factories.JobMasterServiceFactoryNg;
+import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
 import org.apache.flink.util.FlinkException;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-public class DefaultJobMasterServiceProcess implements JobMasterServiceProcess {
+/**
+ * Default {@link JobMasterServiceProcess} which is responsible for creating and running a {@link
+ * JobMasterService}.
+ */
+public class DefaultJobMasterServiceProcess
+        implements JobMasterServiceProcess, OnCompletionActions {
 
     private final Object lock = new Object();
+
+    private final JobID jobId;
 
     private final CompletableFuture<JobMasterService> jobMasterServiceFuture;
 
@@ -42,15 +54,21 @@ public class DefaultJobMasterServiceProcess implements JobMasterServiceProcess {
     private boolean isRunning = true;
 
     public DefaultJobMasterServiceProcess(
-            CompletableFuture<JobMasterService> jobMasterServiceFuture) {
-        this.jobMasterServiceFuture = jobMasterServiceFuture;
+            JobID jobId, UUID leaderSessionId, JobMasterServiceFactoryNg jobMasterServiceFactory) {
+        this.jobId = jobId;
+        this.jobMasterServiceFuture =
+                jobMasterServiceFactory.createJobMasterService(leaderSessionId, this);
 
-        FutureUtils.forward(
-                jobMasterServiceFuture.thenApply(JobMasterService::getGateway),
-                jobMasterGatewayFuture);
-        FutureUtils.forward(
-                jobMasterServiceFuture.thenApply(JobMasterService::getAddress),
-                leaderAddressFuture);
+        jobMasterServiceFuture.whenComplete(
+                (jobMasterService, throwable) -> {
+                    if (throwable != null) {
+                        resultFuture.complete(
+                                JobManagerRunnerResult.forInitializationFailure(throwable));
+                    } else {
+                        jobMasterGatewayFuture.complete(jobMasterService.getGateway());
+                        leaderAddressFuture.complete(jobMasterService.getAddress());
+                    }
+                });
     }
 
     @Override
@@ -59,13 +77,20 @@ public class DefaultJobMasterServiceProcess implements JobMasterServiceProcess {
             if (isRunning) {
                 isRunning = false;
 
-                resultFuture.complete(JobManagerRunnerResult.jobNotFinished());
+                resultFuture.completeExceptionally(new JobNotFinishedException(jobId));
                 jobMasterGatewayFuture.completeExceptionally(
                         new FlinkException("Process has been closed."));
 
-                FutureUtils.forward(
-                        jobMasterServiceFuture.thenCompose(JobMasterService::closeAsync),
-                        terminationFuture);
+                jobMasterServiceFuture.whenComplete(
+                        (jobMasterService, throwable) -> {
+                            if (throwable != null) {
+                                // JobMasterService creation has failed.
+                                terminationFuture.complete(null);
+                            } else {
+                                FutureUtils.forward(
+                                        jobMasterService.closeAsync(), terminationFuture);
+                            }
+                        });
             }
         }
         return terminationFuture;
@@ -89,5 +114,20 @@ public class DefaultJobMasterServiceProcess implements JobMasterServiceProcess {
     @Override
     public CompletableFuture<String> getLeaderAddressFuture() {
         return leaderAddressFuture;
+    }
+
+    @Override
+    public void jobReachedGloballyTerminalState(ExecutionGraphInfo executionGraphInfo) {
+        resultFuture.complete(JobManagerRunnerResult.forSuccess(executionGraphInfo));
+    }
+
+    @Override
+    public void jobFinishedByOther() {
+        resultFuture.completeExceptionally(new JobNotFinishedException(jobId));
+    }
+
+    @Override
+    public void jobMasterFailed(Throwable cause) {
+        resultFuture.completeExceptionally(cause);
     }
 }

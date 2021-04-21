@@ -18,14 +18,18 @@
 
 package org.apache.flink.runtime.jobmaster;
 
+import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.util.AutoCloseableAsync;
+import org.apache.flink.util.FlinkException;
+
+import javax.annotation.Nonnull;
 
 import java.util.concurrent.CompletableFuture;
 
 public interface JobMasterServiceProcess extends AutoCloseableAsync {
 
     static JobMasterServiceProcess waitingForLeadership() {
-        return null;
+        return WaitingForLeadership.INSTANCE;
     }
 
     boolean isInitialized();
@@ -35,4 +39,39 @@ public interface JobMasterServiceProcess extends AutoCloseableAsync {
     CompletableFuture<JobManagerRunnerResult> getResultFuture();
 
     CompletableFuture<String> getLeaderAddressFuture();
+
+    enum WaitingForLeadership implements JobMasterServiceProcess {
+        INSTANCE;
+
+        @Override
+        public CompletableFuture<Void> closeAsync() {
+            return FutureUtils.completedVoidFuture();
+        }
+
+        @Override
+        public boolean isInitialized() {
+            return false;
+        }
+
+        @Override
+        public CompletableFuture<JobMasterGateway> getJobMasterGatewayFuture() {
+            return failedOperationFuture();
+        }
+
+        @Override
+        public CompletableFuture<JobManagerRunnerResult> getResultFuture() {
+            return failedOperationFuture();
+        }
+
+        @Override
+        public CompletableFuture<String> getLeaderAddressFuture() {
+            return failedOperationFuture();
+        }
+
+        @Nonnull
+        private <T> CompletableFuture<T> failedOperationFuture() {
+            return FutureUtils.completedExceptionally(
+                    new FlinkException("Still waiting for the leadership."));
+        }
+    }
 }

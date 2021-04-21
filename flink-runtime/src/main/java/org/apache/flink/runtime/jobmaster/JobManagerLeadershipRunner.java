@@ -22,7 +22,9 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.concurrent.FutureUtils;
-import org.apache.flink.runtime.executiongraph.ArchivedExecutionGraph;
+import org.apache.flink.runtime.execution.librarycache.LibraryCacheManager;
+import org.apache.flink.runtime.highavailability.RunningJobsRegistry;
+import org.apache.flink.runtime.jobmaster.factories.JobMasterServiceProcessFactory;
 import org.apache.flink.runtime.leaderelection.LeaderContender;
 import org.apache.flink.runtime.leaderelection.LeaderElectionService;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -34,6 +36,7 @@ import org.apache.flink.util.Preconditions;
 
 import javax.annotation.concurrent.GuardedBy;
 
+import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -47,6 +50,10 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
     private final JobMasterServiceProcessFactory jobMasterServiceProcessFactory;
 
     private final LeaderElectionService leaderElectionService;
+
+    private final RunningJobsRegistry runningJobsRegistry;
+
+    private final LibraryCacheManager.ClassLoaderLease classLoaderLease;
 
     private final FatalErrorHandler fatalErrorHandler;
 
@@ -71,9 +78,13 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
     public JobManagerLeadershipRunner(
             JobMasterServiceProcessFactory jobMasterServiceProcessFactory,
             LeaderElectionService leaderElectionService,
+            RunningJobsRegistry runningJobsRegistry,
+            LibraryCacheManager.ClassLoaderLease classLoaderLease,
             FatalErrorHandler fatalErrorHandler) {
         this.jobMasterServiceProcessFactory = jobMasterServiceProcessFactory;
         this.leaderElectionService = leaderElectionService;
+        this.runningJobsRegistry = runningJobsRegistry;
+        this.classLoaderLease = classLoaderLease;
         this.fatalErrorHandler = fatalErrorHandler;
     }
 
@@ -86,14 +97,18 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
                 jobMasterGatewayFuture.completeExceptionally(
                         new FlinkException(
                                 "JobManagerLeadershipRunner is closed. Therefore, the corresponding JobMaster will never acquire the leadership."));
-                resultFuture.complete(JobManagerRunnerResult.jobNotFinished());
+                resultFuture.completeExceptionally(new JobNotFinishedException(getJobID()));
 
                 final CompletableFuture<Void> processTerminationFuture =
                         jobMasterServiceProcess.closeAsync();
 
                 final CompletableFuture<Void> serviceTerminationFuture =
                         FutureUtils.runAfterwards(
-                                processTerminationFuture, leaderElectionService::stop);
+                                processTerminationFuture,
+                                () -> {
+                                    classLoaderLease.release();
+                                    leaderElectionService.stop();
+                                });
 
                 FutureUtils.forward(serviceTerminationFuture, terminationFuture);
             }
@@ -157,12 +172,8 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
                 } else {
                     return CompletableFuture.completedFuture(
                             new ExecutionGraphInfo(
-                                    ArchivedExecutionGraph.createFromInitializingJob(
-                                            getJobID(),
-                                            null,
-                                            JobStatus.INITIALIZING,
-                                            null,
-                                            initializationTimestamp)));
+                                    jobMasterServiceProcessFactory
+                                            .createInitializingArchivedExecutionGraph()));
                 }
             } else {
                 return resultFuture.thenApply(JobManagerRunnerResult::getExecutionGraphInfo);
@@ -202,7 +213,7 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
                 leaderSessionId,
                 jobMasterServiceProcess.getJobMasterGatewayFuture(),
                 jobMasterGatewayFuture);
-        forwardResultFuture(leaderSessionId, jobMasterServiceProcess);
+        forwardResultFuture(leaderSessionId, jobMasterServiceProcess.getResultFuture());
         confirmLeadership(leaderSessionId, jobMasterServiceProcess.getLeaderAddressFuture());
     }
 
@@ -221,23 +232,38 @@ public class JobManagerLeadershipRunner implements JobManagerRunner, LeaderConte
     }
 
     private void forwardResultFuture(
-            UUID leaderSessionId, JobMasterServiceProcess jobMasterServiceProcess) {
-        jobMasterServiceProcess
-                .getResultFuture()
-                .whenComplete(
-                        (jobManagerRunnerResult, throwable) -> {
-                            synchronized (lock) {
-                                if (isValidLeader(leaderSessionId)) {
-                                    state = State.FINISHED;
+            UUID leaderSessionId, CompletableFuture<JobManagerRunnerResult> resultFuture) {
+        resultFuture.whenComplete(
+                (jobManagerRunnerResult, throwable) -> {
+                    synchronized (lock) {
+                        if (isValidLeader(leaderSessionId)) {
+                            onJobCompletion(jobManagerRunnerResult, throwable);
+                        }
+                    }
+                });
+    }
 
-                                    if (throwable != null) {
-                                        resultFuture.completeExceptionally(throwable);
-                                    } else {
-                                        resultFuture.complete(jobManagerRunnerResult);
-                                    }
-                                }
-                            }
-                        });
+    private void onJobCompletion(
+            JobManagerRunnerResult jobManagerRunnerResult, Throwable throwable) {
+        state = State.FINISHED;
+
+        if (throwable != null) {
+            resultFuture.completeExceptionally(throwable);
+        } else {
+            if (jobManagerRunnerResult.isSuccess()) {
+                try {
+                    runningJobsRegistry.setJobFinished(getJobID());
+                } catch (IOException e) {
+                    resultFuture.completeExceptionally(
+                            new FlinkException(
+                                    String.format(
+                                            "Could not mark job %s as done in the RunningJobsRegistry.",
+                                            getJobID())));
+                }
+            }
+
+            resultFuture.complete(jobManagerRunnerResult);
+        }
     }
 
     @Override
