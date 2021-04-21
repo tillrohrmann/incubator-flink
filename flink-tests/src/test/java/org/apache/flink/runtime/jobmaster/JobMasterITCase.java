@@ -27,6 +27,10 @@ import org.apache.flink.api.connector.source.SourceSplit;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
+import org.apache.flink.runtime.minicluster.MiniCluster;
+import org.apache.flink.runtime.minicluster.MiniClusterConfiguration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
@@ -36,9 +40,31 @@ import org.junit.Test;
 
 import static org.apache.flink.core.testutils.FlinkMatchers.containsMessage;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /** Integration tests for the {@link JobMaster}. */
 public class JobMasterITCase extends TestLogger {
+
+    @Test
+    public void testRejectionOfEmptyJobGraphs() throws Exception {
+        MiniCluster miniCluster =
+                new MiniCluster(
+                        new MiniClusterConfiguration.Builder()
+                                .setNumTaskManagers(1)
+                                .setNumSlotsPerTaskManager(1)
+                                .build());
+        miniCluster.start();
+        JobGraph jobGraph = JobGraphTestUtils.emptyJobGraph();
+
+        try {
+            miniCluster.submitJob(jobGraph).get();
+            fail("Expect failure");
+        } catch (Throwable t) {
+            assertThat(t, containsMessage("The given job is empty"));
+        }
+        miniCluster.close();
+    }
+
     /**
      * This test is to guard against the issue reported in FLINK-22001, where any exception from the
      * JobManager initialization was not forwarded to the user.

@@ -42,6 +42,8 @@ import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.shuffle.ShuffleServiceLoader;
 import org.apache.flink.util.Preconditions;
 
+import static org.apache.flink.util.Preconditions.checkArgument;
+
 /** Factory which creates a {@link JobMasterServiceLeadershipRunner}. */
 public enum JobMasterServiceLeadershipRunnerFactory implements JobManagerRunnerFactory {
     INSTANCE;
@@ -58,6 +60,9 @@ public enum JobMasterServiceLeadershipRunnerFactory implements JobManagerRunnerF
             FatalErrorHandler fatalErrorHandler,
             long initializationTimestamp)
             throws Exception {
+
+        checkArgument(jobGraph.getNumberOfVertices() > 0, "The given job is empty");
+
         final JobMasterConfiguration jobMasterConfiguration =
                 JobMasterConfiguration.fromConfiguration(configuration);
 
