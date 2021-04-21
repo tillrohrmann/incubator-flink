@@ -23,6 +23,7 @@ import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.configuration.BlobServerOptions;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.testutils.FlinkMatchers;
 import org.apache.flink.core.testutils.OneShotLatch;
 import org.apache.flink.runtime.blob.BlobKey;
 import org.apache.flink.runtime.blob.BlobServer;
@@ -300,9 +301,7 @@ public class DispatcherResourceCleanupTest extends TestLogger {
             submissionFuture.get();
             fail("Job submission was expected to fail.");
         } catch (ExecutionException ee) {
-            assertThat(
-                    ExceptionUtils.findThrowable(ee, JobSubmissionException.class).isPresent(),
-                    is(true));
+            assertThat(ee, FlinkMatchers.containsCause(JobSubmissionException.class));
         }
 
         assertThatHABlobsHaveBeenRemoved();
