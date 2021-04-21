@@ -163,6 +163,8 @@ public class JobManagerRunnerImpl
                 haServices.getJobManagerLeaderElectionService(jobGraph.getJobID());
 
         this.leaderGatewayFuture = new CompletableFuture<>();
+
+        throw new RuntimeException("Not in use");
     }
 
     // ----------------------------------------------------------------------------------------------

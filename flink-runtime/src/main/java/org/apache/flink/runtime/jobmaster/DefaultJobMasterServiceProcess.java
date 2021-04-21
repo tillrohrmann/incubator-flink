@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.jobmaster;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.runtime.client.JobInitializationException;
 import org.apache.flink.runtime.concurrent.FutureUtils;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.jobmaster.factories.JobMasterServiceFactoryNg;
@@ -63,7 +64,11 @@ public class DefaultJobMasterServiceProcess
                 (jobMasterService, throwable) -> {
                     if (throwable != null) {
                         resultFuture.complete(
-                                JobManagerRunnerResult.forInitializationFailure(throwable));
+                                JobManagerRunnerResult.forInitializationFailure(
+                                        new JobInitializationException(
+                                                jobId,
+                                                "Could not start the JobMaster.",
+                                                throwable)));
                     } else {
                         jobMasterGatewayFuture.complete(jobMasterService.getGateway());
                         leaderAddressFuture.complete(jobMasterService.getAddress());
