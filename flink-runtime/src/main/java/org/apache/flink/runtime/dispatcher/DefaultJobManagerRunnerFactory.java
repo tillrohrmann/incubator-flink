@@ -90,10 +90,10 @@ public enum DefaultJobManagerRunnerFactory implements JobManagerRunnerFactory {
         return new JobManagerLeadershipRunner(
                 jobGraph,
                 jobMasterServiceProcessFactory,
+                highAvailabilityServices,
                 jobManagerServices
                         .getLibraryCacheManager()
                         .registerClassLoaderLease(jobGraph.getJobID()),
-                highAvailabilityServices,
                 fatalErrorHandler,
                 initializationTimestamp);
     }

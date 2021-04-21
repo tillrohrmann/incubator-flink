@@ -44,9 +44,9 @@ import org.apache.flink.runtime.jobgraph.JobGraphBuilder;
 import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmanager.JobGraphWriter;
+import org.apache.flink.runtime.jobmaster.JobManagerLeadershipRunnerTest;
 import org.apache.flink.runtime.jobmaster.JobManagerRunner;
 import org.apache.flink.runtime.jobmaster.JobManagerRunnerImpl;
-import org.apache.flink.runtime.jobmaster.JobManagerRunnerImplTest;
 import org.apache.flink.runtime.jobmaster.JobManagerRunnerResult;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.JobMasterGateway;
@@ -749,7 +749,7 @@ public class DispatcherTest extends TestLogger {
 
         private final JobMasterGateway jobMasterGateway;
         private final AtomicReference<JobStatus> currentJobStatus;
-        private JobManagerRunnerImplTest.BlockingJobMasterServiceFactory
+        private JobManagerLeadershipRunnerTest.BlockingJobMasterServiceFactory
                 blockingJobMasterServiceFactory;
 
         private JobManagerRunnerWithBlockingJobMasterFactory() {
@@ -781,7 +781,8 @@ public class DispatcherTest extends TestLogger {
                 throws Exception {
 
             this.blockingJobMasterServiceFactory =
-                    new JobManagerRunnerImplTest.BlockingJobMasterServiceFactory(jobMasterGateway);
+                    new JobManagerLeadershipRunnerTest.BlockingJobMasterServiceFactory(
+                            jobMasterGateway);
 
             return new JobManagerRunnerImpl(
                     jobGraph,

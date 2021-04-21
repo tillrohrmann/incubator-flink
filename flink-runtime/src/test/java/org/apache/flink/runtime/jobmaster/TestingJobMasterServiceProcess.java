@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,15 +18,38 @@
 
 package org.apache.flink.runtime.jobmaster;
 
-import org.apache.flink.runtime.jobgraph.JobGraph;
-import org.apache.flink.runtime.jobmanager.OnCompletionActions;
+import org.apache.flink.api.common.JobID;
 
-public interface JobMasterServiceProcessFactory {
-    JobMasterServiceProcess create(
-            JobGraph jobGraph,
-            JobMasterId jobMasterId,
-            OnCompletionActions jobCompletionActions,
-            ClassLoader userCodeClassloader,
-            long initializationTimestamp)
-            throws Exception;
+import java.util.concurrent.CompletableFuture;
+
+public class TestingJobMasterServiceProcess implements JobMasterServiceProcess {
+    @Override
+    public CompletableFuture<Void> closeAsync() {
+        return null;
+    }
+
+    @Override
+    public boolean isInitialized() {
+        return false;
+    }
+
+    @Override
+    public CompletableFuture<JobMasterGateway> getJobMasterGatewayFuture() {
+        return null;
+    }
+
+    @Override
+    public CompletableFuture<JobManagerRunnerResult> getResultFuture() {
+        return null;
+    }
+
+    @Override
+    public CompletableFuture<String> getLeaderAddressFuture() {
+        return null;
+    }
+
+    @Override
+    public JobID getJobId() {
+        return null;
+    }
 }

@@ -22,29 +22,31 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.jobmaster.JobMaster;
 import org.apache.flink.runtime.jobmaster.JobMasterId;
-import org.apache.flink.runtime.jobmaster.JobMasterService;
-import org.apache.flink.runtime.jobmaster.TestingJobMasterService;
+import org.apache.flink.runtime.jobmaster.JobMasterServiceProcess;
+import org.apache.flink.runtime.jobmaster.JobMasterServiceProcessFactory;
+import org.apache.flink.runtime.jobmaster.TestingJobMasterServiceProcess;
 import org.apache.flink.util.function.SupplierWithException;
 
 /**
- * Testing implementation of the {@link JobMasterServiceFactory} which returns a {@link JobMaster}
- * mock.
+ * Testing implementation of the {@link JobMasterServiceProcessFactory} which returns a {@link
+ * JobMaster} mock.
  */
-public class TestingJobMasterServiceFactory implements JobMasterServiceFactory {
+public class TestingJobMasterServiceProcessFactory implements JobMasterServiceProcessFactory {
 
-    private final SupplierWithException<JobMasterService, Exception> jobMasterServiceSupplier;
+    private final SupplierWithException<JobMasterServiceProcess, Exception>
+            jobMasterServiceSupplier;
 
-    public TestingJobMasterServiceFactory(
-            SupplierWithException<JobMasterService, Exception> jobMasterServiceSupplier) {
+    public TestingJobMasterServiceProcessFactory(
+            SupplierWithException<JobMasterServiceProcess, Exception> jobMasterServiceSupplier) {
         this.jobMasterServiceSupplier = jobMasterServiceSupplier;
     }
 
-    public TestingJobMasterServiceFactory() {
-        this(TestingJobMasterService::new);
+    public TestingJobMasterServiceProcessFactory() {
+        this(TestingJobMasterServiceProcess::new);
     }
 
     @Override
-    public JobMasterService createJobMasterService(
+    public JobMasterServiceProcess create(
             JobGraph jobGraph,
             JobMasterId jobMasterId,
             OnCompletionActions jobCompletionActions,

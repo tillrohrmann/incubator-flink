@@ -132,7 +132,6 @@ public class JobManagerRunnerImpl
             final FatalErrorHandler fatalErrorHandler,
             long initializationTimestamp)
             throws Exception {
-
         this.resultFuture = new CompletableFuture<>();
         this.terminationFuture = new CompletableFuture<>();
         this.leadershipOperation = CompletableFuture.completedFuture(null);
@@ -163,6 +162,7 @@ public class JobManagerRunnerImpl
                 haServices.getJobManagerLeaderElectionService(jobGraph.getJobID());
 
         this.leaderGatewayFuture = new CompletableFuture<>();
+        throw new UnsupportedOperationException("not in use anymore");
     }
 
     // ----------------------------------------------------------------------------------------------

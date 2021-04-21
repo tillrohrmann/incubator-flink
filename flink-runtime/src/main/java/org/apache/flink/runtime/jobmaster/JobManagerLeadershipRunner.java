@@ -34,8 +34,10 @@ import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.webmonitor.JobDetails;
 import org.apache.flink.runtime.rpc.FatalErrorHandler;
 import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
+import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.function.RunnableWithException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,10 +70,15 @@ public class JobManagerLeadershipRunner
 
     private final CompletableFuture<JobManagerRunnerResult> resultFuture =
             new CompletableFuture<>();
-    private final LibraryCacheManager.ClassLoaderHandle classLoaderLease;
+
+    private final LibraryCacheManager.ClassLoaderLease classLoaderLease;
+
     private final ClassLoader userCodeClassLoader;
+
     private final long initializationTimestamp;
+
     private final JobGraph jobGraph;
+
     private final RunningJobsRegistry runningJobsRegistry;
 
     @GuardedBy("lock")
@@ -93,8 +100,8 @@ public class JobManagerLeadershipRunner
     public JobManagerLeadershipRunner(
             JobGraph jobGraph,
             JobMasterServiceProcessFactory jobMasterServiceProcessFactory,
-            LibraryCacheManager.ClassLoaderLease classLoaderLease,
             final HighAvailabilityServices haServices,
+            LibraryCacheManager.ClassLoaderLease classLoaderLease,
             FatalErrorHandler fatalErrorHandler,
             long initializationTimestamp)
             throws Exception {
@@ -137,7 +144,11 @@ public class JobManagerLeadershipRunner
 
                 final CompletableFuture<Void> serviceTerminationFuture =
                         FutureUtils.runAfterwards(
-                                processTerminationFuture, leaderElectionService::stop);
+                                processTerminationFuture,
+                                () -> {
+                                    leaderElectionService.stop();
+                                    classLoaderLease.release();
+                                });
 
                 FutureUtils.forward(serviceTerminationFuture, terminationFuture);
             }
@@ -160,23 +171,14 @@ public class JobManagerLeadershipRunner
 
     @Override
     public CompletableFuture<JobManagerRunnerResult> getResultFuture() {
-        // TODO: reconsider -- purpose is to stick to the existing contract(s)
-        /* return resultFuture.thenApply(
-                result -> {
-                    if (result.isJobNotFinished()) {
-                        throw new RuntimeException(
-                                new JobNotFinishedException(jobGraph.getJobID()));
-                    }
-                    return result;
-                }); /
-
-        */
         return resultFuture;
     }
 
     @Override
     public JobID getJobID() {
-        return jobMasterServiceProcess.getJobId();
+        synchronized (lock) {
+            return jobMasterServiceProcess.getJobId();
+        }
     }
 
     @Override
@@ -244,15 +246,37 @@ public class JobManagerLeadershipRunner
     private void onGrantLeadership(UUID leaderSessionId) {
         sequentialOperation =
                 sequentialOperation.thenRun(
-                        () ->
+                        () -> {
+                            try {
                                 runIfValidLeader(
                                         leaderSessionId,
-                                        () -> createNewJobMasterProcess(leaderSessionId)));
+                                        () -> createNewJobMasterProcess(leaderSessionId));
+                            } catch (Exception e) {
+                                ExceptionUtils.rethrow(e);
+                            }
+                        });
+
+        sequentialOperation.whenComplete(
+                (ignored, throwable) -> {
+                    if (throwable != null) {
+                        handleError(
+                                new FlinkException(
+                                        "Error while running leadership operation", throwable));
+                    }
+                });
     }
 
     @GuardedBy("lock")
-    private void createNewJobMasterProcess(UUID leaderSessionId) {
+    private void createNewJobMasterProcess(UUID leaderSessionId) throws FlinkException {
         Preconditions.checkState(jobMasterServiceProcess.closeAsync().isDone());
+
+        final RunningJobsRegistry.JobSchedulingStatus jobSchedulingStatus =
+                getJobSchedulingStatus();
+
+        if (jobSchedulingStatus == RunningJobsRegistry.JobSchedulingStatus.DONE) {
+            jobAlreadyDone();
+            return;
+        }
 
         jobMasterServiceProcess =
                 jobMasterServiceProcessFactory.create(
@@ -282,6 +306,23 @@ public class JobManagerLeadershipRunner
                                 }
                             }
                         }));
+    }
+
+    private RunningJobsRegistry.JobSchedulingStatus getJobSchedulingStatus() throws FlinkException {
+        try {
+            return runningJobsRegistry.getJobSchedulingStatus(jobGraph.getJobID());
+        } catch (IOException e) {
+            throw new FlinkException(
+                    String.format(
+                            "Could not retrieve the job scheduling status for job %s.",
+                            jobGraph.getJobID()),
+                    e);
+        }
+    }
+
+    private void jobAlreadyDone() {
+        log.info("Granted leader ship but job {} has been finished. ", jobGraph.getJobID());
+        jobFinishedByOther();
     }
 
     private void forwardResultFuture(
@@ -357,7 +398,8 @@ public class JobManagerLeadershipRunner
         return state == State.RUNNING;
     }
 
-    private void runIfValidLeader(UUID expectedLeaderId, Runnable action) {
+    private void runIfValidLeader(UUID expectedLeaderId, RunnableWithException action)
+            throws Exception {
         synchronized (lock) {
             if (isValidLeader(expectedLeaderId)) {
                 action.run();

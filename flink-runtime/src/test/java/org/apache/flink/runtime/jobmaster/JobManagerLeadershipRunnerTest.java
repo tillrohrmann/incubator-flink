@@ -31,15 +31,13 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
-import org.apache.flink.runtime.jobmaster.factories.JobMasterServiceFactory;
-import org.apache.flink.runtime.jobmaster.factories.TestingJobMasterServiceFactory;
+import org.apache.flink.runtime.jobmaster.factories.TestingJobMasterServiceProcessFactory;
 import org.apache.flink.runtime.jobmaster.utils.TestingJobMasterGatewayBuilder;
 import org.apache.flink.runtime.leaderelection.TestingLeaderElectionService;
 import org.apache.flink.runtime.leaderretrieval.SettableLeaderRetrievalService;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.rest.handler.legacy.utils.ArchivedExecutionGraphBuilder;
 import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
-import org.apache.flink.runtime.testingUtils.TestingUtils;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.runtime.util.TestingUserCodeClassLoader;
@@ -76,8 +74,8 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-/** Tests for the {@link JobManagerRunnerImpl}. */
-public class JobManagerRunnerImplTest extends TestLogger {
+/** Tests for the {@link JobManagerLeadershipRunner}. */
+public class JobManagerLeadershipRunnerTest extends TestLogger {
 
     private static final Time TESTING_TIMEOUT = Time.seconds(10);
 
@@ -87,7 +85,7 @@ public class JobManagerRunnerImplTest extends TestLogger {
 
     private static ExecutionGraphInfo executionGraphInfo;
 
-    private static JobMasterServiceFactory defaultJobMasterServiceFactory;
+    private static JobMasterServiceProcessFactory defaultJobMasterServiceProcessFactory;
 
     private TestingHighAvailabilityServices haServices;
 
@@ -97,7 +95,7 @@ public class JobManagerRunnerImplTest extends TestLogger {
 
     @BeforeClass
     public static void setupClass() {
-        defaultJobMasterServiceFactory = new TestingJobMasterServiceFactory();
+        defaultJobMasterServiceProcessFactory = new TestingJobMasterServiceProcessFactory();
 
         final JobVertex jobVertex = new JobVertex("Test vertex");
         jobVertex.setInvokableClass(NoOpInvokable.class);
@@ -129,7 +127,7 @@ public class JobManagerRunnerImplTest extends TestLogger {
 
     @Test
     public void testJobCompletion() throws Exception {
-        final JobManagerRunnerImpl jobManagerRunner = createJobManagerRunner();
+        final JobManagerLeadershipRunner jobManagerRunner = createJobManagerLeadershipRunner();
 
         try {
             jobManagerRunner.start();
@@ -152,7 +150,7 @@ public class JobManagerRunnerImplTest extends TestLogger {
 
     @Test
     public void testJobFinishedByOther() throws Exception {
-        final JobManagerRunnerImpl jobManagerRunner = createJobManagerRunner();
+        final JobManagerLeadershipRunner jobManagerRunner = createJobManagerLeadershipRunner();
 
         try {
             jobManagerRunner.start();
@@ -172,7 +170,7 @@ public class JobManagerRunnerImplTest extends TestLogger {
 
     @Test
     public void testShutDown() throws Exception {
-        final JobManagerRunner jobManagerRunner = createJobManagerRunner();
+        final JobManagerRunner jobManagerRunner = createJobManagerLeadershipRunner();
 
         try {
             jobManagerRunner.start();
@@ -585,35 +583,35 @@ public class JobManagerRunnerImplTest extends TestLogger {
     }
 
     @Nonnull
-    private JobManagerRunner createJobManagerRunner(
+    private JobManagerLeadershipRunner createJobManagerLeadershipRunner(
             LibraryCacheManager.ClassLoaderLease classLoaderLease) throws Exception {
-        return createJobManagerRunner(defaultJobMasterServiceFactory, classLoaderLease);
+        return createJobManagerLeadershipRunner(defaultJobMasterServiceFactory, classLoaderLease);
     }
 
     @Nonnull
-    private JobManagerRunnerImpl createJobManagerRunner() throws Exception {
-        return createJobManagerRunner(
+    private JobManagerLeadershipRunner createJobManagerLeadershipRunner() throws Exception {
+        return createJobManagerLeadershipRunner(
                 defaultJobMasterServiceFactory, TestingClassLoaderLease.newBuilder().build());
     }
 
     @Nonnull
-    private JobManagerRunnerImpl createJobManagerRunner(
-            JobMasterServiceFactory jobMasterServiceFactory) throws Exception {
-        return createJobManagerRunner(
-                jobMasterServiceFactory, TestingClassLoaderLease.newBuilder().build());
+    private JobManagerLeadershipRunner createJobManagerLeadershipRunner(
+            JobMasterServiceProcessFactory jobMasterServiceProcessFactory) throws Exception {
+        return createJobManagerLeadershipRunner(
+                jobMasterServiceProcessFactory, TestingClassLoaderLease.newBuilder().build());
     }
 
     @Nonnull
-    private JobManagerRunnerImpl createJobManagerRunner(
-            JobMasterServiceFactory jobMasterServiceFactory,
+    JobManagerLeadershipRunner createJobManagerLeadershipRunner(
+            JobMasterServiceProcessFactory jobMasterServiceProcessFactory,
             LibraryCacheManager.ClassLoaderLease classLoaderLease)
             throws Exception {
-        return new JobManagerRunnerImpl(
+
+        return new JobManagerLeadershipRunner(
                 jobGraph,
-                jobMasterServiceFactory,
+                jobMasterServiceProcessFactory,
                 haServices,
                 classLoaderLease,
-                TestingUtils.defaultExecutor(),
                 fatalErrorHandler,
                 System.currentTimeMillis());
     }
