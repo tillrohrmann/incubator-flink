@@ -39,11 +39,11 @@ import static org.junit.Assert.assertThat;
 
 /** Integration tests for the {@link JobMaster}. */
 public class JobMasterITCase extends TestLogger {
-    private static final String FAILURE_MESSAGE = "Intentional Test failure";
-
     /**
      * This test is to guard against the issue reported in FLINK-22001, where any exception from the
      * JobManager initialization was not forwarded to the user.
+     *
+     * <p>TODO: This test relies on an internal error. Replace it with a more robust approach.
      */
     @Test
     public void testJobManagerInitializationExceptionsAreForwardedToTheUser() {
@@ -61,7 +61,6 @@ public class JobMasterITCase extends TestLogger {
         try {
             see.execute();
         } catch (Exception e) {
-            log.info("caught", e);
             assertThat(e, containsMessage("Context was not yet initialized"));
         }
     }
@@ -81,8 +80,7 @@ public class JobMasterITCase extends TestLogger {
         @Override
         public SplitEnumerator<MockSplit, Void> createEnumerator(
                 SplitEnumeratorContext<MockSplit> enumContext) throws Exception {
-            // here, we fail in the JobMaster
-            throw new RuntimeException(FAILURE_MESSAGE);
+            throw new RuntimeException();
         }
 
         @Override
@@ -93,7 +91,7 @@ public class JobMasterITCase extends TestLogger {
 
         @Override
         public SimpleVersionedSerializer<MockSplit> getSplitSerializer() {
-            throw new RuntimeException(FAILURE_MESSAGE);
+            throw new RuntimeException();
         }
 
         @Override
