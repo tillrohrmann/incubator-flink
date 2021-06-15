@@ -44,4 +44,9 @@ public class DefaultVertexParallelismStore implements MutableVertexParallelismSt
                                                 "No parallelism information set for vertex %s",
                                                 vertexId)));
     }
+
+    @Override
+    public boolean containsVertex(JobVertexID vertexId) {
+        return vertexToParallelismInfo.containsKey(vertexId);
+    }
 }

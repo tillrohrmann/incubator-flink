@@ -33,4 +33,7 @@ public interface VertexParallelismStore {
      * @throws IllegalStateException if there is no parallelism information for the given vertex
      */
     VertexParallelismInformation getParallelismInfo(JobVertexID vertexId);
+
+    /** True if the store contains information about the specified vertex. */
+    boolean containsVertex(JobVertexID vertexId);
 }
