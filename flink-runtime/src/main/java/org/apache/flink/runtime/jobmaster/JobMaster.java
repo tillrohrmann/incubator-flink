@@ -75,6 +75,7 @@ import org.apache.flink.runtime.rpc.RpcService;
 import org.apache.flink.runtime.rpc.akka.AkkaRpcServiceUtils;
 import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
+import org.apache.flink.runtime.scheduler.VertexMaxParallelism;
 import org.apache.flink.runtime.shuffle.ShuffleMaster;
 import org.apache.flink.runtime.slots.ResourceRequirement;
 import org.apache.flink.runtime.state.KeyGroupRange;
@@ -89,6 +90,7 @@ import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.InstantiationUtil;
 import org.apache.flink.util.SerializedValue;
+import org.apache.flink.util.VoidResult;
 
 import org.slf4j.Logger;
 
@@ -96,9 +98,11 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -849,6 +853,79 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
             return schedulerNG.deliverCoordinationRequestToCoordinator(operatorId, request);
         } catch (Exception e) {
             return FutureUtils.completedExceptionally(e);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> changeParallelism(
+            JobVertexParallelism jobVertexParallelism) {
+        final ParallelismValidationResult validationResult =
+                validateNewParallelism(jobVertexParallelism);
+
+        if (validationResult.isOk()) {
+            // TODO: persist parallelism changes
+            schedulerNG.changeParallelism(jobVertexParallelism);
+            return CompletableFuture.completedFuture(Acknowledge.get());
+        } else {
+            return FutureUtils.completedExceptionally(
+                    new FlinkException(validationResult.getError()));
+        }
+    }
+
+    /**
+     * This methods validates that the new job vertex parallelisms are less or equal than the max
+     * parallelism. Moreover, it validates that there a no unknown job vertex ids.
+     *
+     * @param newJobVertexParallelism newJobVertexParallelism contains the new parallelism
+     *     information for the job vertices.
+     * @return Validation result
+     */
+    private ParallelismValidationResult validateNewParallelism(
+            JobVertexParallelism newJobVertexParallelism) {
+        final Set<JobVertexID> jobVertexIds = newJobVertexParallelism.getJobVertices();
+
+        final VertexMaxParallelism vertexMaxParallelism = schedulerNG.getVertexMaxParallelism();
+
+        final List<String> errors = new ArrayList<>();
+
+        for (JobVertexID jobVertexId : jobVertexIds) {
+            if (!vertexMaxParallelism.containsJobVertex(jobVertexId)) {
+                errors.add(
+                        String.format(
+                                "There is no job vertex with the specified job vertex id %s.",
+                                jobVertexId));
+            } else {
+                final int maxParallelism = vertexMaxParallelism.getMaxParallelism(jobVertexId);
+                final int newParallelism =
+                        newJobVertexParallelism.getParallelismForJobVertex(jobVertexId).get();
+                if (maxParallelism < newParallelism) {
+                    errors.add(
+                            String.format(
+                                    "The newly requested parallelism %d for the job vertex %s exceeds its maximum parallelism %d.",
+                                    newParallelism, jobVertexId, maxParallelism));
+                }
+            }
+        }
+
+        if (errors.isEmpty()) {
+            return ParallelismValidationResult.ok();
+        } else {
+            final String errorMessage = String.join(System.lineSeparator(), errors);
+            return ParallelismValidationResult.error(errorMessage);
+        }
+    }
+
+    private static final class ParallelismValidationResult extends VoidResult<String> {
+        private ParallelismValidationResult(@Nullable String error) {
+            super(error);
+        }
+
+        public static ParallelismValidationResult ok() {
+            return new ParallelismValidationResult(null);
+        }
+
+        public static ParallelismValidationResult error(String error) {
+            return new ParallelismValidationResult(error);
         }
     }
 

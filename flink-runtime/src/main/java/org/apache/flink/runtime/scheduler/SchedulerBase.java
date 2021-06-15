@@ -151,6 +151,8 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
 
     private final ExecutionGraphFactory executionGraphFactory;
 
+    private final VertexParallelismStore vertexParallelismStore;
+
     public SchedulerBase(
             final Logger log,
             final JobGraph jobGraph,
@@ -186,11 +188,14 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
                 SchedulerUtils.createCheckpointIDCounterIfCheckpointingIsEnabled(
                         jobGraph, checkNotNull(checkpointRecoveryFactory));
 
+        this.vertexParallelismStore = computeVertexParallelismStore(jobGraph);
+
         this.executionGraph =
                 createAndRestoreExecutionGraph(
                         completedCheckpointStore,
                         checkpointsCleaner,
                         checkpointIdCounter,
+                        vertexParallelismStore,
                         initializationTimestamp,
                         mainThreadExecutor,
                         jobStatusListener);
@@ -333,6 +338,7 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
             CompletedCheckpointStore completedCheckpointStore,
             CheckpointsCleaner checkpointsCleaner,
             CheckpointIDCounter checkpointIdCounter,
+            VertexParallelismStore vertexParallelismStore,
             long initializationTimestamp,
             ComponentMainThreadExecutor mainThreadExecutor,
             JobStatusListener jobStatusListener)
@@ -348,7 +354,7 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
                                 jobGraph.getJobType()),
                         initializationTimestamp,
                         new DefaultVertexAttemptNumberStore(),
-                        computeVertexParallelismStore(jobGraph),
+                        vertexParallelismStore,
                         log);
 
         newExecutionGraph.setInternalTaskFailuresListener(
@@ -1004,6 +1010,21 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
 
         return operatorCoordinatorHandler.deliverCoordinationRequestToCoordinator(
                 operator, request);
+    }
+
+    @Override
+    public VertexMaxParallelism getVertexMaxParallelism() {
+        final Map<JobVertexID, Integer> maxParallelismPerJobVertex = new HashMap<>();
+
+        final Map<JobVertexID, ExecutionJobVertex> allVertices = executionGraph.getAllVertices();
+
+        for (JobVertexID jobVertexId : allVertices.keySet()) {
+            maxParallelismPerJobVertex.put(
+                    jobVertexId,
+                    vertexParallelismStore.getParallelismInfo(jobVertexId).getMaxParallelism());
+        }
+
+        return new VertexMaxParallelism(maxParallelismPerJobVertex);
     }
 
     // ------------------------------------------------------------------------

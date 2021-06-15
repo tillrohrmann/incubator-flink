@@ -289,4 +289,9 @@ public interface JobMasterGateway
             OperatorID operatorId,
             SerializedValue<CoordinationRequest> serializedRequest,
             @RpcTimeout Time timeout);
+
+    default CompletableFuture<Acknowledge> changeParallelism(
+            JobVertexParallelism jobVertexParallelism) {
+        throw new UnsupportedOperationException("Not yet implemented.");
+    }
 }

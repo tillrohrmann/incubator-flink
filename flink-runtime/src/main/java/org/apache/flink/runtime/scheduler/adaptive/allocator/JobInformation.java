@@ -43,5 +43,7 @@ public interface JobInformation {
         int getParallelism();
 
         SlotSharingGroup getSlotSharingGroup();
+
+        int getMaxParallelism();
     }
 }

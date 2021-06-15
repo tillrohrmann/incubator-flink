@@ -22,6 +22,7 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobmaster.JobVertexParallelism;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.rpc.FencedRpcGateway;
 import org.apache.flink.runtime.rpc.RpcTimeout;
@@ -60,5 +61,10 @@ public interface DispatcherGateway extends FencedRpcGateway<DispatcherId>, Restf
 
     default CompletableFuture<Acknowledge> shutDownCluster(ApplicationStatus applicationStatus) {
         return shutDownCluster();
+    }
+
+    default CompletableFuture<Acknowledge> changeJobParallelism(
+            JobID jobId, JobVertexParallelism jobVertexParallelism) {
+        throw new UnsupportedOperationException("Operation is not yet implemented.");
     }
 }

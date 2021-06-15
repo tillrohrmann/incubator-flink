@@ -64,6 +64,7 @@ import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
 import org.apache.flink.runtime.jobmanager.scheduler.NoResourceAvailableException;
+import org.apache.flink.runtime.jobmaster.JobVertexParallelism;
 import org.apache.flink.runtime.jobmaster.LogicalSlot;
 import org.apache.flink.runtime.jobmaster.SerializedInputSplit;
 import org.apache.flink.runtime.jobmaster.SlotInfo;
@@ -92,8 +93,10 @@ import org.apache.flink.runtime.scheduler.SchedulerBase;
 import org.apache.flink.runtime.scheduler.SchedulerNG;
 import org.apache.flink.runtime.scheduler.SchedulerUtils;
 import org.apache.flink.runtime.scheduler.UpdateSchedulerNgOnInternalFailuresListener;
+import org.apache.flink.runtime.scheduler.VertexMaxParallelism;
 import org.apache.flink.runtime.scheduler.VertexParallelismInformation;
 import org.apache.flink.runtime.scheduler.VertexParallelismStore;
+import org.apache.flink.runtime.scheduler.adaptive.allocator.JobInformation;
 import org.apache.flink.runtime.scheduler.adaptive.allocator.ReservedSlots;
 import org.apache.flink.runtime.scheduler.adaptive.allocator.SlotAllocator;
 import org.apache.flink.runtime.scheduler.adaptive.allocator.VertexParallelism;
@@ -117,7 +120,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -156,8 +161,9 @@ public class AdaptiveScheduler
 
     private static final Logger LOG = LoggerFactory.getLogger(AdaptiveScheduler.class);
 
-    private final JobGraphJobInformation jobInformation;
+    private final JobGraph jobGraph;
     private final VertexParallelismStore initialParallelismStore;
+    private JobGraphJobInformation jobInformation;
 
     private final DeclarativeSlotPool declarativeSlotPool;
 
@@ -224,6 +230,7 @@ public class AdaptiveScheduler
 
         assertPreconditions(jobGraph);
 
+        this.jobGraph = jobGraph;
         this.executionMode = configuration.get(JobManagerOptions.SCHEDULER_MODE);
 
         VertexParallelismStore vertexParallelismStore =
@@ -685,6 +692,45 @@ public class AdaptiveScheduler
                                                 "Coordinator of operator "
                                                         + operator
                                                         + " does not exist")));
+    }
+
+    @Override
+    public void changeParallelism(JobVertexParallelism jobVertexParallelism) {
+        if (executionMode == SchedulerExecutionMode.REACTIVE) {
+            throw new IllegalStateException(
+                    "Cannot change the parallelism of a job running in reactive mode.");
+        }
+
+        final DefaultVertexParallelismStore vertexParallelismStore =
+                new DefaultVertexParallelismStore();
+
+        for (JobInformation.VertexInformation vertex : jobInformation.getVertices()) {
+            vertexParallelismStore.setParallelismInfo(
+                    vertex.getJobVertexID(),
+                    new DefaultVertexParallelismInfo(
+                            vertex.getParallelism(),
+                            vertex.getMaxParallelism(),
+                            maxParallelism -> Optional.of("Cannot change the max parallelism.")));
+        }
+
+        final JobGraphJobInformation newJobInformation =
+                new JobGraphJobInformation(jobGraph, vertexParallelismStore);
+
+        state.tryRun(
+                ChangeParallelism.class,
+                state -> state.changeParallelism(vertexParallelismStore),
+                "Cannot change the parallelism.");
+    }
+
+    @Override
+    public VertexMaxParallelism getVertexMaxParallelism() {
+        final Map<JobVertexID, Integer> maxParallelismPerJobVertex = new HashMap<>();
+
+        for (JobInformation.VertexInformation vertex : jobInformation.getVertices()) {
+            maxParallelismPerJobVertex.put(vertex.getJobVertexID(), vertex.getMaxParallelism());
+        }
+
+        return new VertexMaxParallelism(maxParallelismPerJobVertex);
     }
 
     // ----------------------------------------------------------------

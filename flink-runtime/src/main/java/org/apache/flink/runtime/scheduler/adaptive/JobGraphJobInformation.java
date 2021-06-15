@@ -109,5 +109,10 @@ public class JobGraphJobInformation implements JobInformation {
         public SlotSharingGroup getSlotSharingGroup() {
             return jobVertex.getSlotSharingGroup();
         }
+
+        @Override
+        public int getMaxParallelism() {
+            return parallelismInfo.getMaxParallelism();
+        }
     }
 }

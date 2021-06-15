@@ -214,6 +214,12 @@ public class TestingSchedulerNG implements SchedulerNG {
     }
 
     @Override
+    public VertexMaxParallelism getVertexMaxParallelism() {
+        failOperation();
+        return null;
+    }
+
+    @Override
     public void reportCheckpointMetrics(
             JobID jobID,
             ExecutionAttemptID executionAttemptID,

@@ -46,6 +46,7 @@ import org.apache.flink.runtime.jobmaster.JobManagerRunnerResult;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.JobMasterGateway;
 import org.apache.flink.runtime.jobmaster.JobResult;
+import org.apache.flink.runtime.jobmaster.JobVertexParallelism;
 import org.apache.flink.runtime.jobmaster.factories.DefaultJobManagerJobMetricGroupFactory;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
@@ -707,6 +708,14 @@ public abstract class Dispatcher extends PermanentlyFencedRpcEndpoint<Dispatcher
                 gateway ->
                         gateway.deliverCoordinationRequestToCoordinator(
                                 operatorId, serializedRequest, timeout));
+    }
+
+    @Override
+    public CompletableFuture<Acknowledge> changeJobParallelism(
+            JobID jobId, JobVertexParallelism jobVertexParallelism) {
+        return performOperationOnJobMasterGateway(
+                jobId,
+                jobMasterGateway -> jobMasterGateway.changeParallelism(jobVertexParallelism));
     }
 
     private void registerJobManagerRunnerTerminationFuture(

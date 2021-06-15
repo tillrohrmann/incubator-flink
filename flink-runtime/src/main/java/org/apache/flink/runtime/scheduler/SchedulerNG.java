@@ -35,6 +35,7 @@ import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
+import org.apache.flink.runtime.jobmaster.JobVertexParallelism;
 import org.apache.flink.runtime.jobmaster.SerializedInputSplit;
 import org.apache.flink.runtime.messages.FlinkJobNotFoundException;
 import org.apache.flink.runtime.messages.checkpoint.DeclineCheckpoint;
@@ -182,4 +183,13 @@ public interface SchedulerNG extends AutoCloseableAsync {
      */
     CompletableFuture<CoordinationResponse> deliverCoordinationRequestToCoordinator(
             OperatorID operator, CoordinationRequest request) throws FlinkException;
+
+    default void changeParallelism(JobVertexParallelism jobVertexParallelism) {
+        throw new UnsupportedOperationException(
+                String.format(
+                        "The %s does not support changing the parallelism without a job restart.",
+                        getClass().getSimpleName()));
+    }
+
+    VertexMaxParallelism getVertexMaxParallelism();
 }

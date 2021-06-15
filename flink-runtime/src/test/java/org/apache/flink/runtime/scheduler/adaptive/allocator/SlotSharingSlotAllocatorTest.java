@@ -59,11 +59,11 @@ public class SlotSharingSlotAllocatorTest extends TestLogger {
     private static final SlotSharingGroup slotSharingGroup1 = new SlotSharingGroup();
     private static final SlotSharingGroup slotSharingGroup2 = new SlotSharingGroup();
     private static final JobInformation.VertexInformation vertex1 =
-            new TestVertexInformation(new JobVertexID(), 4, slotSharingGroup1);
+            new TestVertexInformation(new JobVertexID(), 4, slotSharingGroup1, 4);
     private static final JobInformation.VertexInformation vertex2 =
-            new TestVertexInformation(new JobVertexID(), 2, slotSharingGroup1);
+            new TestVertexInformation(new JobVertexID(), 2, slotSharingGroup1, 4);
     private static final JobInformation.VertexInformation vertex3 =
-            new TestVertexInformation(new JobVertexID(), 3, slotSharingGroup2);
+            new TestVertexInformation(new JobVertexID(), 3, slotSharingGroup2, 4);
 
     @Test
     public void testCalculateRequiredSlots() {
@@ -250,12 +250,17 @@ public class SlotSharingSlotAllocatorTest extends TestLogger {
         private final JobVertexID jobVertexId;
         private final int parallelism;
         private final SlotSharingGroup slotSharingGroup;
+        private final int maxParallelism;
 
         private TestVertexInformation(
-                JobVertexID jobVertexId, int parallelism, SlotSharingGroup slotSharingGroup) {
+                JobVertexID jobVertexId,
+                int parallelism,
+                SlotSharingGroup slotSharingGroup,
+                int maxParallelism) {
             this.jobVertexId = jobVertexId;
             this.parallelism = parallelism;
             this.slotSharingGroup = slotSharingGroup;
+            this.maxParallelism = maxParallelism;
             slotSharingGroup.addVertexToGroup(jobVertexId);
         }
 
@@ -272,6 +277,11 @@ public class SlotSharingSlotAllocatorTest extends TestLogger {
         @Override
         public SlotSharingGroup getSlotSharingGroup() {
             return slotSharingGroup;
+        }
+
+        @Override
+        public int getMaxParallelism() {
+            return maxParallelism;
         }
     }
 }

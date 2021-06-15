@@ -40,6 +40,7 @@ import org.apache.flink.runtime.highavailability.HighAvailabilityServicesUtils;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobmaster.JobResult;
+import org.apache.flink.runtime.jobmaster.JobVertexParallelism;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalService;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
@@ -65,6 +66,8 @@ import org.apache.flink.runtime.rest.messages.ResponseBody;
 import org.apache.flink.runtime.rest.messages.TerminationModeQueryParameter;
 import org.apache.flink.runtime.rest.messages.TriggerId;
 import org.apache.flink.runtime.rest.messages.cluster.ShutdownHeaders;
+import org.apache.flink.runtime.rest.messages.job.ChangeJobHeaders;
+import org.apache.flink.runtime.rest.messages.job.ChangeJobRequestBody;
 import org.apache.flink.runtime.rest.messages.job.JobDetailsHeaders;
 import org.apache.flink.runtime.rest.messages.job.JobDetailsInfo;
 import org.apache.flink.runtime.rest.messages.job.JobExecutionResultHeaders;
@@ -683,6 +686,28 @@ public class RestClusterClient<T> implements ClusterClient<T> {
                         });
 
         return resultFuture;
+    }
+
+    /**
+     * Changes the parallelism of job vertices.
+     *
+     * @param jobId jobId specifies the job for which to change the parallelism
+     * @param jobVertexParallelism jobVertexParallelism containing the information about the new
+     *     parallelism for job vertices
+     * @return Future which is completed upon successful operation.
+     */
+    public CompletableFuture<Acknowledge> changeParallelismOfJob(
+            JobID jobId, JobVertexParallelism jobVertexParallelism) {
+        final JobMessageParameters params = new JobMessageParameters();
+        params.jobPathParameter.resolve(jobId);
+
+        return sendRequest(
+                        ChangeJobHeaders.INSTANCE,
+                        params,
+                        ChangeJobRequestBody.newBuilder()
+                                .changeParallelism(jobVertexParallelism)
+                                .build())
+                .thenApply(ignored -> Acknowledge.get());
     }
 
     // ======================================
