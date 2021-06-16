@@ -527,7 +527,7 @@ public class ExecutingTest extends TestLogger {
         }
 
         @Override
-        public boolean canScaleUp(ExecutionGraph executionGraph) {
+        public boolean canChangeParallelism(ExecutionGraph executionGraph) {
             return canScaleUp.get();
         }
 

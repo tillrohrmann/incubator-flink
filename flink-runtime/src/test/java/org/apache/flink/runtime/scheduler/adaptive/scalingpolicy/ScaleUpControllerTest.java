@@ -26,7 +26,7 @@ import org.junit.Test;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 
-/** Tests for the {@link ScaleUpController}. */
+/** Tests for the {@link ScaleUpDownController}. */
 public class ScaleUpControllerTest extends TestLogger {
     private static final Configuration TEST_CONFIG = new Configuration();
 
@@ -36,13 +36,13 @@ public class ScaleUpControllerTest extends TestLogger {
 
     @Test
     public void testScaleUp() {
-        ScaleUpController suc = new ReactiveScaleUpController(TEST_CONFIG);
-        assertThat(suc.canScaleUp(1, 4), is(true));
+        ScaleUpDownController suc = new CumulativeParallelismScaleUpDownController(TEST_CONFIG);
+        assertThat(suc.canScale(1, 4), is(true));
     }
 
     @Test
     public void testNoScaleUp() {
-        ScaleUpController suc = new ReactiveScaleUpController(TEST_CONFIG);
-        assertThat(suc.canScaleUp(2, 3), is(false));
+        ScaleUpDownController suc = new CumulativeParallelismScaleUpDownController(TEST_CONFIG);
+        assertThat(suc.canScale(2, 3), is(false));
     }
 }

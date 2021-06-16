@@ -20,12 +20,13 @@ package org.apache.flink.runtime.scheduler.adaptive.scalingpolicy;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.runtime.scheduler.adaptive.AdaptiveScheduler;
 
-/** Simple policy for controlling the scale up behavior of the {@link AdaptiveScheduler}. */
+/** Simple policy for controlling the scale up/down behavior of the {@link AdaptiveScheduler}. */
 @Internal
-public interface ScaleUpController {
+public interface ScaleUpDownController {
 
     /**
-     * This method gets called whenever new resources are available to the scheduler to scale up.
+     * This method gets called whenever new resources are available to the scheduler to scale
+     * up/down.
      *
      * @param currentCumulativeParallelism Cumulative parallelism of the currently running job
      *     graph.
@@ -33,5 +34,5 @@ public interface ScaleUpController {
      *     resources.
      * @return true if the policy decided to scale up based on the provided information.
      */
-    boolean canScaleUp(int currentCumulativeParallelism, int newCumulativeParallelism);
+    boolean canScale(int currentCumulativeParallelism, int newCumulativeParallelism);
 }

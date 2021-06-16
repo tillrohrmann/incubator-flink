@@ -36,7 +36,7 @@ import java.util.concurrent.ScheduledFuture;
 /**
  * State which describes that the scheduler is waiting for resources in order to execute the job.
  */
-class WaitingForResources implements State, ResourceConsumer {
+class WaitingForResources implements State, ResourceParallelismListener {
 
     private final Context context;
 
@@ -88,7 +88,7 @@ class WaitingForResources implements State, ResourceConsumer {
                     context.runIfState(
                             this, this::resourceTimeout, initialResourceAllocationTimeout);
         }
-        context.runIfState(this, this::notifyNewResourcesAvailable, Duration.ZERO);
+        context.runIfState(this, this::checkDesiredOrSufficientResourcesAvailable, Duration.ZERO);
     }
 
     @Override
@@ -130,6 +130,11 @@ class WaitingForResources implements State, ResourceConsumer {
 
     @Override
     public void notifyNewResourcesAvailable() {
+        checkDesiredOrSufficientResourcesAvailable();
+    }
+
+    @Override
+    public void notifyChangeOfDesiredParallelism() {
         checkDesiredOrSufficientResourcesAvailable();
     }
 

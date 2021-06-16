@@ -18,9 +18,15 @@
 
 package org.apache.flink.runtime.scheduler.adaptive;
 
-/** Interface which denotes that {@link State} can react to newly available resource (slots). */
-interface ResourceConsumer {
+/**
+ * Interface which denotes that {@link State} can react to newly available resource (slots) and
+ * changes in parallelism.
+ */
+interface ResourceParallelismListener {
 
     /** Notifies that new resources are available. */
     void notifyNewResourcesAvailable();
+
+    /** Notifies that the desired parallelism has changed. */
+    void notifyChangeOfDesiredParallelism();
 }

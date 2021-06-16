@@ -43,7 +43,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 
 /** State which represents a running job with an {@link ExecutionGraph} and assigned slots. */
-class Executing extends StateWithExecutionGraph implements ResourceConsumer {
+class Executing extends StateWithExecutionGraph implements ResourceParallelismListener {
 
     private final Context context;
 
@@ -65,7 +65,7 @@ class Executing extends StateWithExecutionGraph implements ResourceConsumer {
         deploy();
 
         // check if new resources have come available in the meantime
-        context.runIfState(this, this::notifyNewResourcesAvailable, Duration.ZERO);
+        context.runIfState(this, this::checkChangingParallelism, Duration.ZERO);
     }
 
     @Override
@@ -153,8 +153,17 @@ class Executing extends StateWithExecutionGraph implements ResourceConsumer {
 
     @Override
     public void notifyNewResourcesAvailable() {
-        if (context.canScaleUp(getExecutionGraph())) {
-            getLogger().info("New resources are available. Restarting job to scale up.");
+        checkChangingParallelism();
+    }
+
+    @Override
+    public void notifyChangeOfDesiredParallelism() {
+        checkChangingParallelism();
+    }
+
+    private void checkChangingParallelism() {
+        if (context.canChangeParallelism(getExecutionGraph())) {
+            getLogger().info("Can change the parallelism of job. Restarting job.");
             context.goToRestarting(
                     getExecutionGraph(),
                     getExecutionGraphHandler(),
@@ -222,7 +231,7 @@ class Executing extends StateWithExecutionGraph implements ResourceConsumer {
          * @param executionGraph executionGraph for making the scaling decision.
          * @return true, if we can scale up
          */
-        boolean canScaleUp(ExecutionGraph executionGraph);
+        boolean canChangeParallelism(ExecutionGraph executionGraph);
 
         /**
          * Transitions into the {@link Restarting} state.

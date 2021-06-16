@@ -100,8 +100,8 @@ import org.apache.flink.runtime.scheduler.adaptive.allocator.JobInformation;
 import org.apache.flink.runtime.scheduler.adaptive.allocator.ReservedSlots;
 import org.apache.flink.runtime.scheduler.adaptive.allocator.SlotAllocator;
 import org.apache.flink.runtime.scheduler.adaptive.allocator.VertexParallelism;
-import org.apache.flink.runtime.scheduler.adaptive.scalingpolicy.ReactiveScaleUpController;
-import org.apache.flink.runtime.scheduler.adaptive.scalingpolicy.ScaleUpController;
+import org.apache.flink.runtime.scheduler.adaptive.scalingpolicy.CumulativeParallelismScaleUpDownController;
+import org.apache.flink.runtime.scheduler.adaptive.scalingpolicy.ScaleUpDownController;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.util.ResourceCounter;
 import org.apache.flink.util.ExceptionUtils;
@@ -187,7 +187,7 @@ public class AdaptiveScheduler
 
     private final SlotAllocator slotAllocator;
 
-    private final ScaleUpController scaleUpController;
+    private final ScaleUpDownController scaleUpDownController;
 
     private final Duration initialResourceAllocationTimeout;
 
@@ -266,7 +266,7 @@ public class AdaptiveScheduler
         this.componentMainThreadExecutor = mainThreadExecutor;
         this.jobStatusListener = jobStatusListener;
 
-        this.scaleUpController = new ReactiveScaleUpController(configuration);
+        this.scaleUpDownController = new CumulativeParallelismScaleUpDownController(configuration);
 
         this.initialResourceAllocationTimeout = initialResourceAllocationTimeout;
 
@@ -396,8 +396,8 @@ public class AdaptiveScheduler
 
     private void newResourcesAvailable(Collection<? extends PhysicalSlot> physicalSlots) {
         state.tryRun(
-                ResourceConsumer.class,
-                ResourceConsumer::notifyNewResourcesAvailable,
+                ResourceParallelismListener.class,
+                ResourceParallelismListener::notifyNewResourcesAvailable,
                 "newResourcesAvailable");
     }
 
@@ -710,11 +710,15 @@ public class AdaptiveScheduler
         final DefaultVertexParallelismStore vertexParallelismStore =
                 new DefaultVertexParallelismStore();
 
+        boolean changeOfParallelism = false;
+
         for (JobInformation.VertexInformation vertex : jobInformation.getVertices()) {
             final int parallelism =
                     jobVertexParallelism
                             .getParallelismForJobVertex(vertex.getJobVertexID())
                             .orElse(vertex.getParallelism());
+
+            changeOfParallelism |= parallelism != vertex.getParallelism();
 
             vertexParallelismStore.setParallelismInfo(
                     vertex.getJobVertexID(),
@@ -724,9 +728,16 @@ public class AdaptiveScheduler
                             maxParallelism -> Optional.of("Cannot change the max parallelism.")));
         }
 
-        this.jobInformation = new JobGraphJobInformation(jobGraph, vertexParallelismStore);
+        if (changeOfParallelism) {
+            this.jobInformation = new JobGraphJobInformation(jobGraph, vertexParallelismStore);
 
-        declareDesiredResources();
+            declareDesiredResources();
+
+            state.tryRun(
+                    ResourceParallelismListener.class,
+                    ResourceParallelismListener::notifyChangeOfDesiredParallelism,
+                    "Current state does not react to desired parallelism changes.");
+        }
     }
 
     @Override
@@ -1061,27 +1072,16 @@ public class AdaptiveScheduler
     }
 
     @Override
-    public boolean canScaleUp(ExecutionGraph executionGraph) {
-        int availableSlots = declarativeSlotPool.getFreeSlotsInformation().size();
+    public boolean canChangeParallelism(ExecutionGraph executionGraph) {
+        final Optional<? extends VertexParallelism> potentialNewParallelism =
+                slotAllocator.determineParallelism(
+                        jobInformation, declarativeSlotPool.getAllSlotsInformation());
 
-        if (availableSlots > 0) {
-            final Optional<? extends VertexParallelism> potentialNewParallelism =
-                    slotAllocator.determineParallelism(
-                            jobInformation, declarativeSlotPool.getAllSlotsInformation());
-
-            if (potentialNewParallelism.isPresent()) {
-                int currentCumulativeParallelism = getCurrentCumulativeParallelism(executionGraph);
-                int newCumulativeParallelism =
-                        getCumulativeParallelism(potentialNewParallelism.get());
-                if (newCumulativeParallelism > currentCumulativeParallelism) {
-                    LOG.debug(
-                            "Offering scale up to scale up controller with currentCumulativeParallelism={}, newCumulativeParallelism={}",
-                            currentCumulativeParallelism,
-                            newCumulativeParallelism);
-                    return scaleUpController.canScaleUp(
-                            currentCumulativeParallelism, newCumulativeParallelism);
-                }
-            }
+        if (potentialNewParallelism.isPresent()) {
+            int currentCumulativeParallelism = getCurrentCumulativeParallelism(executionGraph);
+            int newCumulativeParallelism = getCumulativeParallelism(potentialNewParallelism.get());
+            return scaleUpDownController.canScale(
+                    currentCumulativeParallelism, newCumulativeParallelism);
         }
         return false;
     }

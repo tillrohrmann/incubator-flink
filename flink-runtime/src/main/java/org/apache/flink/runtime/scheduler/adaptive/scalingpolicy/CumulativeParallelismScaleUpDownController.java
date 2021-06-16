@@ -25,16 +25,17 @@ import static org.apache.flink.configuration.JobManagerOptions.MIN_PARALLELISM_I
  * Simple scaling policy for a reactive mode. The user can configure a minimum cumulative
  * parallelism increase to allow a scale up.
  */
-public class ReactiveScaleUpController implements ScaleUpController {
+public class CumulativeParallelismScaleUpDownController implements ScaleUpDownController {
 
     private final int minParallelismIncrease;
 
-    public ReactiveScaleUpController(Configuration configuration) {
+    public CumulativeParallelismScaleUpDownController(Configuration configuration) {
         minParallelismIncrease = configuration.get(MIN_PARALLELISM_INCREASE);
     }
 
     @Override
-    public boolean canScaleUp(int currentCumulativeParallelism, int newCumulativeParallelism) {
-        return newCumulativeParallelism - currentCumulativeParallelism >= minParallelismIncrease;
+    public boolean canScale(int currentCumulativeParallelism, int newCumulativeParallelism) {
+        return Math.abs(newCumulativeParallelism - currentCumulativeParallelism)
+                >= minParallelismIncrease;
     }
 }

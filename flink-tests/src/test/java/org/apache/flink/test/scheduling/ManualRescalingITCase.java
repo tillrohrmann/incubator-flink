@@ -28,6 +28,7 @@ import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobgraph.JobVertex;
+import org.apache.flink.runtime.jobmanager.scheduler.SlotSharingGroup;
 import org.apache.flink.runtime.jobmaster.JobVertexParallelism;
 import org.apache.flink.runtime.rest.messages.job.JobDetailsInfo;
 import org.apache.flink.runtime.testtasks.BlockingNoOpInvokable;
@@ -40,9 +41,12 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.time.Duration;
+import java.util.function.Supplier;
 
 /** Tests for the manual rescaling of Flink jobs using the REST API. */
 public class ManualRescalingITCase extends TestLogger {
+
+    public static final Duration TIMEOUT_DURATION = Duration.ofSeconds(10);
 
     @ClassRule
     public static MiniClusterWithClientResource miniClusterWithClientResource =
@@ -62,7 +66,7 @@ public class ManualRescalingITCase extends TestLogger {
     }
 
     @Test
-    public void testManualRescalingViaRESTApiChangesTheJobParallelism() throws Exception {
+    public void testManualUpScalingWithNewSlotAllocation() throws Exception {
         final JobVertex jobVertex = new JobVertex("Single operator");
         final int initialParallelism = 1;
         final int parallelismAfterRescaling = 2;
@@ -70,29 +74,97 @@ public class ManualRescalingITCase extends TestLogger {
         jobVertex.setInvokableClass(BlockingNoOpInvokable.class);
         final JobGraph jobGraph = JobGraphTestUtils.streamingJobGraph(jobVertex);
 
-        final Deadline timeout = Deadline.fromNow(Duration.ofSeconds(10));
+        runRescalingTest(
+                jobGraph,
+                () ->
+                        JobVertexParallelism.newBuilder()
+                                .setParallelismForJobVertex(jobVertex.getID(), 2)
+                                .build(),
+                initialParallelism,
+                parallelismAfterRescaling);
+    }
+
+    @Test
+    public void testManualUpScalingWithNoNewSlotAllocation() throws Exception {
+        final int initialRunningTasks = 3;
+        final int runningTasksAfterRescale = 4;
+
+        final JobVertex jobVertex1 = new JobVertex("Operator1");
+        jobVertex1.setParallelism(1);
+        jobVertex1.setInvokableClass(BlockingNoOpInvokable.class);
+        final JobVertex jobVertex2 = new JobVertex("Operator2");
+        jobVertex2.setParallelism(2);
+        jobVertex2.setInvokableClass(BlockingNoOpInvokable.class);
+
+        final SlotSharingGroup slotSharingGroup = new SlotSharingGroup();
+        jobVertex1.setSlotSharingGroup(slotSharingGroup);
+        jobVertex2.setSlotSharingGroup(slotSharingGroup);
+
+        final JobGraph jobGraph = JobGraphTestUtils.streamingJobGraph(jobVertex1, jobVertex2);
+
+        runRescalingTest(
+                jobGraph,
+                () ->
+                        JobVertexParallelism.newBuilder()
+                                .setParallelismForJobVertex(jobVertex1.getID(), 2)
+                                .build(),
+                initialRunningTasks,
+                runningTasksAfterRescale);
+    }
+
+    @Test
+    public void testManualDownScaling() throws Exception {
+        final int initialRunningTasks = 2;
+        final int runningTasksAfterRescale = 1;
+
+        final JobVertex jobVertex = new JobVertex("Operator");
+        jobVertex.setParallelism(initialRunningTasks);
+        jobVertex.setInvokableClass(BlockingNoOpInvokable.class);
+
+        final JobGraph jobGraph = JobGraphTestUtils.streamingJobGraph(jobVertex);
+
+        runRescalingTest(
+                jobGraph,
+                () ->
+                        JobVertexParallelism.newBuilder()
+                                .setParallelismForJobVertex(jobVertex.getID(), 1)
+                                .build(),
+                initialRunningTasks,
+                runningTasksAfterRescale);
+    }
+
+    private void runRescalingTest(
+            JobGraph jobGraph,
+            Supplier<JobVertexParallelism> newJobVertexParallelismSupplier,
+            int initialRunningTasks,
+            int runningTasksAfterRescale)
+            throws Exception {
+        final Deadline timeout = Deadline.fromNow(TIMEOUT_DURATION);
 
         final RestClusterClient<?> restClusterClient =
                 miniClusterWithClientResource.getRestClusterClient();
 
         restClusterClient.submitJob(jobGraph).join();
 
-        final JobID jobId = jobGraph.getJobID();
+        try {
+            final JobID jobId = jobGraph.getJobID();
 
-        CommonTestUtils.waitUntilCondition(
-                () -> getNumberRunningTasks(restClusterClient, jobId) == initialParallelism,
-                timeout);
+            CommonTestUtils.waitUntilCondition(
+                    () -> getNumberRunningTasks(restClusterClient, jobId) == initialRunningTasks,
+                    timeout);
 
-        final JobVertexParallelism jobVertexParallelism =
-                JobVertexParallelism.newBuilder()
-                        .setParallelismForJobVertex(jobVertex.getID(), 2)
-                        .build();
+            final JobVertexParallelism jobVertexParallelism = newJobVertexParallelismSupplier.get();
 
-        restClusterClient.changeParallelismOfJob(jobId, jobVertexParallelism).join();
+            restClusterClient.changeParallelismOfJob(jobId, jobVertexParallelism).join();
 
-        CommonTestUtils.waitUntilCondition(
-                () -> getNumberRunningTasks(restClusterClient, jobId) == parallelismAfterRescaling,
-                timeout);
+            CommonTestUtils.waitUntilCondition(
+                    () ->
+                            getNumberRunningTasks(restClusterClient, jobId)
+                                    == runningTasksAfterRescale,
+                    timeout);
+        } finally {
+            miniClusterWithClientResource.getClusterClient().cancel(jobGraph.getJobID()).join();
+        }
     }
 
     private int getNumberRunningTasks(RestClusterClient<?> restClusterClient, JobID jobId) {
