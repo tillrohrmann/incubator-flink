@@ -163,7 +163,6 @@ public class AdaptiveScheduler
 
     private final JobGraph jobGraph;
     private final VertexParallelismStore initialParallelismStore;
-    private JobGraphJobInformation jobInformation;
 
     private final DeclarativeSlotPool declarativeSlotPool;
 
@@ -208,6 +207,9 @@ public class AdaptiveScheduler
     private BackgroundTask<ExecutionGraph> backgroundTask = BackgroundTask.finishedBackgroundTask();
 
     private final SchedulerExecutionMode executionMode;
+
+    private JobGraphJobInformation jobInformation;
+    private ResourceCounter desiredResources = ResourceCounter.empty();
 
     public AdaptiveScheduler(
             JobGraph jobGraph,
@@ -701,25 +703,30 @@ public class AdaptiveScheduler
                     "Cannot change the parallelism of a job running in reactive mode.");
         }
 
+        updateJobInformation(jobVertexParallelism);
+    }
+
+    private void updateJobInformation(JobVertexParallelism jobVertexParallelism) {
         final DefaultVertexParallelismStore vertexParallelismStore =
                 new DefaultVertexParallelismStore();
 
         for (JobInformation.VertexInformation vertex : jobInformation.getVertices()) {
+            final int parallelism =
+                    jobVertexParallelism
+                            .getParallelismForJobVertex(vertex.getJobVertexID())
+                            .orElse(vertex.getParallelism());
+
             vertexParallelismStore.setParallelismInfo(
                     vertex.getJobVertexID(),
                     new DefaultVertexParallelismInfo(
-                            vertex.getParallelism(),
+                            parallelism,
                             vertex.getMaxParallelism(),
                             maxParallelism -> Optional.of("Cannot change the max parallelism.")));
         }
 
-        final JobGraphJobInformation newJobInformation =
-                new JobGraphJobInformation(jobGraph, vertexParallelismStore);
+        this.jobInformation = new JobGraphJobInformation(jobGraph, vertexParallelismStore);
 
-        state.tryRun(
-                ChangeParallelism.class,
-                state -> state.changeParallelism(vertexParallelismStore),
-                "Cannot change the parallelism.");
+        declareDesiredResources();
     }
 
     @Override
@@ -736,12 +743,16 @@ public class AdaptiveScheduler
     // ----------------------------------------------------------------
 
     @Override
-    public boolean hasDesiredResources(ResourceCounter desiredResources) {
-        final Collection<? extends SlotInfo> allSlots =
+    public boolean hasDesiredResources() {
+        final Collection<? extends SlotInfo> freeSlots =
                 declarativeSlotPool.getFreeSlotsInformation();
-        ResourceCounter outstandingResources = desiredResources;
+        return hasDesiredResources(desiredResources, freeSlots);
+    }
 
-        final Iterator<? extends SlotInfo> slotIterator = allSlots.iterator();
+    static boolean hasDesiredResources(
+            ResourceCounter desiredResources, Collection<? extends SlotInfo> freeSlots) {
+        ResourceCounter outstandingResources = desiredResources;
+        final Iterator<? extends SlotInfo> slotIterator = freeSlots.iterator();
 
         while (!outstandingResources.isEmpty() && slotIterator.hasNext()) {
             final SlotInfo slotInfo = slotIterator.next();
@@ -789,16 +800,23 @@ public class AdaptiveScheduler
 
     @Override
     public void goToWaitingForResources() {
-        final ResourceCounter desiredResources = calculateDesiredResources();
-        declarativeSlotPool.setResourceRequirements(desiredResources);
+        declareDesiredResources();
 
         transitionToState(
                 new WaitingForResources.Factory(
                         this,
                         LOG,
-                        desiredResources,
                         this.initialResourceAllocationTimeout,
                         this.resourceStabilizationTimeout));
+    }
+
+    private void declareDesiredResources() {
+        final ResourceCounter newDesiredResources = calculateDesiredResources();
+
+        if (!newDesiredResources.equals(this.desiredResources)) {
+            this.desiredResources = newDesiredResources;
+            declarativeSlotPool.setResourceRequirements(this.desiredResources);
+        }
     }
 
     private ResourceCounter calculateDesiredResources() {
