@@ -523,6 +523,14 @@ public class MiniCluster implements AutoCloseableAsync {
      */
     @Override
     public CompletableFuture<Void> closeAsync() {
+        return closeInternal(false);
+    }
+
+    public CompletableFuture<Void> closeAndCleanupHaDataAsync() {
+        return closeInternal(true);
+    }
+
+    private CompletableFuture<Void> closeInternal(boolean cleanupHaData) {
         synchronized (lock) {
             if (running) {
                 LOG.info("Shutting down Flink Mini Cluster");
@@ -553,7 +561,7 @@ public class MiniCluster implements AutoCloseableAsync {
                     final CompletableFuture<Void> remainingServicesTerminationFuture =
                             FutureUtils.runAfterwards(
                                     rpcServicesTerminationFuture,
-                                    this::terminateMiniClusterServices);
+                                    () -> terminateMiniClusterServices(cleanupHaData));
 
                     final CompletableFuture<Void> executorsTerminationFuture =
                             FutureUtils.composeAfterwards(
@@ -1013,7 +1021,7 @@ public class MiniCluster implements AutoCloseableAsync {
                 });
     }
 
-    private void terminateMiniClusterServices() throws Exception {
+    private void terminateMiniClusterServices(boolean cleanupHaData) throws Exception {
         // collect the first exception, but continue and add all successive
         // exceptions as suppressed
         Exception exception = null;
@@ -1041,7 +1049,11 @@ public class MiniCluster implements AutoCloseableAsync {
             // shut down high-availability services
             if (haServices != null) {
                 try {
-                    haServices.closeAndCleanupAllData();
+                    if (cleanupHaData) {
+                        haServices.closeAndCleanupAllData();
+                    } else {
+                        haServices.close();
+                    }
                 } catch (Exception e) {
                     exception = ExceptionUtils.firstOrSuppressed(e, exception);
                 }
