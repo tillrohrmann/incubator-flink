@@ -24,9 +24,18 @@ import org.apache.flink.runtime.taskmanager.LocalTaskManagerLocation;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 
 /** Test {@link SlotInfo} implementation. */
-class TestSlotInfo implements SlotInfo {
+public class TestSlotInfo implements SlotInfo {
 
     private final AllocationID allocationId = new AllocationID();
+    private final ResourceProfile resourceProfile;
+
+    public TestSlotInfo() {
+        this(ResourceProfile.ANY);
+    }
+
+    public TestSlotInfo(ResourceProfile resourceProfile) {
+        this.resourceProfile = resourceProfile;
+    }
 
     @Override
     public AllocationID getAllocationId() {
@@ -45,7 +54,7 @@ class TestSlotInfo implements SlotInfo {
 
     @Override
     public ResourceProfile getResourceProfile() {
-        return ResourceProfile.ANY;
+        return resourceProfile;
     }
 
     @Override
