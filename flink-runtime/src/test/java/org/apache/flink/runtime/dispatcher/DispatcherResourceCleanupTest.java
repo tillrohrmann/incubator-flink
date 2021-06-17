@@ -41,6 +41,7 @@ import org.apache.flink.runtime.highavailability.TestingHighAvailabilityServices
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobmanager.JobGraphWriter;
+import org.apache.flink.runtime.jobmanager.PersistedJobGraphUpdater;
 import org.apache.flink.runtime.jobmaster.JobManagerRunner;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.TestingJobManagerRunner;
@@ -679,6 +680,7 @@ public class DispatcherResourceCleanupTest extends TestLogger {
                 JobGraph jobGraph,
                 Configuration configuration,
                 RpcService rpcService,
+                PersistedJobGraphUpdater persistedJobGraphUpdater,
                 HighAvailabilityServices highAvailabilityServices,
                 HeartbeatServices heartbeatServices,
                 JobManagerSharedServices jobManagerServices,
@@ -705,6 +707,7 @@ public class DispatcherResourceCleanupTest extends TestLogger {
                 JobGraph jobGraph,
                 Configuration configuration,
                 RpcService rpcService,
+                PersistedJobGraphUpdater persistedJobGraphUpdater,
                 HighAvailabilityServices highAvailabilityServices,
                 HeartbeatServices heartbeatServices,
                 JobManagerSharedServices jobManagerServices,

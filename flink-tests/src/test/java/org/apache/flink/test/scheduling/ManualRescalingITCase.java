@@ -167,7 +167,7 @@ public class ManualRescalingITCase extends TestLogger {
         }
     }
 
-    private int getNumberRunningTasks(RestClusterClient<?> restClusterClient, JobID jobId) {
+    public static int getNumberRunningTasks(RestClusterClient<?> restClusterClient, JobID jobId) {
         final JobDetailsInfo jobDetailsInfo = restClusterClient.getJobDetails(jobId).join();
 
         return jobDetailsInfo.getJobVertexInfos().stream()

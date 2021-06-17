@@ -26,6 +26,7 @@ import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.highavailability.RunningJobsRegistry;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobmanager.PersistedJobGraphUpdater;
 import org.apache.flink.runtime.jobmaster.DefaultSlotPoolServiceSchedulerFactory;
 import org.apache.flink.runtime.jobmaster.JobManagerRunner;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
@@ -53,6 +54,7 @@ public enum JobMasterServiceLeadershipRunnerFactory implements JobManagerRunnerF
             JobGraph jobGraph,
             Configuration configuration,
             RpcService rpcService,
+            PersistedJobGraphUpdater persistedJobGraphUpdater,
             HighAvailabilityServices highAvailabilityServices,
             HeartbeatServices heartbeatServices,
             JobManagerSharedServices jobManagerServices,
@@ -104,6 +106,7 @@ public enum JobMasterServiceLeadershipRunnerFactory implements JobManagerRunnerF
                         rpcService,
                         jobMasterConfiguration,
                         jobGraph,
+                        persistedJobGraphUpdater,
                         highAvailabilityServices,
                         slotPoolServiceSchedulerFactory,
                         jobManagerServices,

@@ -27,6 +27,8 @@ import org.apache.flink.runtime.io.network.partition.NoOpJobMasterPartitionTrack
 import org.apache.flink.runtime.io.network.partition.PartitionTrackerFactory;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
+import org.apache.flink.runtime.jobmanager.PersistedJobGraphUpdater;
+import org.apache.flink.runtime.jobmanager.ThrowingJobGraphWriter;
 import org.apache.flink.runtime.jobmaster.DefaultExecutionDeploymentReconciler;
 import org.apache.flink.runtime.jobmaster.DefaultExecutionDeploymentTracker;
 import org.apache.flink.runtime.jobmaster.DefaultSlotPoolServiceSchedulerFactory;
@@ -86,6 +88,8 @@ public class JobMasterBuilder {
             new DefaultExecutionDeploymentTracker();
     private ExecutionDeploymentReconciler.Factory executionDeploymentReconcilerFactory =
             DefaultExecutionDeploymentReconciler::new;
+
+    private PersistedJobGraphUpdater persistedJobGraphUpdater = ThrowingJobGraphWriter.INSTANCE;
 
     public JobMasterBuilder(JobGraph jobGraph, RpcService rpcService) {
         TestingHighAvailabilityServices testingHighAvailabilityServices =
@@ -173,6 +177,12 @@ public class JobMasterBuilder {
         return this;
     }
 
+    public JobMasterBuilder withPersistedJobGraphUpdater(
+            PersistedJobGraphUpdater persistedJobGraphUpdater) {
+        this.persistedJobGraphUpdater = persistedJobGraphUpdater;
+        return this;
+    }
+
     public JobMaster createJobMaster() throws Exception {
         final JobMasterConfiguration jobMasterConfiguration =
                 JobMasterConfiguration.fromConfiguration(configuration);
@@ -183,6 +193,7 @@ public class JobMasterBuilder {
                 jobMasterConfiguration,
                 jmResourceId,
                 jobGraph,
+                persistedJobGraphUpdater,
                 highAvailabilityServices,
                 slotPoolServiceSchedulerFactory != null
                         ? slotPoolServiceSchedulerFactory

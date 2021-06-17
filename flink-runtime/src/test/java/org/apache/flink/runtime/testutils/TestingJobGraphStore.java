@@ -58,6 +58,8 @@ public class TestingJobGraphStore implements JobGraphStore {
 
     private final ThrowingConsumer<JobID, ? extends Exception> releaseJobGraphConsumer;
 
+    private final ThrowingConsumer<JobGraph, ? extends Exception> persistJobGraphChangeConsumer;
+
     private boolean started;
 
     private TestingJobGraphStore(
@@ -70,6 +72,7 @@ public class TestingJobGraphStore implements JobGraphStore {
             ThrowingConsumer<JobGraph, ? extends Exception> putJobGraphConsumer,
             ThrowingConsumer<JobID, ? extends Exception> removeJobGraphConsumer,
             ThrowingConsumer<JobID, ? extends Exception> releaseJobGraphConsumer,
+            ThrowingConsumer<JobGraph, ? extends Exception> persistJobGraphChangeConsumer,
             Collection<JobGraph> initialJobGraphs) {
         this.startConsumer = startConsumer;
         this.stopRunnable = stopRunnable;
@@ -78,6 +81,7 @@ public class TestingJobGraphStore implements JobGraphStore {
         this.putJobGraphConsumer = putJobGraphConsumer;
         this.removeJobGraphConsumer = removeJobGraphConsumer;
         this.releaseJobGraphConsumer = releaseJobGraphConsumer;
+        this.persistJobGraphChangeConsumer = persistJobGraphChangeConsumer;
 
         for (JobGraph initialJobGraph : initialJobGraphs) {
             storedJobs.put(initialJobGraph.getJobID(), initialJobGraph);
@@ -141,6 +145,16 @@ public class TestingJobGraphStore implements JobGraphStore {
         return new Builder();
     }
 
+    @Override
+    public void persistJobGraphChange(JobGraph jobGraph) throws Exception {
+        Preconditions.checkArgument(
+                storedJobs.containsKey(jobGraph.getJobID()),
+                "Can only persist changes for a known JobGraph.");
+
+        persistJobGraphChangeConsumer.accept(jobGraph);
+        storedJobs.put(jobGraph.getJobID(), jobGraph);
+    }
+
     public static class Builder {
         private ThrowingConsumer<JobGraphListener, ? extends Exception> startConsumer =
                 ignored -> {};
@@ -163,6 +177,8 @@ public class TestingJobGraphStore implements JobGraphStore {
         private Collection<JobGraph> initialJobGraphs = Collections.emptyList();
 
         private boolean startJobGraphStore = false;
+        private ThrowingConsumer<JobGraph, ? extends Exception> persistJobGraphChangeConsumer =
+                ignored -> {};
 
         private Builder() {}
 
@@ -209,6 +225,12 @@ public class TestingJobGraphStore implements JobGraphStore {
             return this;
         }
 
+        public Builder setPersistJobGraphChangeConsumer(
+                ThrowingConsumer<JobGraph, ? extends Exception> persistJobGraphChangeConsumer) {
+            this.persistJobGraphChangeConsumer = persistJobGraphChangeConsumer;
+            return this;
+        }
+
         public Builder setInitialJobGraphs(Collection<JobGraph> initialJobGraphs) {
             this.initialJobGraphs = initialJobGraphs;
             return this;
@@ -229,6 +251,7 @@ public class TestingJobGraphStore implements JobGraphStore {
                             putJobGraphConsumer,
                             removeJobGraphConsumer,
                             releaseJobGraphConsumer,
+                            persistJobGraphChangeConsumer,
                             initialJobGraphs);
 
             if (startJobGraphStore) {

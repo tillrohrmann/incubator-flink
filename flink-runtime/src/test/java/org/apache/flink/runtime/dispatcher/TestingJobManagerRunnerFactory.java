@@ -22,6 +22,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.heartbeat.HeartbeatServices;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobmanager.PersistedJobGraphUpdater;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
 import org.apache.flink.runtime.jobmaster.TestingJobManagerRunner;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
@@ -57,6 +58,7 @@ public class TestingJobManagerRunnerFactory implements JobManagerRunnerFactory {
             JobGraph jobGraph,
             Configuration configuration,
             RpcService rpcService,
+            PersistedJobGraphUpdater persistedJobGraphUpdater,
             HighAvailabilityServices highAvailabilityServices,
             HeartbeatServices heartbeatServices,
             JobManagerSharedServices jobManagerServices,

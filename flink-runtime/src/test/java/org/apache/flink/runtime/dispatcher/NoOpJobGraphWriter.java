@@ -34,4 +34,7 @@ public enum NoOpJobGraphWriter implements JobGraphWriter {
 
     @Override
     public void releaseJobGraph(JobID jobId) throws Exception {}
+
+    @Override
+    public void persistJobGraphChange(JobGraph jobGraph) throws Exception {}
 }

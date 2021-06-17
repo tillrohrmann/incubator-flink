@@ -46,10 +46,12 @@ import org.apache.flink.runtime.io.network.partition.PartitionTrackerFactory;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobGraphUtils;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
 import org.apache.flink.runtime.jobmanager.PartitionProducerDisposedException;
+import org.apache.flink.runtime.jobmanager.PersistedJobGraphUpdater;
 import org.apache.flink.runtime.jobmaster.factories.JobManagerJobMetricGroupFactory;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPoolService;
 import org.apache.flink.runtime.leaderretrieval.LeaderRetrievalListener;
@@ -89,8 +91,8 @@ import org.apache.flink.runtime.taskmanager.UnresolvedTaskManagerLocation;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.InstantiationUtil;
+import org.apache.flink.util.Result;
 import org.apache.flink.util.SerializedValue;
-import org.apache.flink.util.VoidResult;
 
 import org.slf4j.Logger;
 
@@ -139,13 +141,13 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
 
     private final ResourceID resourceId;
 
-    private final JobGraph jobGraph;
-
     private final Time rpcTimeout;
 
     private final HighAvailabilityServices highAvailabilityServices;
 
     private final BlobWriter blobWriter;
+
+    private final PersistedJobGraphUpdater persistedJobGraphUpdater;
 
     private final HeartbeatServices heartbeatServices;
 
@@ -193,6 +195,8 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
 
     // -------- Mutable fields ---------
 
+    private JobGraph jobGraph;
+
     @Nullable private ResourceManagerAddress resourceManagerAddress;
 
     @Nullable private ResourceManagerConnection resourceManagerConnection;
@@ -212,6 +216,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
             JobMasterConfiguration jobMasterConfiguration,
             ResourceID resourceId,
             JobGraph jobGraph,
+            PersistedJobGraphUpdater persistedJobGraphUpdater,
             HighAvailabilityServices highAvailabilityService,
             SlotPoolServiceSchedulerFactory slotPoolServiceSchedulerFactory,
             JobManagerSharedServices jobManagerSharedServices,
@@ -276,6 +281,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
         this.jobGraph = checkNotNull(jobGraph);
         this.rpcTimeout = jobMasterConfiguration.getRpcTimeout();
         this.highAvailabilityServices = checkNotNull(highAvailabilityService);
+        this.persistedJobGraphUpdater = checkNotNull(persistedJobGraphUpdater);
         this.blobWriter = jobManagerSharedServices.getBlobWriter();
         this.scheduledExecutorService = jobManagerSharedServices.getScheduledExecutorService();
         this.jobCompletionActions = checkNotNull(jobCompletionActions);
@@ -860,10 +866,20 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
     public CompletableFuture<Acknowledge> changeParallelism(
             JobVertexParallelism jobVertexParallelism) {
         final ParallelismValidationResult validationResult =
-                validateNewParallelism(jobVertexParallelism);
+                validateNewParallelismAndCreateJobGraph(jobVertexParallelism);
 
         if (validationResult.isOk()) {
-            // TODO: persist parallelism changes
+            final JobGraph newJobGraph = validationResult.getOk();
+            try {
+                persistedJobGraphUpdater.persistJobGraphChange(newJobGraph);
+            } catch (Exception e) {
+                return FutureUtils.completedExceptionally(
+                        new JobMasterException(
+                                "Could not persist the job parallelism change. Aborting the operation.",
+                                e));
+            }
+
+            this.jobGraph = newJobGraph;
             schedulerNG.changeParallelism(jobVertexParallelism);
             return CompletableFuture.completedFuture(Acknowledge.get());
         } else {
@@ -874,13 +890,14 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
 
     /**
      * This methods validates that the new job vertex parallelisms are less or equal than the max
-     * parallelism. Moreover, it validates that there a no unknown job vertex ids.
+     * parallelism. Moreover, it validates that there a no unknown job vertex ids. If the validation
+     * passes, then this method returns an updated {@link JobGraph} with the new parallelism.
      *
      * @param newJobVertexParallelism newJobVertexParallelism contains the new parallelism
      *     information for the job vertices.
      * @return Validation result
      */
-    private ParallelismValidationResult validateNewParallelism(
+    private ParallelismValidationResult validateNewParallelismAndCreateJobGraph(
             JobVertexParallelism newJobVertexParallelism) {
         final Set<JobVertexID> jobVertexIds = newJobVertexParallelism.getJobVertices();
 
@@ -908,24 +925,40 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
         }
 
         if (errors.isEmpty()) {
-            return ParallelismValidationResult.ok();
+            return ParallelismValidationResult.ok(
+                    createJobGraphWithNewParallelism(newJobVertexParallelism));
         } else {
             final String errorMessage = String.join(System.lineSeparator(), errors);
             return ParallelismValidationResult.error(errorMessage);
         }
     }
 
-    private static final class ParallelismValidationResult extends VoidResult<String> {
-        private ParallelismValidationResult(@Nullable String error) {
-            super(error);
+    private JobGraph createJobGraphWithNewParallelism(
+            JobVertexParallelism newJobVertexParallelism) {
+        final JobGraph newJobGraph =
+                JobGraphUtils.copyJobGraph(JobGraphUtils.copyJobGraph(jobGraph));
+
+        for (Map.Entry<JobVertexID, Integer> jobVertexParallelism :
+                newJobVertexParallelism.getJobVertexParallelisms()) {
+            newJobGraph
+                    .findVertexByID(jobVertexParallelism.getKey())
+                    .setParallelism(jobVertexParallelism.getValue());
         }
 
-        public static ParallelismValidationResult ok() {
-            return new ParallelismValidationResult(null);
+        return newJobGraph;
+    }
+
+    private static final class ParallelismValidationResult extends Result<JobGraph, String> {
+        private ParallelismValidationResult(@Nullable JobGraph jobGraph, @Nullable String error) {
+            super(jobGraph, error);
+        }
+
+        public static ParallelismValidationResult ok(JobGraph jobGraph) {
+            return new ParallelismValidationResult(jobGraph, null);
         }
 
         public static ParallelismValidationResult error(String error) {
-            return new ParallelismValidationResult(error);
+            return new ParallelismValidationResult(null, error);
         }
     }
 

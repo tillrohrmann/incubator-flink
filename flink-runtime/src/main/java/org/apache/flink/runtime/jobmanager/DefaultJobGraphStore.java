@@ -25,6 +25,7 @@ import org.apache.flink.runtime.persistence.StateHandleStore;
 import org.apache.flink.runtime.state.RetrievableStateHandle;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
+import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -348,5 +349,17 @@ public class DefaultJobGraphStore<R extends ResourceVersion<R>>
     /** Verifies that the state is running. */
     private void verifyIsRunning() {
         checkState(running, "Not running. Forgot to call start()?");
+    }
+
+    @Override
+    public void persistJobGraphChange(JobGraph jobGraph) throws Exception {
+        synchronized (lock) {
+            Preconditions.checkArgument(
+                    addedJobGraphs.contains(jobGraph.getJobID()),
+                    String.format(
+                            "Can only persist changes for known JobGraphs. The job %s is not persisted yet.",
+                            jobGraph.getJobID()));
+            putJobGraph(jobGraph);
+        }
     }
 }

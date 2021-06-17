@@ -24,6 +24,7 @@ import org.apache.flink.runtime.highavailability.HighAvailabilityServices;
 import org.apache.flink.runtime.io.network.partition.JobMasterPartitionTrackerImpl;
 import org.apache.flink.runtime.jobgraph.JobGraph;
 import org.apache.flink.runtime.jobmanager.OnCompletionActions;
+import org.apache.flink.runtime.jobmanager.PersistedJobGraphUpdater;
 import org.apache.flink.runtime.jobmaster.DefaultExecutionDeploymentReconciler;
 import org.apache.flink.runtime.jobmaster.DefaultExecutionDeploymentTracker;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
@@ -47,6 +48,7 @@ public class DefaultJobMasterServiceFactory implements JobMasterServiceFactory {
     private final RpcService rpcService;
     private final JobMasterConfiguration jobMasterConfiguration;
     private final JobGraph jobGraph;
+    private final PersistedJobGraphUpdater persistedJobGraphUpdater;
     private final HighAvailabilityServices haServices;
     private final SlotPoolServiceSchedulerFactory slotPoolServiceSchedulerFactory;
     private final JobManagerSharedServices jobManagerSharedServices;
@@ -62,6 +64,7 @@ public class DefaultJobMasterServiceFactory implements JobMasterServiceFactory {
             RpcService rpcService,
             JobMasterConfiguration jobMasterConfiguration,
             JobGraph jobGraph,
+            PersistedJobGraphUpdater persistedJobGraphUpdater,
             HighAvailabilityServices haServices,
             SlotPoolServiceSchedulerFactory slotPoolServiceSchedulerFactory,
             JobManagerSharedServices jobManagerSharedServices,
@@ -75,6 +78,7 @@ public class DefaultJobMasterServiceFactory implements JobMasterServiceFactory {
         this.rpcService = rpcService;
         this.jobMasterConfiguration = jobMasterConfiguration;
         this.jobGraph = jobGraph;
+        this.persistedJobGraphUpdater = persistedJobGraphUpdater;
         this.haServices = haServices;
         this.slotPoolServiceSchedulerFactory = slotPoolServiceSchedulerFactory;
         this.jobManagerSharedServices = jobManagerSharedServices;
@@ -106,6 +110,7 @@ public class DefaultJobMasterServiceFactory implements JobMasterServiceFactory {
                         jobMasterConfiguration,
                         ResourceID.generate(),
                         jobGraph,
+                        persistedJobGraphUpdater,
                         haServices,
                         slotPoolServiceSchedulerFactory,
                         jobManagerSharedServices,

@@ -46,6 +46,7 @@ import org.apache.flink.runtime.jobgraph.JobGraphBuilder;
 import org.apache.flink.runtime.jobgraph.JobGraphTestUtils;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobmanager.JobGraphWriter;
+import org.apache.flink.runtime.jobmanager.PersistedJobGraphUpdater;
 import org.apache.flink.runtime.jobmaster.JobManagerRunner;
 import org.apache.flink.runtime.jobmaster.JobManagerRunnerResult;
 import org.apache.flink.runtime.jobmaster.JobManagerSharedServices;
@@ -834,6 +835,7 @@ public class DispatcherTest extends TestLogger {
                 JobGraph jobGraph,
                 Configuration configuration,
                 RpcService rpcService,
+                PersistedJobGraphUpdater persistedJobGraphUpdater,
                 HighAvailabilityServices highAvailabilityServices,
                 HeartbeatServices heartbeatServices,
                 JobManagerSharedServices jobManagerServices,
@@ -892,6 +894,7 @@ public class DispatcherTest extends TestLogger {
                 JobGraph jobGraph,
                 Configuration configuration,
                 RpcService rpcService,
+                PersistedJobGraphUpdater persistedJobGraphUpdater,
                 HighAvailabilityServices highAvailabilityServices,
                 HeartbeatServices heartbeatServices,
                 JobManagerSharedServices jobManagerServices,
@@ -971,6 +974,7 @@ public class DispatcherTest extends TestLogger {
                 JobGraph jobGraph,
                 Configuration configuration,
                 RpcService rpcService,
+                PersistedJobGraphUpdater persistedJobGraphUpdater,
                 HighAvailabilityServices highAvailabilityServices,
                 HeartbeatServices heartbeatServices,
                 JobManagerSharedServices jobManagerSharedServices,
@@ -985,6 +989,7 @@ public class DispatcherTest extends TestLogger {
                             jobGraph,
                             configuration,
                             rpcService,
+                            persistedJobGraphUpdater,
                             highAvailabilityServices,
                             heartbeatServices,
                             jobManagerSharedServices,
@@ -1033,6 +1038,7 @@ public class DispatcherTest extends TestLogger {
                 JobGraph jobGraph,
                 Configuration configuration,
                 RpcService rpcService,
+                PersistedJobGraphUpdater persistedJobGraphUpdater,
                 HighAvailabilityServices highAvailabilityServices,
                 HeartbeatServices heartbeatServices,
                 JobManagerSharedServices jobManagerServices,
@@ -1148,6 +1154,7 @@ public class DispatcherTest extends TestLogger {
                 JobGraph jobGraph,
                 Configuration configuration,
                 RpcService rpcService,
+                PersistedJobGraphUpdater persistedJobGraphUpdater,
                 HighAvailabilityServices highAvailabilityServices,
                 HeartbeatServices heartbeatServices,
                 JobManagerSharedServices jobManagerSharedServices,
@@ -1163,6 +1170,7 @@ public class DispatcherTest extends TestLogger {
                     jobGraph,
                     configuration,
                     rpcService,
+                    persistedJobGraphUpdater,
                     highAvailabilityServices,
                     heartbeatServices,
                     jobManagerSharedServices,

@@ -24,6 +24,7 @@ import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.util.FileUtils;
 import org.apache.flink.util.FlinkRuntimeException;
+import org.apache.flink.util.InstantiationUtil;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,5 +92,13 @@ public enum JobGraphUtils {
         }
 
         return result;
+    }
+
+    public static JobGraph copyJobGraph(JobGraph jobGraph) {
+        try {
+            return InstantiationUtil.clone(jobGraph);
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException("Could not copy the JobGraph. This should never happen.", e);
+        }
     }
 }

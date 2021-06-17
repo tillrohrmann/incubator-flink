@@ -31,7 +31,7 @@ import java.util.Objects;
 /** {@link JobGraphStore} implementation for a single job. */
 public class SingleJobJobGraphStore implements JobGraphStore {
 
-    private final JobGraph jobGraph;
+    private JobGraph jobGraph;
 
     public SingleJobJobGraphStore(JobGraph jobGraph) {
         this.jobGraph = Preconditions.checkNotNull(jobGraph);
@@ -77,5 +77,14 @@ public class SingleJobJobGraphStore implements JobGraphStore {
     @Override
     public Collection<JobID> getJobIds() {
         return Collections.singleton(jobGraph.getJobID());
+    }
+
+    @Override
+    public void persistJobGraphChange(JobGraph jobGraph) {
+        Preconditions.checkArgument(
+                jobGraph.getJobID().equals(this.jobGraph.getJobID()),
+                String.format("The %s can only store a single job.", getClass().getSimpleName()));
+
+        this.jobGraph = jobGraph;
     }
 }

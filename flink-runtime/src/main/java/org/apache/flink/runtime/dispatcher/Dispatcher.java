@@ -470,6 +470,7 @@ public abstract class Dispatcher extends PermanentlyFencedRpcEndpoint<Dispatcher
                         jobGraph,
                         configuration,
                         rpcService,
+                        jobGraphWriter,
                         highAvailabilityServices,
                         heartbeatServices,
                         jobManagerSharedServices,

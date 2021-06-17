@@ -35,4 +35,9 @@ public enum ThrowingJobGraphWriter implements JobGraphWriter {
 
     @Override
     public void releaseJobGraph(JobID jobId) {}
+
+    @Override
+    public void persistJobGraphChange(JobGraph jobGraph) throws Exception {
+        throw new UnsupportedOperationException("Cannot persist job graph changes.");
+    }
 }

@@ -66,4 +66,9 @@ public class StandaloneJobGraphStore implements JobGraphStore {
     public JobGraph recoverJobGraph(JobID jobId) {
         return null;
     }
+
+    @Override
+    public void persistJobGraphChange(JobGraph jobGraph) {
+        // nothing to do
+    }
 }
