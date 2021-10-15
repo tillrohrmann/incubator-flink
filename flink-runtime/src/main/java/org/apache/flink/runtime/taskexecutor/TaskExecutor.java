@@ -21,6 +21,7 @@ package org.apache.flink.runtime.taskexecutor;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.time.Time;
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.management.jmx.JMXService;
 import org.apache.flink.runtime.accumulators.AccumulatorSnapshot;
 import org.apache.flink.runtime.blob.BlobCacheService;
@@ -1045,6 +1046,16 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
             final Time timeout) {
         // TODO: Filter invalid requests from the resource manager by using the
         // instance/registration Id
+
+        final AllocationID resolvedAllocationId;
+        if (taskManagerConfiguration
+                .getConfiguration()
+                .get(CheckpointingOptions.PERSISTENT_VOLUME_SUPPORT)) {
+            resolvedAllocationId =
+                    new AllocationID(slotId.getSlotNumber(), slotId.getResourceID().hashCode());
+        } else {
+            resolvedAllocationId = allocationId;
+        }
 
         log.info(
                 "Receive slot request {} for job {} from resource manager with leader id {}.",
