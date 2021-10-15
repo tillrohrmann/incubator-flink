@@ -33,6 +33,12 @@
             <td>This option configures local recovery for this state backend. By default, local recovery is deactivated. Local recovery currently only covers keyed state backends. Currently, the MemoryStateBackend does not support local recovery and ignores this option.</td>
         </tr>
         <tr>
+            <td><h5>state.backend.persistent-volume-support</h5></td>
+            <td style="word-wrap: break-word;">false</td>
+            <td>Boolean</td>
+            <td>Set to true to activate experimental support for persistent volumes.</td>
+        </tr>
+        <tr>
             <td><h5>state.checkpoint-storage</h5></td>
             <td style="word-wrap: break-word;">(none)</td>
             <td>String</td>

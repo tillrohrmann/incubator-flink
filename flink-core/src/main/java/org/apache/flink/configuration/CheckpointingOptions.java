@@ -190,6 +190,13 @@ public class CheckpointingOptions {
                                     + "deactivated. Local recovery currently only covers keyed state backends. Currently, the MemoryStateBackend "
                                     + "does not support local recovery and ignores this option.");
 
+    public static final ConfigOption<Boolean> PERSISTENT_VOLUME_SUPPORT =
+            ConfigOptions.key("state.backend.persistent-volume-support")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription(
+                            "Set to true to activate experimental support for persistent volumes.");
+
     /**
      * The config parameter defining the root directories for storing file-based state for local
      * recovery.
