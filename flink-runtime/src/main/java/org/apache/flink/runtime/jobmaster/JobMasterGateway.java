@@ -53,6 +53,7 @@ import org.apache.flink.util.SerializedValue;
 import javax.annotation.Nullable;
 
 import java.util.Collection;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /** {@link JobMaster} rpc gateway interface. */
@@ -177,6 +178,7 @@ public interface JobMasterGateway
             final String taskManagerRpcAddress,
             final UnresolvedTaskManagerLocation unresolvedTaskManagerLocation,
             final JobID jobId,
+            final UUID taskManagerSession,
             @RpcTimeout final Time timeout);
 
     /**

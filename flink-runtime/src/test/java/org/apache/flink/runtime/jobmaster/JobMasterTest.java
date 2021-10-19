@@ -107,6 +107,7 @@ import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.runtime.taskmanager.UnresolvedTaskManagerLocation;
 import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.runtime.testutils.CommonTestUtils;
+import org.apache.flink.runtime.testutils.TestingUtils;
 import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.testutils.junit.FailsWithAdaptiveScheduler;
 import org.apache.flink.util.ExceptionUtils;
@@ -287,6 +288,7 @@ public class JobMasterTest extends TestLogger {
                             taskExecutorGateway.getAddress(),
                             unresolvedTaskManagerLocation,
                             jobGraph.getJobID(),
+                            TestingUtils.zeroUUID(),
                             testingTimeout);
 
             // wait for the completion of the registration
@@ -343,6 +345,7 @@ public class JobMasterTest extends TestLogger {
                             taskExecutorGateway.getAddress(),
                             unresolvedTaskManagerLocation,
                             jobGraph.getJobID(),
+                            TestingUtils.zeroUUID(),
                             testingTimeout);
 
             // wait for the completion of the registration
@@ -439,6 +442,7 @@ public class JobMasterTest extends TestLogger {
                             taskExecutorGateway.getAddress(),
                             unresolvedTaskManagerLocation,
                             jobGraph.getJobID(),
+                            TestingUtils.zeroUUID(),
                             testingTimeout);
 
             // wait for the completion of the registration
@@ -1774,6 +1778,7 @@ public class JobMasterTest extends TestLogger {
                             "foobar",
                             new LocalUnresolvedTaskManagerLocation(),
                             new JobID(),
+                            TestingUtils.zeroUUID(),
                             testingTimeout);
 
             assertThat(registrationResponse.get(), instanceOf(JMTMRegistrationRejection.class));
@@ -1906,6 +1911,7 @@ public class JobMasterTest extends TestLogger {
                         taskExecutorGateway.getAddress(),
                         unresolvedTaskManagerLocation,
                         jobId,
+                        TestingUtils.zeroUUID(),
                         testingTimeout)
                 .get();
 

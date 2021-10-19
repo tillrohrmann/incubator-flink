@@ -43,6 +43,7 @@ import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.LocalUnresolvedTaskManagerLocation;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
 import org.apache.flink.runtime.taskmanager.UnresolvedTaskManagerLocation;
+import org.apache.flink.runtime.testutils.TestingUtils;
 import org.apache.flink.util.concurrent.FutureUtils;
 
 import org.apache.flink.shaded.guava30.com.google.common.collect.Iterables;
@@ -146,7 +147,11 @@ public class JobMasterTester implements Closeable {
     public CompletableFuture<List<TaskDeploymentDescriptor>> deployVertices(int numSlots) {
         return jobMasterGateway
                 .registerTaskManager(
-                        taskExecutorGateway.getAddress(), taskManagerLocation, jobId, TIMEOUT)
+                        taskExecutorGateway.getAddress(),
+                        taskManagerLocation,
+                        jobId,
+                        TestingUtils.zeroUUID(),
+                        TIMEOUT)
                 .thenCompose(ignored -> offerSlots(numSlots))
                 .thenCompose(ignored -> descriptorsFuture);
     }

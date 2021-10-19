@@ -174,6 +174,8 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
     private final Map<ResourceID, Tuple2<TaskManagerLocation, TaskExecutorGateway>>
             registeredTaskManagers;
 
+    private final Map<ResourceID, UUID> taskManagerSessions;
+
     private final ShuffleMaster<?> shuffleMaster;
 
     // --------- Scheduler --------
@@ -302,6 +304,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
                 checkNotNull(slotPoolServiceSchedulerFactory).createSlotPoolService(jid);
 
         this.registeredTaskManagers = new HashMap<>(4);
+        this.taskManagerSessions = new HashMap<>();
         this.partitionTracker =
                 checkNotNull(partitionTrackerFactory)
                         .create(
@@ -509,6 +512,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
 
         Tuple2<TaskManagerLocation, TaskExecutorGateway> taskManagerConnection =
                 registeredTaskManagers.remove(resourceID);
+        taskManagerSessions.remove(resourceID);
 
         if (taskManagerConnection != null) {
             taskManagerConnection.f1.disconnectJobManager(jobGraph.getJobID(), cause);
@@ -680,6 +684,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
             final String taskManagerRpcAddress,
             final UnresolvedTaskManagerLocation unresolvedTaskManagerLocation,
             final JobID jobId,
+            final UUID taskManagerSession,
             final Time timeout) {
 
         if (!jobGraph.getJobID().equals(jobId)) {
@@ -717,32 +722,42 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
 
         final ResourceID taskManagerId = taskManagerLocation.getResourceID();
 
-        if (registeredTaskManagers.containsKey(taskManagerId)) {
+        if (taskManagerSession.equals(taskManagerSessions.get(taskManagerId))) {
+            log.debug(
+                    "Ignoring registration attempt of TaskManager {} with the same session id {}.",
+                    taskManagerId,
+                    taskManagerSession);
             final RegistrationResponse response = new JMTMRegistrationSuccess(resourceId);
             return CompletableFuture.completedFuture(response);
-        } else {
-            return getRpcService()
-                    .connect(taskManagerRpcAddress, TaskExecutorGateway.class)
-                    .handleAsync(
-                            (TaskExecutorGateway taskExecutorGateway, Throwable throwable) -> {
-                                if (throwable != null) {
-                                    return new RegistrationResponse.Failure(throwable);
-                                }
-
-                                slotPoolService.registerTaskManager(taskManagerId);
-                                registeredTaskManagers.put(
-                                        taskManagerId,
-                                        Tuple2.of(taskManagerLocation, taskExecutorGateway));
-
-                                // monitor the task manager as heartbeat target
-                                taskManagerHeartbeatManager.monitorTarget(
-                                        taskManagerId,
-                                        new TaskExecutorHeartbeatSender(taskExecutorGateway));
-
-                                return new JMTMRegistrationSuccess(resourceId);
-                            },
-                            getMainThreadExecutor());
+        } else if (taskManagerSessions.containsKey(taskManagerId)) {
+            disconnectTaskManager(
+                    taskManagerId,
+                    new FlinkException(
+                            "A registered TaskManager re-registered with a new session id. This indicates a restart of the TaskManager. Closing the old connection."));
         }
+
+        return getRpcService()
+                .connect(taskManagerRpcAddress, TaskExecutorGateway.class)
+                .handleAsync(
+                        (TaskExecutorGateway taskExecutorGateway, Throwable throwable) -> {
+                            if (throwable != null) {
+                                return new RegistrationResponse.Failure(throwable);
+                            }
+
+                            slotPoolService.registerTaskManager(taskManagerId);
+                            registeredTaskManagers.put(
+                                    taskManagerId,
+                                    Tuple2.of(taskManagerLocation, taskExecutorGateway));
+                            taskManagerSessions.put(taskManagerId, taskManagerSession);
+
+                            // monitor the task manager as heartbeat target
+                            taskManagerHeartbeatManager.monitorTarget(
+                                    taskManagerId,
+                                    new TaskExecutorHeartbeatSender(taskExecutorGateway));
+
+                            return new JMTMRegistrationSuccess(resourceId);
+                        },
+                        getMainThreadExecutor());
     }
 
     @Override

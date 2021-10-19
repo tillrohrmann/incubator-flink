@@ -55,6 +55,7 @@ import org.apache.flink.runtime.taskmanager.TaskExecutionState;
 import org.apache.flink.runtime.taskmanager.UnresolvedTaskManagerLocation;
 import org.apache.flink.util.SerializedValue;
 import org.apache.flink.util.concurrent.FutureUtils;
+import org.apache.flink.util.function.QuadFunction;
 import org.apache.flink.util.function.TriConsumer;
 import org.apache.flink.util.function.TriFunction;
 
@@ -101,13 +102,14 @@ public class TestingJobMasterGatewayBuilder {
                             CompletableFuture.completedFuture(Collections.emptyList());
     private TriConsumer<ResourceID, AllocationID, Throwable> failSlotConsumer =
             (ignoredA, ignoredB, ignoredC) -> {};
-    private TriFunction<
+    private QuadFunction<
                     String,
                     UnresolvedTaskManagerLocation,
                     JobID,
+                    UUID,
                     CompletableFuture<RegistrationResponse>>
             registerTaskManagerFunction =
-                    (ignoredA, ignoredB, ignoredC) ->
+                    (ignoredA, ignoredB, ignoredC, ignoredD) ->
                             CompletableFuture.completedFuture(
                                     new JMTMRegistrationSuccess(RESOURCE_MANAGER_ID));
     private BiFunction<
@@ -243,10 +245,11 @@ public class TestingJobMasterGatewayBuilder {
     }
 
     public TestingJobMasterGatewayBuilder setRegisterTaskManagerFunction(
-            TriFunction<
+            QuadFunction<
                             String,
                             UnresolvedTaskManagerLocation,
                             JobID,
+                            UUID,
                             CompletableFuture<RegistrationResponse>>
                     registerTaskManagerFunction) {
         this.registerTaskManagerFunction = registerTaskManagerFunction;
