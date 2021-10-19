@@ -26,6 +26,7 @@ import org.apache.flink.runtime.taskexecutor.TaskExecutorGateway;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.LocalUnresolvedTaskManagerLocation;
 import org.apache.flink.runtime.taskmanager.UnresolvedTaskManagerLocation;
+import org.apache.flink.runtime.testutils.TestingUtils;
 
 import java.util.Collection;
 import java.util.concurrent.ExecutionException;
@@ -54,6 +55,7 @@ public class JobMasterTestUtils {
                         taskExecutorGateway.getAddress(),
                         unresolvedTaskManagerLocation,
                         jobId,
+                        TestingUtils.zeroUUID(),
                         testingTimeout)
                 .get();
 

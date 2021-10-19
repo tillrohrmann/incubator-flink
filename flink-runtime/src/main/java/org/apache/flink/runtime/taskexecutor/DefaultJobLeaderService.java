@@ -70,6 +70,8 @@ public class DefaultJobLeaderService implements JobLeaderService {
 
     private final RetryingRegistrationConfiguration retryingRegistrationConfiguration;
 
+    private final UUID taskManagerSession;
+
     /** Internal state of the service. */
     private volatile DefaultJobLeaderService.State state;
 
@@ -93,6 +95,7 @@ public class DefaultJobLeaderService implements JobLeaderService {
         this.ownLocation = Preconditions.checkNotNull(location);
         this.retryingRegistrationConfiguration =
                 Preconditions.checkNotNull(retryingRegistrationConfiguration);
+        this.taskManagerSession = UUID.randomUUID();
 
         // Has to be a concurrent hash map because tests might access this service
         // concurrently via containsJob
@@ -403,7 +406,8 @@ public class DefaultJobLeaderService implements JobLeaderService {
                         retryingRegistrationConfiguration,
                         ownerAddress,
                         ownLocation,
-                        jobId);
+                        jobId,
+                        taskManagerSession);
             }
 
             @Override
@@ -488,6 +492,8 @@ public class DefaultJobLeaderService implements JobLeaderService {
 
         private final JobID jobId;
 
+        private final UUID taskManagerSession;
+
         JobManagerRetryingRegistration(
                 Logger log,
                 RpcService rpcService,
@@ -498,7 +504,8 @@ public class DefaultJobLeaderService implements JobLeaderService {
                 RetryingRegistrationConfiguration retryingRegistrationConfiguration,
                 String taskManagerRpcAddress,
                 UnresolvedTaskManagerLocation unresolvedTaskManagerLocation,
-                JobID jobId) {
+                JobID jobId,
+                UUID taskManagerSession) {
             super(
                     log,
                     rpcService,
@@ -512,6 +519,7 @@ public class DefaultJobLeaderService implements JobLeaderService {
             this.unresolvedTaskManagerLocation =
                     Preconditions.checkNotNull(unresolvedTaskManagerLocation);
             this.jobId = Preconditions.checkNotNull(jobId);
+            this.taskManagerSession = taskManagerSession;
         }
 
         @Override
@@ -521,6 +529,7 @@ public class DefaultJobLeaderService implements JobLeaderService {
                     taskManagerRpcAddress,
                     unresolvedTaskManagerLocation,
                     jobId,
+                    taskManagerSession,
                     Time.milliseconds(timeoutMillis));
         }
     }

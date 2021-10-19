@@ -356,7 +356,7 @@ public class TaskExecutorTest extends TestLogger {
         final TestingJobMasterGatewayBuilder testingJobMasterGatewayBuilder =
                 new TestingJobMasterGatewayBuilder()
                         .setRegisterTaskManagerFunction(
-                                (s, taskManagerUnresolvedLocation, ignored) -> {
+                                (s, taskManagerUnresolvedLocation, ignored, ignoredUUID) -> {
                                     registrationAttempts.countDown();
                                     return CompletableFuture.completedFuture(
                                             new JMTMRegistrationSuccess(jmResourceId));
@@ -2323,7 +2323,7 @@ public class TaskExecutorTest extends TestLogger {
                                         CompletableFuture.completedFuture(
                                                 new ArrayList<>(slotOffers)))
                         .setRegisterTaskManagerFunction(
-                                (ignoredA, ignoredB, ignoredC) ->
+                                (ignoredA, ignoredB, ignoredC, ignoredUUID) ->
                                         CompletableFuture.completedFuture(
                                                 new JMTMRegistrationSuccess(jobManagerResourceId)))
                         .build();
@@ -2581,7 +2581,7 @@ public class TaskExecutorTest extends TestLogger {
         final TestingJobMasterGateway jobMasterGateway =
                 new TestingJobMasterGatewayBuilder()
                         .setRegisterTaskManagerFunction(
-                                (s, unresolvedTaskManagerLocation, jobID) ->
+                                (s, unresolvedTaskManagerLocation, jobID, ignoredUUID) ->
                                         CompletableFuture.completedFuture(
                                                 new JMTMRegistrationRejection("foobar")))
                         .build();
@@ -2653,7 +2653,7 @@ public class TaskExecutorTest extends TestLogger {
         final TestingJobMasterGateway jobMasterGateway =
                 new TestingJobMasterGatewayBuilder()
                         .setRegisterTaskManagerFunction(
-                                (s, unresolvedTaskManagerLocation, jobID) ->
+                                (s, unresolvedTaskManagerLocation, jobID, ignoredUUID) ->
                                         new CompletableFuture<>())
                         .build();
 

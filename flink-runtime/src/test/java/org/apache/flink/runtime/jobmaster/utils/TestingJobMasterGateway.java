@@ -55,6 +55,7 @@ import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.TaskExecutionState;
 import org.apache.flink.runtime.taskmanager.UnresolvedTaskManagerLocation;
 import org.apache.flink.util.SerializedValue;
+import org.apache.flink.util.function.QuadFunction;
 import org.apache.flink.util.function.TriConsumer;
 import org.apache.flink.util.function.TriFunction;
 
@@ -63,6 +64,7 @@ import javax.annotation.Nullable;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -111,10 +113,11 @@ public class TestingJobMasterGateway implements JobMasterGateway {
     @Nonnull private final TriConsumer<ResourceID, AllocationID, Throwable> failSlotConsumer;
 
     @Nonnull
-    private final TriFunction<
+    private final QuadFunction<
                     String,
                     UnresolvedTaskManagerLocation,
                     JobID,
+                    UUID,
                     CompletableFuture<RegistrationResponse>>
             registerTaskManagerFunction;
 
@@ -218,10 +221,11 @@ public class TestingJobMasterGateway implements JobMasterGateway {
                             offerSlotsFunction,
             @Nonnull TriConsumer<ResourceID, AllocationID, Throwable> failSlotConsumer,
             @Nonnull
-                    TriFunction<
+                    QuadFunction<
                                     String,
                                     UnresolvedTaskManagerLocation,
                                     JobID,
+                                    UUID,
                                     CompletableFuture<RegistrationResponse>>
                             registerTaskManagerFunction,
             @Nonnull
@@ -375,9 +379,10 @@ public class TestingJobMasterGateway implements JobMasterGateway {
             String taskManagerRpcAddress,
             UnresolvedTaskManagerLocation unresolvedTaskManagerLocation,
             JobID jobId,
+            UUID taskManagerSession,
             Time timeout) {
         return registerTaskManagerFunction.apply(
-                taskManagerRpcAddress, unresolvedTaskManagerLocation, jobId);
+                taskManagerRpcAddress, unresolvedTaskManagerLocation, jobId, taskManagerSession);
     }
 
     @Override

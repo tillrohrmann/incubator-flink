@@ -263,7 +263,7 @@ public class DefaultJobLeaderServiceTest extends TestLogger {
         final TestingJobMasterGateway jobMasterGateway =
                 new TestingJobMasterGatewayBuilder()
                         .setRegisterTaskManagerFunction(
-                                (s, unresolvedTaskManagerLocation, jobID) ->
+                                (s, unresolvedTaskManagerLocation, jobID, ignoredUUID) ->
                                         CompletableFuture.completedFuture(
                                                 new JMTMRegistrationRejection("foobar")))
                         .build();

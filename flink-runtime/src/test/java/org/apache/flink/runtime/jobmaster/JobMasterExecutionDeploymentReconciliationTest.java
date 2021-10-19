@@ -44,6 +44,7 @@ import org.apache.flink.runtime.taskexecutor.TestingTaskExecutorGatewayBuilder;
 import org.apache.flink.runtime.taskexecutor.slot.SlotOffer;
 import org.apache.flink.runtime.taskmanager.LocalUnresolvedTaskManagerLocation;
 import org.apache.flink.runtime.taskmanager.UnresolvedTaskManagerLocation;
+import org.apache.flink.runtime.testutils.TestingUtils;
 import org.apache.flink.runtime.util.TestingFatalErrorHandlerResource;
 import org.apache.flink.util.TestLogger;
 
@@ -273,6 +274,7 @@ public class JobMasterExecutionDeploymentReconciliationTest extends TestLogger {
                         taskExecutorGateway.getAddress(),
                         taskManagerLocation,
                         jobId,
+                        TestingUtils.zeroUUID(),
                         testingTimeout)
                 .get();
 
