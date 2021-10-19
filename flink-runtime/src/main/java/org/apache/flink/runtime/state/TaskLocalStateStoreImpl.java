@@ -25,6 +25,8 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.util.ExceptionUtils;
+import org.apache.flink.util.FlinkRuntimeException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +37,11 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,6 +64,8 @@ public class TaskLocalStateStoreImpl implements OwnedTaskLocalStateStore {
 
     /** Dummy value to use instead of null to satisfy {@link ConcurrentHashMap}. */
     @VisibleForTesting static final TaskStateSnapshot NULL_DUMMY = new TaskStateSnapshot(0, false);
+
+    public static final String METADATA_FILENAME = "_metadata";
 
     /** JobID from the owning subtask. */
     @Nonnull private final JobID jobID;
@@ -164,6 +172,7 @@ public class TaskLocalStateStoreImpl implements OwnedTaskLocalStateStore {
             } else {
                 TaskStateSnapshot previous =
                         storedTaskStateByCheckpointID.put(checkpointId, localState);
+                persistLocalStateMetadata(checkpointId, localState);
 
                 if (previous != null) {
                     toDiscard = new AbstractMap.SimpleEntry<>(checkpointId, previous);
@@ -176,6 +185,43 @@ public class TaskLocalStateStoreImpl implements OwnedTaskLocalStateStore {
         }
     }
 
+    /**
+     * Writes a metadata file that contains the serialized content of the local state.
+     *
+     * @param checkpointId
+     * @param localState
+     */
+    private void persistLocalStateMetadata(long checkpointId, TaskStateSnapshot localState) {
+        final File checkpointDirectory =
+                localRecoveryConfig
+                        .getLocalStateDirectoryProvider()
+                        .subtaskSpecificCheckpointDirectory(checkpointId);
+
+        if (!checkpointDirectory.exists() && !checkpointDirectory.mkdirs()) {
+            throw new FlinkRuntimeException(
+                    String.format(
+                            "Could not create the checkpoint directory '%s'", checkpointDirectory));
+        }
+
+        final File checkpointMetadataFile = getCheckpointMetadataFile(checkpointDirectory);
+        try (ObjectOutputStream oos =
+                new ObjectOutputStream(new FileOutputStream(checkpointMetadataFile))) {
+            oos.writeObject(localState);
+
+            LOG.debug(
+                    "Successfully written local state metadata file {} for checkpoint {}.",
+                    checkpointMetadataFile,
+                    checkpointId);
+        } catch (IOException e) {
+            ExceptionUtils.rethrow(e, "Could not write the local state metadata file.");
+        }
+    }
+
+    @Nonnull
+    private File getCheckpointMetadataFile(File checkpointDirectory) {
+        return new File(checkpointDirectory, METADATA_FILENAME);
+    }
+
     @Override
     @Nullable
     public TaskStateSnapshot retrieveLocalState(long checkpointID) {
@@ -183,7 +229,7 @@ public class TaskLocalStateStoreImpl implements OwnedTaskLocalStateStore {
         TaskStateSnapshot snapshot;
 
         synchronized (lock) {
-            snapshot = storedTaskStateByCheckpointID.get(checkpointID);
+            snapshot = loadTaskStateSnapshot(checkpointID);
         }
 
         if (snapshot != null) {
@@ -213,6 +259,45 @@ public class TaskLocalStateStoreImpl implements OwnedTaskLocalStateStore {
         }
 
         return (snapshot != NULL_DUMMY) ? snapshot : null;
+    }
+
+    @GuardedBy("lock")
+    @Nullable
+    private TaskStateSnapshot loadTaskStateSnapshot(long checkpointID) {
+        return storedTaskStateByCheckpointID.computeIfAbsent(
+                checkpointID, this::tryLoadTaskStateSnapshotFromDisk);
+    }
+
+    @GuardedBy("lock")
+    @Nullable
+    private TaskStateSnapshot tryLoadTaskStateSnapshotFromDisk(long checkpointID) {
+        final File checkpointDirectory =
+                localRecoveryConfig
+                        .getLocalStateDirectoryProvider()
+                        .subtaskSpecificCheckpointDirectory(checkpointID);
+
+        final File checkpointMetadataFile = getCheckpointMetadataFile(checkpointDirectory);
+
+        if (checkpointMetadataFile.exists()) {
+            TaskStateSnapshot taskStateSnapshot = null;
+            try (ObjectInputStream ois =
+                    new ObjectInputStream(new FileInputStream(checkpointMetadataFile))) {
+                taskStateSnapshot = (TaskStateSnapshot) ois.readObject();
+
+                LOG.debug(
+                        "Loaded task local state for checkpoint {} successfully from disk.",
+                        checkpointID);
+            } catch (IOException | ClassNotFoundException e) {
+                LOG.debug(
+                        "Could not read metadata file {} for checkpoint {}. Ignoring the corresponding local state.",
+                        checkpointMetadataFile,
+                        checkpointID);
+            }
+
+            return taskStateSnapshot;
+        }
+
+        return null;
     }
 
     @Override
