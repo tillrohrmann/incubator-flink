@@ -69,6 +69,8 @@ public class TaskExecutorLocalStateStoresManager {
 
     private final Thread shutdownHook;
 
+    private final boolean persistentVolumeSupport;
+
     @GuardedBy("lock")
     private boolean closed;
 
@@ -77,12 +79,27 @@ public class TaskExecutorLocalStateStoresManager {
             @Nonnull File[] localStateRootDirectories,
             @Nonnull Executor discardExecutor)
             throws IOException {
+        this(localRecoveryEnabled, localStateRootDirectories, discardExecutor, false);
+    }
+
+    public TaskExecutorLocalStateStoresManager(
+            boolean localRecoveryEnabled,
+            @Nonnull File[] localStateRootDirectories,
+            @Nonnull Executor discardExecutor,
+            boolean persistentVolumeSupport)
+            throws IOException {
+
+        LOG.debug(
+                "Start {} with local state root directories {}.",
+                getClass().getSimpleName(),
+                localStateRootDirectories);
 
         this.taskStateStoresByAllocationID = new HashMap<>();
         this.localRecoveryEnabled = localRecoveryEnabled;
         this.localStateRootDirectories = localStateRootDirectories;
         this.discardExecutor = discardExecutor;
         this.lock = new Object();
+        this.persistentVolumeSupport = persistentVolumeSupport;
         this.closed = false;
 
         for (File localStateRecoveryRootDir : localStateRootDirectories) {
@@ -192,24 +209,26 @@ public class TaskExecutorLocalStateStoresManager {
 
     public void releaseLocalStateForAllocationId(@Nonnull AllocationID allocationID) {
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Releasing local state under allocation id {}.", allocationID);
-        }
-
-        Map<JobVertexSubtaskKey, OwnedTaskLocalStateStore> cleanupLocalStores;
-
-        synchronized (lock) {
-            if (closed) {
-                return;
+        if (!persistentVolumeSupport) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Releasing local state under allocation id {}.", allocationID);
             }
-            cleanupLocalStores = taskStateStoresByAllocationID.remove(allocationID);
-        }
 
-        if (cleanupLocalStores != null) {
-            doRelease(cleanupLocalStores.values());
-        }
+            Map<JobVertexSubtaskKey, OwnedTaskLocalStateStore> cleanupLocalStores;
 
-        cleanupAllocationBaseDirs(allocationID);
+            synchronized (lock) {
+                if (closed) {
+                    return;
+                }
+                cleanupLocalStores = taskStateStoresByAllocationID.remove(allocationID);
+            }
+
+            if (cleanupLocalStores != null) {
+                doRelease(cleanupLocalStores.values());
+            }
+
+            cleanupAllocationBaseDirs(allocationID);
+        }
     }
 
     public void shutdown() {
@@ -230,11 +249,13 @@ public class TaskExecutorLocalStateStoresManager {
 
         LOG.info("Shutting down TaskExecutorLocalStateStoresManager.");
 
-        for (Map.Entry<AllocationID, Map<JobVertexSubtaskKey, OwnedTaskLocalStateStore>> entry :
-                toRelease.entrySet()) {
+        if (!persistentVolumeSupport) {
+            for (Map.Entry<AllocationID, Map<JobVertexSubtaskKey, OwnedTaskLocalStateStore>> entry :
+                    toRelease.entrySet()) {
 
-            doRelease(entry.getValue().values());
-            cleanupAllocationBaseDirs(entry.getKey());
+                doRelease(entry.getValue().values());
+                cleanupAllocationBaseDirs(entry.getKey());
+            }
         }
     }
 

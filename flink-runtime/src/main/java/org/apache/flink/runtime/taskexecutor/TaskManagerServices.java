@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.taskexecutor;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.blob.PermanentBlobService;
@@ -327,11 +328,17 @@ public class TaskManagerServices {
                     new File(stateRootDirectoryStrings[i], LOCAL_STATE_SUB_DIRECTORY_ROOT);
         }
 
+        final boolean persistentVolumeSupport =
+                taskManagerServicesConfiguration
+                        .getConfiguration()
+                        .get(CheckpointingOptions.PERSISTENT_VOLUME_SUPPORT);
+
         final TaskExecutorLocalStateStoresManager taskStateManager =
                 new TaskExecutorLocalStateStoresManager(
                         taskManagerServicesConfiguration.isLocalRecoveryEnabled(),
                         stateRootDirectoryFiles,
-                        ioExecutor);
+                        ioExecutor,
+                        persistentVolumeSupport);
 
         final TaskExecutorStateChangelogStoragesManager changelogStoragesManager =
                 new TaskExecutorStateChangelogStoragesManager();

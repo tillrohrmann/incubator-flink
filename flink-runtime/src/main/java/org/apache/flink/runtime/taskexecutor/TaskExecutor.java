@@ -1059,7 +1059,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
 
         log.info(
                 "Receive slot request {} for job {} from resource manager with leader id {}.",
-                allocationId,
+                resolvedAllocationId,
                 jobId,
                 resourceManagerId);
 
@@ -1073,7 +1073,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
         }
 
         try {
-            allocateSlot(slotId, jobId, allocationId, resourceProfile);
+            allocateSlot(slotId, jobId, resolvedAllocationId, resourceProfile);
         } catch (SlotAllocationException sae) {
             return FutureUtils.completedExceptionally(sae);
         }
@@ -1087,7 +1087,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
         } catch (Exception e) {
             // free the allocated slot
             try {
-                taskSlotTable.freeSlot(allocationId);
+                taskSlotTable.freeSlot(resolvedAllocationId);
             } catch (SlotNotFoundException slotNotFoundException) {
                 // slot no longer existent, this should actually never happen, because we've
                 // just allocated the slot. So let's fail hard in this case!
@@ -1095,7 +1095,7 @@ public class TaskExecutor extends RpcEndpoint implements TaskExecutorGateway {
             }
 
             // release local state under the allocation id.
-            localStateStoresManager.releaseLocalStateForAllocationId(allocationId);
+            localStateStoresManager.releaseLocalStateForAllocationId(resolvedAllocationId);
 
             // sanity check
             if (!taskSlotTable.isSlotFree(slotId.getSlotNumber())) {
