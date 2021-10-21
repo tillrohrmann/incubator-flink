@@ -398,12 +398,18 @@ public class PendingCheckpoint implements Checkpoint {
             }
 
             long ackTimestamp = System.currentTimeMillis();
+            long stateSize = 0L;
             if (operatorSubtaskStates != null && operatorSubtaskStates.isTaskDeployedAsFinished()) {
                 checkpointPlan.reportTaskFinishedOnRestore(vertex);
             } else {
                 List<OperatorIDPair> operatorIDs = vertex.getJobVertex().getOperatorIDs();
                 for (OperatorIDPair operatorID : operatorIDs) {
                     updateOperatorState(vertex, operatorSubtaskStates, operatorID);
+
+                    final OperatorSubtaskState subtaskStateByOperatorID =
+                            operatorSubtaskStates.getSubtaskStateByOperatorID(
+                                    operatorID.getGeneratedOperatorID());
+                    stateSize += subtaskStateByOperatorID.getStateSize();
                 }
 
                 if (operatorSubtaskStates != null && operatorSubtaskStates.isTaskFinished()) {
@@ -425,7 +431,7 @@ public class PendingCheckpoint implements Checkpoint {
                         new SubtaskStateStats(
                                 vertex.getParallelSubtaskIndex(),
                                 ackTimestamp,
-                                metrics.getTotalBytesPersisted(),
+                                stateSize,
                                 metrics.getSyncDurationMillis(),
                                 metrics.getAsyncDurationMillis(),
                                 metrics.getBytesProcessedDuringAlignment(),
