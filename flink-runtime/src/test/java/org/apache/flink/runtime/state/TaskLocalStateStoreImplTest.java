@@ -19,11 +19,13 @@
 package org.apache.flink.runtime.state;
 
 import org.apache.flink.api.common.JobID;
+import org.apache.flink.runtime.checkpoint.CompletedCheckpointStoreTest;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.util.TestLogger;
 import org.apache.flink.util.concurrent.Executors;
 
 import org.junit.After;
@@ -31,17 +33,21 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.mockito.Mockito;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.function.Predicate;
 
-import static org.powermock.api.mockito.PowerMockito.spy;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertTrue;
 
-public class TaskLocalStateStoreImplTest {
+public class TaskLocalStateStoreImplTest extends TestLogger {
 
     private SortedMap<Long, TaskStateSnapshot> internalSnapshotMap;
     private Object internalLock;
@@ -181,16 +187,48 @@ public class TaskLocalStateStoreImplTest {
             throws Exception {
         for (int i = start; i < end; ++i) {
             TaskStateSnapshot expected = history.get(i);
-            Assert.assertTrue(expected == taskLocalStateStore.retrieveLocalState(i));
-            Mockito.verify(expected, Mockito.never()).discardState();
+            assertTrue(expected == taskLocalStateStore.retrieveLocalState(i));
+            assertThatTaskStateSnapshotHasNotBeenDiscarded(expected);
         }
     }
 
-    private void checkPrunedAndDiscarded(List<TaskStateSnapshot> history, int start, int end)
-            throws Exception {
+    private void assertThatTaskStateSnapshotHasNotBeenDiscarded(TaskStateSnapshot expected) {
+        assertForEveryOperatorSubtaskState(
+                expected.getSubtaskStateMappings(),
+                not(CompletedCheckpointStoreTest.TestOperatorSubtaskState::isDiscarded));
+    }
+
+    private static <T> Predicate<T> not(Predicate<T> predicate) {
+        return predicate.negate();
+    }
+
+    private void checkPrunedAndDiscarded(List<TaskStateSnapshot> history, int start, int end) {
         for (int i = start; i < end; ++i) {
             Assert.assertNull(taskLocalStateStore.retrieveLocalState(i));
-            Mockito.verify(history.get(i)).discardState();
+            final TaskStateSnapshot taskStateSnapshot = history.get(i);
+
+            assertThatTaskStateSnapshotHasBeenDiscarded(taskStateSnapshot);
+        }
+    }
+
+    private void assertThatTaskStateSnapshotHasBeenDiscarded(TaskStateSnapshot taskStateSnapshot) {
+        assertForEveryOperatorSubtaskState(
+                taskStateSnapshot.getSubtaskStateMappings(),
+                CompletedCheckpointStoreTest.TestOperatorSubtaskState::isDiscarded);
+    }
+
+    private void assertForEveryOperatorSubtaskState(
+            Set<Map.Entry<OperatorID, OperatorSubtaskState>> operatorSubtaskStates,
+            Predicate<CompletedCheckpointStoreTest.TestOperatorSubtaskState> assertion) {
+        for (Map.Entry<OperatorID, OperatorSubtaskState> subtaskStateMapping :
+                operatorSubtaskStates) {
+            assertThat(
+                    subtaskStateMapping.getValue(),
+                    instanceOf(CompletedCheckpointStoreTest.TestOperatorSubtaskState.class));
+            final CompletedCheckpointStoreTest.TestOperatorSubtaskState testOperatorSubtaskState =
+                    (CompletedCheckpointStoreTest.TestOperatorSubtaskState)
+                            subtaskStateMapping.getValue();
+            assertTrue(assertion.test(testOperatorSubtaskState));
         }
     }
 
@@ -198,8 +236,9 @@ public class TaskLocalStateStoreImplTest {
         List<TaskStateSnapshot> taskStateSnapshots = new ArrayList<>(count);
         for (int i = 0; i < count; ++i) {
             OperatorID operatorID = new OperatorID();
-            TaskStateSnapshot taskStateSnapshot = spy(new TaskStateSnapshot());
-            OperatorSubtaskState operatorSubtaskState = OperatorSubtaskState.builder().build();
+            TaskStateSnapshot taskStateSnapshot = new TaskStateSnapshot();
+            OperatorSubtaskState operatorSubtaskState =
+                    new CompletedCheckpointStoreTest.TestOperatorSubtaskState();
             taskStateSnapshot.putSubtaskStateByOperatorID(operatorID, operatorSubtaskState);
             taskLocalStateStore.storeLocalState(i, taskStateSnapshot);
             taskStateSnapshots.add(taskStateSnapshot);
