@@ -26,5 +26,23 @@
             <td><p>Enum</p></td>
             <td>Defines whether cluster will handle any uncaught exceptions by just logging them (LOG mode), or by failing job (FAIL mode)<br /><br />Possible values:<ul><li>"LOG"</li><li>"FAIL"</li></ul></td>
         </tr>
+        <tr>
+            <td><h5>process.jobmanager.working-dir</h5></td>
+            <td style="word-wrap: break-word;">(none)</td>
+            <td>String</td>
+            <td>Working directory for the JobManager process. The working directory can be used to store information that can be used upon process recovery.</td>
+        </tr>
+        <tr>
+            <td><h5>process.taskmanager.working-dir</h5></td>
+            <td style="word-wrap: break-word;">(none)</td>
+            <td>String</td>
+            <td>Working directory for the TaskManager process. The working directory can be used to store information that can be used upon process recovery.</td>
+        </tr>
+        <tr>
+            <td><h5>process.working-dir</h5></td>
+            <td style="word-wrap: break-word;">"/var/folders/ck/2gym0wnn4cg48v53_t2slm4r0000gn/T/"</td>
+            <td>String</td>
+            <td>Working directory for Flink processes. The working directory can be used to store information that can be used upon process recovery. If the not configured, then it will default to <code class="highlighter-rouge">System.getProperty("java.io.tmpdir")</code>.</td>
+        </tr>
     </tbody>
 </table>

@@ -295,7 +295,7 @@ public class JobManagerHAProcessFailureRecoveryITCase extends TestLogger {
             for (int i = 0; i < numberOfTaskManagers; i++) {
                 taskManagerRunners[i] =
                         new TaskManagerRunner(
-                                config,
+                                new Configuration(config),
                                 pluginManager,
                                 TaskManagerRunner::createTaskExecutorService);
                 taskManagerRunners[i].start();
