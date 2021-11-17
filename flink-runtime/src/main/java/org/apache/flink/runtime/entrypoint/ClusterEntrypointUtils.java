@@ -230,6 +230,10 @@ public final class ClusterEntrypointUtils {
         return localStateDir;
     }
 
+    public static File getSlotAllocationsWorkingDirectory(ReadableConfig configuration) {
+        return new File(getWorkingDirectory(configuration), "slotAllocations");
+    }
+
     @VisibleForTesting
     public static File getWorkingDir(String basePath, ResourceID resourceId) {
         return new File(basePath, resourceId.toString());
