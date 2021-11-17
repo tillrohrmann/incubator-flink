@@ -18,9 +18,13 @@
 
 package org.apache.flink.runtime.entrypoint;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.ClusterOptions;
+import org.apache.flink.configuration.ClusterOptionsInternal;
 import org.apache.flink.configuration.ConfigConstants;
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.parser.CommandLineParser;
 import org.apache.flink.runtime.entrypoint.parser.ParserResultFactory;
 import org.apache.flink.runtime.util.ClusterUncaughtExceptionHandler;
@@ -33,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Optional;
 
 /** Utility class for {@link org.apache.flink.runtime.entrypoint.ClusterEntrypoint}. */
@@ -127,5 +132,75 @@ public final class ClusterEntrypointUtils {
         Thread.setDefaultUncaughtExceptionHandler(
                 new ClusterUncaughtExceptionHandler(
                         config.get(ClusterOptions.UNCAUGHT_EXCEPTION_HANDLING)));
+    }
+
+    /**
+     * This method configures the working directory of the TaskManager process identified by the
+     * given resourceId.
+     *
+     * @param configuration to write the working directory to
+     * @param resourceId identifying the process
+     */
+    public static void configureTaskManagerWorkingDirectory(
+            Configuration configuration, ResourceID resourceId) throws IOException {
+        configureProcessWorkingDirectory(
+                configuration, resourceId, ClusterOptions.TASK_MANAGER_PROCESS_WORKING_DIR_BASE);
+    }
+
+    /**
+     * This method configures the working directory of the JobManager process identified by the
+     * given resourceId.
+     *
+     * @param configuration to write the working directory to
+     * @param resourceId identifying the process
+     */
+    public static void configureJobManagerWorkingDirectory(
+            Configuration configuration, ResourceID resourceId) throws IOException {
+        configureProcessWorkingDirectory(
+                configuration, resourceId, ClusterOptions.JOB_MANAGER_PROCESS_WORKING_DIR_BASE);
+    }
+
+    private static void configureProcessWorkingDirectory(
+            Configuration configuration,
+            ResourceID resourceId,
+            ConfigOption<String> precedingOption)
+            throws IOException {
+        Preconditions.checkState(
+                !configuration.contains(ClusterOptionsInternal.WORKING_DIR),
+                "The working directory must not be configured directly. Instead configure %s.",
+                ClusterOptions.PROCESS_WORKING_DIR_BASE);
+
+        final String workingDirectoryBase;
+
+        if (configuration.contains(precedingOption)) {
+            workingDirectoryBase = configuration.get(precedingOption);
+        } else {
+            workingDirectoryBase = configuration.get(ClusterOptions.PROCESS_WORKING_DIR_BASE);
+        }
+
+        final File workingDir = createWorkingDir(workingDirectoryBase, resourceId);
+
+        LOG.debug("Create working directory for process {} under {}.", resourceId, workingDir);
+
+        if (!workingDir.mkdirs() && !workingDir.exists()) {
+            throw new IOException(
+                    String.format(
+                            "Could not create the working directory %s.",
+                            workingDir.getAbsolutePath()));
+        }
+
+        configuration.set(ClusterOptionsInternal.WORKING_DIR, workingDir.getAbsolutePath());
+    }
+
+    public static File getWorkingDirectory(Configuration configuration) {
+        return new File(
+                Preconditions.checkNotNull(
+                        configuration.get(ClusterOptionsInternal.WORKING_DIR),
+                        "The working directory has not been configured properly."));
+    }
+
+    @VisibleForTesting
+    public static File createWorkingDir(String basePath, ResourceID resourceId) {
+        return new File(basePath, resourceId.toString());
     }
 }

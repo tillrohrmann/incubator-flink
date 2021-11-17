@@ -22,6 +22,7 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.annotation.docs.Documentation;
 import org.apache.flink.configuration.description.Description;
 import org.apache.flink.configuration.description.InlineElement;
+import org.apache.flink.configuration.description.TextElement;
 
 import static org.apache.flink.configuration.ClusterOptions.UserSystemExitMode.THROW;
 import static org.apache.flink.configuration.ConfigOptions.key;
@@ -148,6 +149,43 @@ public class ClusterOptions {
                                             + "by just logging them (%s mode), or by failing job (%s mode)",
                                     UncaughtExceptionHandleMode.LOG.name(),
                                     UncaughtExceptionHandleMode.FAIL.name()));
+
+    @Documentation.Section(Documentation.Sections.EXPERT_CLUSTER)
+    public static final ConfigOption<String> PROCESS_WORKING_DIR_BASE =
+            ConfigOptions.key("process.working-dir")
+                    .stringType()
+                    .defaultValue(System.getProperty("java.io.tmpdir"))
+                    .withDescription(
+                            Description.builder()
+                                    .text(
+                                            "Working directory for Flink processes. The working directory can be used to store information that can be used upon process recovery. If the not configured, then it will default to %s.",
+                                            TextElement.code(
+                                                    "System.getProperty(\"java.io.tmpdir\")"))
+                                    .build());
+
+    @Documentation.Section(Documentation.Sections.EXPERT_CLUSTER)
+    public static final ConfigOption<String> JOB_MANAGER_PROCESS_WORKING_DIR_BASE =
+            ConfigOptions.key("process.jobmanager.working-dir")
+                    .stringType()
+                    .noDefaultValue()
+                    .withFallbackKeys(PROCESS_WORKING_DIR_BASE.key())
+                    .withDescription(
+                            Description.builder()
+                                    .text(
+                                            "Working directory for the JobManager process. The working directory can be used to store information that can be used upon process recovery.")
+                                    .build());
+
+    @Documentation.Section(Documentation.Sections.EXPERT_CLUSTER)
+    public static final ConfigOption<String> TASK_MANAGER_PROCESS_WORKING_DIR_BASE =
+            ConfigOptions.key("process.taskmanager.working-dir")
+                    .stringType()
+                    .noDefaultValue()
+                    .withFallbackKeys(PROCESS_WORKING_DIR_BASE.key())
+                    .withDescription(
+                            Description.builder()
+                                    .text(
+                                            "Working directory for the TaskManager process. The working directory can be used to store information that can be used upon process recovery.")
+                                    .build());
 
     public static JobManagerOptions.SchedulerType getSchedulerType(Configuration configuration) {
         if (isAdaptiveSchedulerEnabled(configuration) || isReactiveModeEnabled(configuration)) {

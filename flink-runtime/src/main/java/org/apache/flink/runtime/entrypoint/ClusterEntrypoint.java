@@ -39,6 +39,7 @@ import org.apache.flink.core.security.FlinkSecurityManager;
 import org.apache.flink.management.jmx.JMXService;
 import org.apache.flink.runtime.blob.BlobServer;
 import org.apache.flink.runtime.clusterframework.ApplicationStatus;
+import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.dispatcher.ExecutionGraphInfoStore;
 import org.apache.flink.runtime.dispatcher.MiniDispatcher;
 import org.apache.flink.runtime.entrypoint.component.DispatcherResourceManagerComponent;
@@ -338,6 +339,9 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
             executionGraphInfoStore =
                     createSerializableExecutionGraphStore(
                             configuration, commonRpcService.getScheduledExecutor());
+
+            ClusterEntrypointUtils.configureJobManagerWorkingDirectory(
+                    configuration, ResourceID.generate());
         }
     }
 
@@ -507,9 +511,15 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
             final CompletableFuture<Void> rpcSystemClassLoaderCloseFuture =
                     FutureUtils.runAfterwards(serviceShutdownFuture, rpcSystem::close);
 
-            final CompletableFuture<Void> cleanupDirectoriesFuture =
-                    FutureUtils.runAfterwards(
-                            rpcSystemClassLoaderCloseFuture, this::cleanupDirectories);
+            final CompletableFuture<Void> cleanupDirectoriesFuture;
+
+            if (shutdownBehaviour == ShutdownBehaviour.STOP_APPLICATION) {
+                cleanupDirectoriesFuture =
+                        FutureUtils.runAfterwards(
+                                rpcSystemClassLoaderCloseFuture, this::cleanupDirectories);
+            } else {
+                cleanupDirectoriesFuture = rpcSystemClassLoaderCloseFuture;
+            }
 
             cleanupDirectoriesFuture.whenComplete(
                     (Void ignored2, Throwable serviceThrowable) -> {
@@ -558,9 +568,25 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
      * @throws IOException if the temporary directories could not be cleaned up
      */
     protected void cleanupDirectories() throws IOException {
+        IOException ioException = null;
+
         final String webTmpDir = configuration.getString(WebOptions.TMP_DIR);
 
-        FileUtils.deleteDirectory(new File(webTmpDir));
+        try {
+            FileUtils.deleteDirectory(new File(webTmpDir));
+        } catch (IOException ioe) {
+            ioException = ioe;
+        }
+
+        try {
+            FileUtils.deleteDirectory(ClusterEntrypointUtils.getWorkingDirectory(configuration));
+        } catch (IOException ioe) {
+            ioException = ExceptionUtils.firstOrSuppressed(ioe, ioException);
+        }
+
+        if (ioException != null) {
+            throw ioException;
+        }
     }
 
     // --------------------------------------------------
