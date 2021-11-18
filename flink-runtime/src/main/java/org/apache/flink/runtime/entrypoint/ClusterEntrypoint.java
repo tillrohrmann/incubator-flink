@@ -340,8 +340,18 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
                     createSerializableExecutionGraphStore(
                             configuration, commonRpcService.getScheduledExecutor());
 
-            ClusterEntrypointUtils.configureJobManagerWorkingDirectory(
-                    configuration, ResourceID.generate());
+            final ResourceID resourceId =
+                    configuration
+                            .getOptional(JobManagerOptions.JOB_MANAGER_RESOURCE_ID)
+                            .map(ResourceID::new)
+                            .orElseGet(ResourceID::generate);
+
+            LOG.debug(
+                    "Initialize cluster entrypoint {} with resource id {}.",
+                    getClass().getSimpleName(),
+                    resourceId);
+
+            ClusterEntrypointUtils.configureJobManagerWorkingDirectory(configuration, resourceId);
         }
     }
 

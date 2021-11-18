@@ -480,6 +480,17 @@ public class JobManagerOptions {
                     .withDescription(
                             "Controls whether partitions should already be released during the job execution.");
 
+    /**
+     * The JobManager's ResourceID. If not configured, the ResourceID will be generated randomly.
+     */
+    @Documentation.Section(Documentation.Sections.ALL_TASK_MANAGER)
+    public static final ConfigOption<String> JOB_MANAGER_RESOURCE_ID =
+            key("jobmanager.resource-id")
+                    .stringType()
+                    .noDefaultValue()
+                    .withDescription(
+                            "The JobManager's ResourceID. If not configured, the ResourceID will be generated randomly.");
+
     // ---------------------------------------------------------------------------------------------
 
     private JobManagerOptions() {
