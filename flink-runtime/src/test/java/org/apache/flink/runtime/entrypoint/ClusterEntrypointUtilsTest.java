@@ -16,17 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.flink.test.recovery;
+package org.apache.flink.runtime.entrypoint;
 
-import org.apache.flink.api.common.time.Deadline;
 import org.apache.flink.configuration.ClusterOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
-import org.apache.flink.runtime.entrypoint.ClusterEntrypointUtils;
-import org.apache.flink.runtime.testutils.CommonTestUtils;
-import org.apache.flink.runtime.testutils.DispatcherProcess;
-import org.apache.flink.test.util.TestProcessBuilder;
+import org.apache.flink.util.FileUtils;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.ClassRule;
@@ -34,49 +30,48 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
-import java.time.Duration;
+import java.io.IOException;
 
 import static org.junit.Assert.assertTrue;
 
-/** Integration tests for the {@link org.apache.flink.runtime.entrypoint.ClusterEntrypoint}. */
-public class ClusterEntrypointITCase extends TestLogger {
-
+/** Tests for the {@link ClusterEntrypointUtils}. */
+public class ClusterEntrypointUtilsTest extends TestLogger {
     @ClassRule public static final TemporaryFolder TEMPORARY_FOLDER = new TemporaryFolder();
 
     @Test
-    public void testWorkingDirectoryIsNotDeletedInCaseOfProcessFailure() throws Exception {
+    public void testTmpWorkingDirectoryFolderIsDeletedUponCreation() throws IOException {
         final File workingDirBase = TEMPORARY_FOLDER.newFolder();
         final ResourceID resourceId = ResourceID.generate();
-        final File workingDirectory =
-                ClusterEntrypointUtils.getWorkingDir(workingDirBase.getAbsolutePath(), resourceId);
 
         final Configuration configuration = new Configuration();
         configuration.set(
                 ClusterOptions.PROCESS_WORKING_DIR_BASE, workingDirBase.getAbsolutePath());
         configuration.set(JobManagerOptions.JOB_MANAGER_RESOURCE_ID, resourceId.toString());
 
-        final TestProcessBuilder.TestProcess taskManagerProcess =
-                new TestProcessBuilder(
-                                DispatcherProcess.DispatcherProcessEntryPoint.class.getName())
-                        .addConfigAsMainClassArgs(configuration)
-                        .start();
+        createTmpFile(workingDirBase, resourceId);
 
-        boolean success = false;
-        try {
-            CommonTestUtils.waitUntilCondition(
-                    workingDirectory::exists, Deadline.fromNow(Duration.ofMinutes(1L)));
+        ClusterEntrypointUtils.configureJobManagerWorkingDirectory(configuration, resourceId);
 
-            taskManagerProcess.getProcess().destroy();
+        final File tmpWorkingDirectory =
+                ClusterEntrypointUtils.getTmpWorkingDirectory(configuration);
 
-            taskManagerProcess.getProcess().waitFor();
+        assertTrue(directoryIsEmptyOrDoesNotExist(tmpWorkingDirectory));
+    }
 
-            assertTrue(workingDirectory.exists());
-            success = true;
-        } finally {
-            if (!success) {
-                AbstractTaskManagerProcessFailureRecoveryTest.printProcessLog(
-                        "JobManager", taskManagerProcess);
-            }
-        }
+    private boolean directoryIsEmptyOrDoesNotExist(File tmpWorkingDirectory) {
+        return !tmpWorkingDirectory.exists() || tmpWorkingDirectory.list().length == 0;
+    }
+
+    private void createTmpFile(File workingDirBase, ResourceID resourceId) throws IOException {
+        final File workingDirectory =
+                ClusterEntrypointUtils.getWorkingDir(workingDirBase.getAbsolutePath(), resourceId);
+
+        final File tmpWorkingDir = ClusterEntrypointUtils.getTmpWorkingDir(workingDirectory);
+
+        assertTrue("Could not create the tmp working directory.", tmpWorkingDir.mkdirs());
+
+        final File tmpFile = new File(tmpWorkingDir, "foobar");
+        assertTrue(tmpFile.createNewFile());
+        FileUtils.writeFileUtf8(tmpFile, "Foobar");
     }
 }

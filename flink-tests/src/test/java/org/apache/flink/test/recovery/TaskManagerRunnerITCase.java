@@ -50,8 +50,7 @@ public class TaskManagerRunnerITCase extends TestLogger {
         final File workingDirBase = TEMPORARY_FOLDER.newFolder();
         final ResourceID resourceId = ResourceID.generate();
         final File workingDirectory =
-                ClusterEntrypointUtils.createWorkingDir(
-                        workingDirBase.getAbsolutePath(), resourceId);
+                ClusterEntrypointUtils.getWorkingDir(workingDirBase.getAbsolutePath(), resourceId);
 
         final Configuration configuration = new Configuration();
         configuration.set(

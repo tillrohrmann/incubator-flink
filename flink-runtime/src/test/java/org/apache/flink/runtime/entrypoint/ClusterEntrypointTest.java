@@ -237,8 +237,7 @@ public class ClusterEntrypointTest extends TestLogger {
         final File workingDirBase = TEMPORARY_FOLDER.newFolder();
         final ResourceID resourceId = new ResourceID("foobar");
         final File workingDir =
-                ClusterEntrypointUtils.createWorkingDir(
-                        workingDirBase.getAbsolutePath(), resourceId);
+                ClusterEntrypointUtils.getWorkingDir(workingDirBase.getAbsolutePath(), resourceId);
 
         configureWorkingDirectory(flinkConfig, workingDirBase, resourceId);
 
@@ -261,8 +260,7 @@ public class ClusterEntrypointTest extends TestLogger {
         final File workingDirBase = TEMPORARY_FOLDER.newFolder();
         final ResourceID resourceId = new ResourceID("foobar");
         final File workingDir =
-                ClusterEntrypointUtils.createWorkingDir(
-                        workingDirBase.getAbsolutePath(), resourceId);
+                ClusterEntrypointUtils.getWorkingDir(workingDirBase.getAbsolutePath(), resourceId);
 
         configureWorkingDirectory(flinkConfig, workingDirBase, resourceId);
 
@@ -281,8 +279,7 @@ public class ClusterEntrypointTest extends TestLogger {
         final File workingDirBase = TEMPORARY_FOLDER.newFolder();
         final ResourceID resourceId = new ResourceID("foobar");
         final File workingDir =
-                ClusterEntrypointUtils.createWorkingDir(
-                        workingDirBase.getAbsolutePath(), resourceId);
+                ClusterEntrypointUtils.getWorkingDir(workingDirBase.getAbsolutePath(), resourceId);
 
         configureWorkingDirectory(flinkConfig, workingDirBase, resourceId);
 

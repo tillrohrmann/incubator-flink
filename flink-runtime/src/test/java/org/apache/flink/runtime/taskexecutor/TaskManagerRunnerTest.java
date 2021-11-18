@@ -214,7 +214,7 @@ public class TaskManagerRunnerTest extends TestLogger {
         final Configuration configuration =
                 createConfigurationWithWorkingDirectory(workingDirBase, taskManagerResourceId);
         final File workingDir =
-                ClusterEntrypointUtils.createWorkingDir(
+                ClusterEntrypointUtils.getWorkingDir(
                         workingDirBase.getAbsolutePath(), taskManagerResourceId);
         final TaskManagerRunner taskManagerRunner = createTaskManagerRunner(configuration);
 
@@ -256,8 +256,7 @@ public class TaskManagerRunnerTest extends TestLogger {
         taskManagerRunner.getTerminationFuture().join();
 
         assertTrue(
-                ClusterEntrypointUtils.createWorkingDir(
-                                workingDirBase.getAbsolutePath(), resourceId)
+                ClusterEntrypointUtils.getWorkingDir(workingDirBase.getAbsolutePath(), resourceId)
                         .exists());
     }
 

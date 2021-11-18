@@ -29,11 +29,13 @@ import org.apache.flink.runtime.entrypoint.parser.CommandLineParser;
 import org.apache.flink.runtime.entrypoint.parser.ParserResultFactory;
 import org.apache.flink.runtime.util.ClusterUncaughtExceptionHandler;
 import org.apache.flink.runtime.util.Hardware;
+import org.apache.flink.util.FileUtils;
 import org.apache.flink.util.Preconditions;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.File;
@@ -178,7 +180,7 @@ public final class ClusterEntrypointUtils {
             workingDirectoryBase = configuration.get(ClusterOptions.PROCESS_WORKING_DIR_BASE);
         }
 
-        final File workingDir = createWorkingDir(workingDirectoryBase, resourceId);
+        final File workingDir = getWorkingDir(workingDirectoryBase, resourceId);
 
         LOG.debug("Create working directory for process {} under {}.", resourceId, workingDir);
 
@@ -189,7 +191,19 @@ public final class ClusterEntrypointUtils {
                             workingDir.getAbsolutePath()));
         }
 
+        deleteTmpWorkingDirectory(workingDir);
+
         configuration.set(ClusterOptionsInternal.WORKING_DIR, workingDir.getAbsolutePath());
+    }
+
+    private static void deleteTmpWorkingDirectory(File workingDir) throws IOException {
+        FileUtils.deleteDirectory(getTmpWorkingDir(workingDir));
+    }
+
+    @Nonnull
+    @VisibleForTesting
+    static File getTmpWorkingDir(File workingDir) {
+        return new File(workingDir, "tmp");
     }
 
     public static File getWorkingDirectory(Configuration configuration) {
@@ -199,8 +213,12 @@ public final class ClusterEntrypointUtils {
                         "The working directory has not been configured properly."));
     }
 
+    public static File getTmpWorkingDirectory(Configuration configuration) {
+        return getTmpWorkingDir(getWorkingDirectory(configuration));
+    }
+
     @VisibleForTesting
-    public static File createWorkingDir(String basePath, ResourceID resourceId) {
+    public static File getWorkingDir(String basePath, ResourceID resourceId) {
         return new File(basePath, resourceId.toString());
     }
 }
