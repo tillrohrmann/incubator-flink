@@ -36,6 +36,7 @@ import org.apache.flink.util.NetUtils;
 
 import javax.annotation.Nullable;
 
+import java.io.File;
 import java.net.InetAddress;
 import java.util.Optional;
 
@@ -248,11 +249,12 @@ public class TaskManagerServicesConfiguration {
             boolean localCommunicationOnly,
             TaskExecutorResourceSpec taskExecutorResourceSpec)
             throws Exception {
-        final String[] tmpDirs = ConfigurationUtils.parseTempDirectories(configuration);
         String[] localStateRootDir = ConfigurationUtils.parseLocalStateDirectories(configuration);
         if (localStateRootDir.length == 0) {
-            // default to temp dirs.
-            localStateRootDir = tmpDirs;
+            final File localStateDir =
+                    ClusterEntrypointUtils.getLocalStateWorkingDirectory(configuration);
+
+            localStateRootDir = new String[] {localStateDir.getAbsolutePath()};
         }
 
         boolean localRecoveryMode = configuration.getBoolean(CheckpointingOptions.LOCAL_RECOVERY);
@@ -281,6 +283,8 @@ public class TaskManagerServicesConfiguration {
                 CoreOptions.getParentFirstLoaderPatterns(configuration);
 
         final int numIoThreads = ClusterEntrypointUtils.getPoolSize(configuration);
+
+        final String[] tmpDirs = ConfigurationUtils.parseTempDirectories(configuration);
 
         return new TaskManagerServicesConfiguration(
                 configuration,

@@ -217,6 +217,14 @@ public final class ClusterEntrypointUtils {
         return getTmpWorkingDir(getWorkingDirectory(configuration));
     }
 
+    @Nonnull
+    public static File getLocalStateWorkingDirectory(Configuration configuration) {
+        final File workingDirectory = getWorkingDirectory(configuration);
+
+        final File localStateDir = new File(workingDirectory, "localState");
+        return localStateDir;
+    }
+
     @VisibleForTesting
     public static File getWorkingDir(String basePath, ResourceID resourceId) {
         return new File(basePath, resourceId.toString());
