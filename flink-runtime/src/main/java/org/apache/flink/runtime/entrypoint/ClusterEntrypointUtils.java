@@ -218,6 +218,10 @@ public final class ClusterEntrypointUtils {
         return getTmpWorkingDir(getWorkingDirectory(configuration));
     }
 
+    public static File getBlobsWorkingDirectory(ReadableConfig configuration) {
+        return new File(getWorkingDirectory(configuration), "blobs");
+    }
+
     @Nonnull
     public static File getLocalStateWorkingDirectory(Configuration configuration) {
         final File workingDirectory = getWorkingDirectory(configuration);

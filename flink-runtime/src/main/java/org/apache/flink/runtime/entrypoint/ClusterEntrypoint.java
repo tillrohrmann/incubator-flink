@@ -295,6 +295,19 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
         LOG.info("Initializing cluster services.");
 
         synchronized (lock) {
+            final ResourceID resourceId =
+                    configuration
+                            .getOptional(JobManagerOptions.JOB_MANAGER_RESOURCE_ID)
+                            .map(ResourceID::new)
+                            .orElseGet(ResourceID::generate);
+
+            LOG.debug(
+                    "Initialize cluster entrypoint {} with resource id {}.",
+                    getClass().getSimpleName(),
+                    resourceId);
+
+            ClusterEntrypointUtils.configureJobManagerWorkingDirectory(configuration, resourceId);
+
             rpcSystem = RpcSystem.load(configuration);
 
             commonRpcService =
@@ -339,19 +352,6 @@ public abstract class ClusterEntrypoint implements AutoCloseableAsync, FatalErro
             executionGraphInfoStore =
                     createSerializableExecutionGraphStore(
                             configuration, commonRpcService.getScheduledExecutor());
-
-            final ResourceID resourceId =
-                    configuration
-                            .getOptional(JobManagerOptions.JOB_MANAGER_RESOURCE_ID)
-                            .map(ResourceID::new)
-                            .orElseGet(ResourceID::generate);
-
-            LOG.debug(
-                    "Initialize cluster entrypoint {} with resource id {}.",
-                    getClass().getSimpleName(),
-                    resourceId);
-
-            ClusterEntrypointUtils.configureJobManagerWorkingDirectory(configuration, resourceId);
         }
     }
 

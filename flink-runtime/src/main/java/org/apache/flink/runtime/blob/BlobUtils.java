@@ -21,9 +21,9 @@ package org.apache.flink.runtime.blob;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.configuration.BlobServerOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.ConfigurationUtils;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.runtime.entrypoint.ClusterEntrypointUtils;
 import org.apache.flink.runtime.highavailability.HighAvailabilityServicesUtils;
 import org.apache.flink.runtime.jobmanager.HighAvailabilityMode;
 import org.apache.flink.util.InstantiationUtil;
@@ -110,32 +110,37 @@ public class BlobUtils {
      */
     static File initLocalStorageDirectory(Configuration config) throws IOException {
 
-        String basePath = config.getString(BlobServerOptions.STORAGE_DIRECTORY);
+        final String basePath = config.getString(BlobServerOptions.STORAGE_DIRECTORY);
 
         File baseDir;
         if (StringUtils.isNullOrWhitespaceOnly(basePath)) {
-            final String[] tmpDirPaths = ConfigurationUtils.parseTempDirectories(config);
-            baseDir = new File(tmpDirPaths[RANDOM.nextInt(tmpDirPaths.length)]);
+            baseDir = ClusterEntrypointUtils.getBlobsWorkingDirectory(config);
+
+            if (baseDir.mkdirs() || baseDir.exists()) {
+                // the working dir is prefixed by the processes' resource id
+                return baseDir;
+            }
         } else {
             baseDir = new File(basePath);
-        }
 
-        File storageDir;
+            File storageDir;
 
-        // NOTE: although we will be using UUIDs, there may be collisions
-        int maxAttempts = 10;
-        for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            storageDir =
-                    new File(baseDir, String.format("blobStore-%s", UUID.randomUUID().toString()));
+            // NOTE: although we will be using UUIDs, there may be collisions
+            int maxAttempts = 10;
+            for (int attempt = 0; attempt < maxAttempts; attempt++) {
+                storageDir =
+                        new File(
+                                baseDir,
+                                String.format("blobStore-%s", UUID.randomUUID().toString()));
 
-            // Create the storage dir if it doesn't exist. Only return it when the operation was
-            // successful.
-            if (storageDir.mkdirs()) {
-                return storageDir;
+                // Create the storage dir if it doesn't exist. Only return it when the operation was
+                // successful.
+                if (storageDir.mkdirs()) {
+                    return storageDir;
+                }
             }
         }
 
-        // max attempts exceeded to find a storage directory
         throw new IOException(
                 "Could not create storage directory for BLOB store in '" + baseDir + "'.");
     }
