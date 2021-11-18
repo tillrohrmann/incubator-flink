@@ -24,6 +24,7 @@ import org.apache.flink.configuration.ClusterOptionsInternal;
 import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.entrypoint.parser.CommandLineParser;
 import org.apache.flink.runtime.entrypoint.parser.ParserResultFactory;
@@ -206,14 +207,14 @@ public final class ClusterEntrypointUtils {
         return new File(workingDir, "tmp");
     }
 
-    public static File getWorkingDirectory(Configuration configuration) {
+    public static File getWorkingDirectory(ReadableConfig configuration) {
         return new File(
                 Preconditions.checkNotNull(
                         configuration.get(ClusterOptionsInternal.WORKING_DIR),
                         "The working directory has not been configured properly."));
     }
 
-    public static File getTmpWorkingDirectory(Configuration configuration) {
+    public static File getTmpWorkingDirectory(ReadableConfig configuration) {
         return getTmpWorkingDir(getWorkingDirectory(configuration));
     }
 

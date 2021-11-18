@@ -31,6 +31,7 @@ import org.apache.flink.configuration.description.InlineElement;
 import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.runtime.entrypoint.ClusterEntrypointUtils;
 import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.memory.OpaqueMemoryResource;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
@@ -305,8 +306,11 @@ public class EmbeddedRocksDBStateBackend extends AbstractManagedMemoryStateBacke
 
         // initialize the paths where the local RocksDB files should be stored
         if (localRocksDbDirectories == null) {
-            // initialize from the temp directories
-            initializedDbBasePaths = env.getIOManager().getSpillingDirectories();
+            initializedDbBasePaths =
+                    new File[] {
+                        ClusterEntrypointUtils.getTmpWorkingDirectory(
+                                env.getTaskManagerInfo().getConfiguration())
+                    };
         } else {
             List<File> dirs = new ArrayList<>(localRocksDbDirectories.length);
             StringBuilder errorMessage = new StringBuilder();
