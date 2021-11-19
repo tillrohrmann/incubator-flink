@@ -23,6 +23,7 @@ USAGE="Usage: jobmanager.sh ((start|start-foreground) [host] [webui-port])|stop|
 STARTSTOP=$1
 HOST=$2 # optional when starting multiple instances
 WEBUIPORT=$3 # optional when starting multiple instances
+ARGS=("${@:4}")
 
 if [[ $STARTSTOP != "start" ]] && [[ $STARTSTOP != "start-foreground" ]] && [[ $STARTSTOP != "stop" ]] && [[ $STARTSTOP != "stop-all" ]]; then
   echo $USAGE
@@ -54,6 +55,10 @@ if [[ $STARTSTOP == "start" ]] || [[ $STARTSTOP == "start-foreground" ]]; then
 
     if [ ! -z "${DYNAMIC_PARAMETERS}" ]; then
         args+=(${DYNAMIC_PARAMETERS[@]})
+    fi
+
+    if [ ! -z "${ARGS}" ]; then
+        args+=(${ARGS[@]})
     fi
 fi
 
