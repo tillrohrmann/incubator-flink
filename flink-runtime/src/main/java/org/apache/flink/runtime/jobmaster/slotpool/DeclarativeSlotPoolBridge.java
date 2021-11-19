@@ -40,6 +40,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -183,15 +184,26 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
     private Optional<PendingRequest> findMatchingPendingRequest(PhysicalSlot slot) {
         final ResourceProfile resourceProfile = slot.getResourceProfile();
 
+        PendingRequest candidate = null;
+
         for (PendingRequest pendingRequest : pendingRequests.values()) {
             if (resourceProfile.isMatching(pendingRequest.getResourceProfile())) {
-                log.debug("Matched slot {} to pending request {}.", slot, pendingRequest);
-                return Optional.of(pendingRequest);
+                candidate = pendingRequest;
+
+                if (candidate.getPreferredAllocations().contains(slot.getAllocationId())) {
+                    break;
+                }
             }
         }
-        log.debug("Could not match slot {} to any pending request.", slot);
 
-        return Optional.empty();
+        if (candidate != null) {
+            log.debug("Matched slot {} to pending request {}.", slot, candidate);
+            return Optional.of(candidate);
+        } else {
+            log.debug("Could not match slot {} to any pending request.", slot);
+
+            return Optional.empty();
+        }
     }
 
     @Override
@@ -231,6 +243,7 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
     public CompletableFuture<PhysicalSlot> requestNewAllocatedSlot(
             @Nonnull SlotRequestId slotRequestId,
             @Nonnull ResourceProfile resourceProfile,
+            @Nonnull Collection<AllocationID> preferredAllocations,
             @Nullable Time timeout) {
         assertRunningInMainThread();
 
@@ -240,7 +253,8 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
                 resourceProfile);
 
         final PendingRequest pendingRequest =
-                PendingRequest.createNormalRequest(slotRequestId, resourceProfile);
+                PendingRequest.createNormalRequest(
+                        slotRequestId, resourceProfile, preferredAllocations);
 
         return internalRequestNewSlot(pendingRequest, timeout);
     }
@@ -248,7 +262,9 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
     @Override
     @Nonnull
     public CompletableFuture<PhysicalSlot> requestNewAllocatedBatchSlot(
-            @Nonnull SlotRequestId slotRequestId, @Nonnull ResourceProfile resourceProfile) {
+            @Nonnull SlotRequestId slotRequestId,
+            @Nonnull ResourceProfile resourceProfile,
+            @Nonnull Collection<AllocationID> preferredAllocations) {
         assertRunningInMainThread();
 
         log.debug(
@@ -257,7 +273,8 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
                 resourceProfile);
 
         final PendingRequest pendingRequest =
-                PendingRequest.createBatchRequest(slotRequestId, resourceProfile);
+                PendingRequest.createBatchRequest(
+                        slotRequestId, resourceProfile, preferredAllocations);
 
         return internalRequestNewSlot(pendingRequest, null);
     }
@@ -502,6 +519,8 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
 
         private final ResourceProfile resourceProfile;
 
+        private final HashSet<AllocationID> preferredAllocations;
+
         private final CompletableFuture<PhysicalSlot> slotFuture;
 
         private final boolean isBatchRequest;
@@ -511,22 +530,28 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
         private PendingRequest(
                 SlotRequestId slotRequestId,
                 ResourceProfile resourceProfile,
+                Collection<AllocationID> preferredAllocations,
                 boolean isBatchRequest) {
             this.slotRequestId = slotRequestId;
             this.resourceProfile = resourceProfile;
+            this.preferredAllocations = new HashSet<>(preferredAllocations);
             this.isBatchRequest = isBatchRequest;
             this.slotFuture = new CompletableFuture<>();
             this.unfulfillableSince = Long.MAX_VALUE;
         }
 
         static PendingRequest createBatchRequest(
-                SlotRequestId slotRequestId, ResourceProfile resourceProfile) {
-            return new PendingRequest(slotRequestId, resourceProfile, true);
+                SlotRequestId slotRequestId,
+                ResourceProfile resourceProfile,
+                Collection<AllocationID> preferredAllocations) {
+            return new PendingRequest(slotRequestId, resourceProfile, preferredAllocations, true);
         }
 
         static PendingRequest createNormalRequest(
-                SlotRequestId slotRequestId, ResourceProfile resourceProfile) {
-            return new PendingRequest(slotRequestId, resourceProfile, false);
+                SlotRequestId slotRequestId,
+                ResourceProfile resourceProfile,
+                Collection<AllocationID> preferredAllocations) {
+            return new PendingRequest(slotRequestId, resourceProfile, preferredAllocations, false);
         }
 
         SlotRequestId getSlotRequestId() {
@@ -535,6 +560,10 @@ public class DeclarativeSlotPoolBridge extends DeclarativeSlotPoolService implem
 
         ResourceProfile getResourceProfile() {
             return resourceProfile;
+        }
+
+        public Set<AllocationID> getPreferredAllocations() {
+            return preferredAllocations;
         }
 
         CompletableFuture<PhysicalSlot> getSlotFuture() {

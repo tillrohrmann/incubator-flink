@@ -36,6 +36,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -162,9 +163,18 @@ public interface SlotPool extends AllocatedSlotActions, AutoCloseable {
      * @return a newly allocated slot that was previously not available.
      */
     @Nonnull
+    default CompletableFuture<PhysicalSlot> requestNewAllocatedSlot(
+            @Nonnull SlotRequestId slotRequestId,
+            @Nonnull ResourceProfile resourceProfile,
+            @Nullable Time timeout) {
+        return requestNewAllocatedSlot(
+                slotRequestId, resourceProfile, Collections.emptyList(), timeout);
+    }
+
     CompletableFuture<PhysicalSlot> requestNewAllocatedSlot(
             @Nonnull SlotRequestId slotRequestId,
             @Nonnull ResourceProfile resourceProfile,
+            @Nonnull Collection<AllocationID> preferredAllocations,
             @Nullable Time timeout);
 
     /**
@@ -178,8 +188,17 @@ public interface SlotPool extends AllocatedSlotActions, AutoCloseable {
      * @return a future which is completed with newly allocated batch slot
      */
     @Nonnull
+    default CompletableFuture<PhysicalSlot> requestNewAllocatedBatchSlot(
+            @Nonnull SlotRequestId slotRequestId, @Nonnull ResourceProfile resourceProfile) {
+        return requestNewAllocatedBatchSlot(
+                slotRequestId, resourceProfile, Collections.emptyList());
+    }
+
+    @Nonnull
     CompletableFuture<PhysicalSlot> requestNewAllocatedBatchSlot(
-            @Nonnull SlotRequestId slotRequestId, @Nonnull ResourceProfile resourceProfile);
+            @Nonnull SlotRequestId slotRequestId,
+            @Nonnull ResourceProfile resourceProfile,
+            Collection<AllocationID> preferredAllocations);
 
     /**
      * Disables batch slot request timeout check. Invoked when someone else wants to take over the

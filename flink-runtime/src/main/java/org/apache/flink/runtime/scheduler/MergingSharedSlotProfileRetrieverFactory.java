@@ -25,6 +25,9 @@ import org.apache.flink.runtime.scheduler.strategy.ExecutionVertexID;
 import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.util.Preconditions;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -35,6 +38,9 @@ import java.util.function.Supplier;
 /** Factory for {@link MergingSharedSlotProfileRetriever}. */
 class MergingSharedSlotProfileRetrieverFactory
         implements SharedSlotProfileRetriever.SharedSlotProfileRetrieverFactory {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(MergingSharedSlotProfileRetriever.class);
+
     private final SyncPreferredLocationsRetriever preferredLocationsRetriever;
 
     private final Function<ExecutionVertexID, AllocationID> priorAllocationIdRetriever;
@@ -102,12 +108,18 @@ class MergingSharedSlotProfileRetrieverFactory
                         preferredLocationsRetriever.getPreferredLocations(
                                 execution, producersToIgnore));
             }
-            return SlotProfile.priorAllocation(
-                    physicalSlotResourceProfile,
-                    physicalSlotResourceProfile,
-                    preferredLocations,
-                    priorAllocations,
-                    reservedAllocationIds);
+
+            final SlotProfile slotProfile =
+                    SlotProfile.priorAllocation(
+                            physicalSlotResourceProfile,
+                            physicalSlotResourceProfile,
+                            preferredLocations,
+                            priorAllocations,
+                            reservedAllocationIds);
+
+            LOG.info("SlotProfile for {} is {}.", executionSlotSharingGroup, slotProfile);
+
+            return slotProfile;
         }
     }
 }
