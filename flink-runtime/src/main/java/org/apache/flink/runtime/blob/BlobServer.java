@@ -333,13 +333,6 @@ public class BlobServer extends Thread
                 }
             }
 
-            // Clean up the storage directory
-            try {
-                FileUtils.deleteDirectory(storageDir);
-            } catch (IOException e) {
-                exception = ExceptionUtils.firstOrSuppressed(e, exception);
-            }
-
             // Remove shutdown hook to prevent resource leaks
             ShutdownHookUtil.removeShutdownHook(shutdownHook, getClass().getSimpleName(), LOG);
 

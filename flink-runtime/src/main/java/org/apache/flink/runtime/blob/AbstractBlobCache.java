@@ -21,7 +21,6 @@ package org.apache.flink.runtime.blob;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.configuration.BlobServerOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.util.FileUtils;
 import org.apache.flink.util.ShutdownHookUtil;
 
 import org.slf4j.Logger;
@@ -239,13 +238,8 @@ public abstract class AbstractBlobCache implements Closeable {
         if (shutdownRequested.compareAndSet(false, true)) {
             log.info("Shutting down BLOB cache");
 
-            // Clean up the storage directory
-            try {
-                FileUtils.deleteDirectory(storageDir);
-            } finally {
-                // Remove shutdown hook to prevent resource leaks
-                ShutdownHookUtil.removeShutdownHook(shutdownHook, getClass().getSimpleName(), log);
-            }
+            // Remove shutdown hook to prevent resource leaks
+            ShutdownHookUtil.removeShutdownHook(shutdownHook, getClass().getSimpleName(), log);
         }
     }
 
