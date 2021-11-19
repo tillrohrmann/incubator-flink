@@ -23,7 +23,6 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.util.FileUtils;
-import org.apache.flink.util.ShutdownHookUtil;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,8 +66,6 @@ public class TaskExecutorLocalStateStoresManager {
     /** Guarding lock for taskStateStoresByAllocationID and closed-flag. */
     private final Object lock;
 
-    private final Thread shutdownHook;
-
     @GuardedBy("lock")
     private boolean closed;
 
@@ -102,10 +99,6 @@ public class TaskExecutorLocalStateStoresManager {
                                 + localStateRecoveryRootDir);
             }
         }
-
-        // register a shutdown hook
-        this.shutdownHook =
-                ShutdownHookUtil.addShutdownHook(this::shutdown, getClass().getSimpleName(), LOG);
     }
 
     @Nonnull
@@ -229,8 +222,6 @@ public class TaskExecutorLocalStateStoresManager {
             toRelease = new HashMap<>(taskStateStoresByAllocationID);
             taskStateStoresByAllocationID.clear();
         }
-
-        ShutdownHookUtil.removeShutdownHook(shutdownHook, getClass().getSimpleName(), LOG);
 
         LOG.info("Shutting down TaskExecutorLocalStateStoresManager.");
 
