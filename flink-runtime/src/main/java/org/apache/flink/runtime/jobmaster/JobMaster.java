@@ -507,7 +507,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
                 cause.getMessage());
 
         taskManagerHeartbeatManager.unmonitorTarget(resourceID);
-        slotPoolService.releaseTaskManager(resourceID, cause);
+        //        slotPoolService.releaseTaskManager(resourceID, cause);
         partitionTracker.stopTrackingPartitionsFor(resourceID);
 
         Tuple2<TaskManagerLocation, TaskExecutorGateway> taskManagerConnection =
@@ -686,6 +686,8 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
             final JobID jobId,
             final UUID taskManagerSession,
             final Time timeout) {
+
+        log.info("Register TaskManager {}.", unresolvedTaskManagerLocation);
 
         if (!jobGraph.getJobID().equals(jobId)) {
             log.debug(
@@ -943,7 +945,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
 
         // TODO: Distinguish between job termination which should free all slots and a loss of
         // leadership which should keep the slots
-        slotPoolService.close();
+        //        slotPoolService.close();
 
         stopHeartbeatServices();
 

@@ -38,6 +38,7 @@ import org.apache.flink.runtime.checkpoint.CheckpointsCleaner;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpoint;
 import org.apache.flink.runtime.checkpoint.CompletedCheckpointStore;
 import org.apache.flink.runtime.checkpoint.TaskStateSnapshot;
+import org.apache.flink.runtime.clusterframework.types.AllocationID;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.deployment.TaskDeploymentDescriptorFactory;
 import org.apache.flink.runtime.execution.ExecutionState;
@@ -81,6 +82,7 @@ import org.apache.flink.runtime.scheduler.strategy.SchedulingExecutionVertex;
 import org.apache.flink.runtime.scheduler.strategy.SchedulingTopology;
 import org.apache.flink.runtime.state.KeyGroupRange;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
+import org.apache.flink.runtime.taskmanager.TaskManagerLocation;
 import org.apache.flink.runtime.util.BoundedFIFOQueue;
 import org.apache.flink.runtime.util.IntArrayList;
 import org.apache.flink.util.ExceptionUtils;
@@ -150,6 +152,8 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
 
     private final ExecutionGraphFactory executionGraphFactory;
 
+    private final SchedulingInformationPersistence schedulingInformationPersistence;
+
     public SchedulerBase(
             final Logger log,
             final JobGraph jobGraph,
@@ -196,9 +200,11 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
 
         this.schedulingTopology = executionGraph.getSchedulingTopology();
 
-        stateLocationRetriever =
-                executionVertexId ->
-                        getExecutionVertex(executionVertexId).getPreferredLocationBasedOnState();
+        this.schedulingInformationPersistence =
+                SchedulingInformationPersistence.from(jobGraph.getJobID(), jobMasterConfiguration);
+
+        stateLocationRetriever = new SchedulerStateLocationRetriever();
+
         inputsLocationsRetriever =
                 new ExecutionGraphToInputsLocationsRetrieverAdapter(executionGraph);
 
@@ -1028,5 +1034,29 @@ public abstract class SchedulerBase implements SchedulerNG, CheckpointScheduling
     @VisibleForTesting
     JobID getJobId() {
         return jobGraph.getJobID();
+    }
+
+    private class SchedulerStateLocationRetriever implements StateLocationRetriever {
+        @Override
+        public Optional<TaskManagerLocation> getStateLocation(ExecutionVertexID executionVertexId) {
+            return getExecutionVertex(executionVertexId)
+                    .getPreferredLocationBasedOnState()
+                    .map(Optional::of)
+                    .orElseGet(
+                            () ->
+                                    schedulingInformationPersistence.getLatestPriorLocation(
+                                            executionVertexId));
+        }
+    }
+
+    protected Optional<AllocationID> getLatestPersistedPriorAllocationId(
+            ExecutionVertexID executionVertexId) {
+        return schedulingInformationPersistence.getLatestPriorAllocationId(executionVertexId);
+    }
+
+    protected void persistSchedulingInformation(
+            Collection<SchedulingInformationPersistence.SchedulingInformation>
+                    schedulingInformation) {
+        schedulingInformationPersistence.store(schedulingInformation);
     }
 }

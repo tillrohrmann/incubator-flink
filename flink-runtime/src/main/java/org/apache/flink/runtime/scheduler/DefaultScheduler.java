@@ -62,6 +62,7 @@ import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -539,6 +540,13 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
             final ExecutionVertex executionVertex = getExecutionVertex(executionVertexId);
             executionVertex.tryAssignResource(logicalSlot);
 
+            persistSchedulingInformation(
+                    Collections.singleton(
+                            SchedulingInformationPersistence.SchedulingInformation.create(
+                                    executionVertexId,
+                                    logicalSlot.getAllocationId(),
+                                    logicalSlot.getTaskManagerLocation())));
+
             startReserveAllocation(executionVertexId, logicalSlot.getAllocationId());
 
             return logicalSlot;
@@ -679,7 +687,23 @@ public class DefaultScheduler extends SchedulerBase implements SchedulerOperatio
 
         @Override
         public AllocationID getPriorAllocationId(final ExecutionVertexID executionVertexId) {
-            return getExecutionVertex(executionVertexId).getLatestPriorAllocation();
+            final AllocationID latestPriorAllocation =
+                    getExecutionVertex(executionVertexId).getLatestPriorAllocation();
+
+            final AllocationID priorAllocationId;
+            if (latestPriorAllocation != null) {
+                priorAllocationId = latestPriorAllocation;
+            } else {
+                priorAllocationId =
+                        getLatestPersistedPriorAllocationId(executionVertexId).orElse(null);
+            }
+
+            log.info(
+                    "Found prior allocation id of operator {} is {}.",
+                    executionVertexId,
+                    priorAllocationId);
+
+            return priorAllocationId;
         }
 
         @Override
