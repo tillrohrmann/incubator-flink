@@ -111,7 +111,11 @@ public interface SlotPoolService extends AutoCloseable {
      * @param cause for the releasing of the TaskManager
      * @return true iff a given registered resource id was removed
      */
-    boolean releaseTaskManager(ResourceID taskManagerId, Exception cause);
+    default boolean releaseTaskManager(ResourceID taskManagerId, Exception cause) {
+        return releaseTaskManager(taskManagerId, true, cause);
+    }
+
+    boolean releaseTaskManager(ResourceID taskManagerId, boolean freeSlots, Exception cause);
 
     /**
      * Connects the SlotPool to the given ResourceManager. After this method is called, the SlotPool

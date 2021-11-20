@@ -223,11 +223,12 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
     }
 
     @Override
-    public boolean releaseTaskManager(ResourceID taskManagerId, Exception cause) {
+    public boolean releaseTaskManager(
+            ResourceID taskManagerId, boolean freeSlots, Exception cause) {
         assertHasBeenStarted();
 
         if (registeredTaskManagers.remove(taskManagerId)) {
-            internalReleaseTaskManager(taskManagerId, cause);
+            internalReleaseTaskManager(taskManagerId, freeSlots, cause);
             return true;
         }
 
@@ -236,17 +237,18 @@ public class DeclarativeSlotPoolService implements SlotPoolService {
 
     private void releaseAllTaskManagers(Exception cause) {
         for (ResourceID registeredTaskManager : registeredTaskManagers) {
-            internalReleaseTaskManager(registeredTaskManager, cause);
+            internalReleaseTaskManager(registeredTaskManager, true, cause);
         }
 
         registeredTaskManagers.clear();
     }
 
-    private void internalReleaseTaskManager(ResourceID taskManagerId, Exception cause) {
+    private void internalReleaseTaskManager(
+            ResourceID taskManagerId, boolean freeSlots, Exception cause) {
         assertHasBeenStarted();
 
         final ResourceCounter previouslyFulfilledRequirement =
-                declarativeSlotPool.releaseSlots(taskManagerId, cause);
+                declarativeSlotPool.releaseSlots(taskManagerId, freeSlots, cause);
 
         onReleaseTaskManager(previouslyFulfilledRequirement);
     }

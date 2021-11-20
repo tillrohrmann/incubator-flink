@@ -160,7 +160,7 @@ final class TestingDeclarativeSlotPool implements DeclarativeSlotPool {
     }
 
     @Override
-    public ResourceCounter releaseSlots(ResourceID owner, Exception cause) {
+    public ResourceCounter releaseSlots(ResourceID owner, boolean freeSlots, Exception cause) {
         return releaseSlotsFunction.apply(owner, cause);
     }
 

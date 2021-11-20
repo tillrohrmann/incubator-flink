@@ -145,7 +145,11 @@ public interface DeclarativeSlotPool {
      * @return the resource requirements that all slots were fulfilling; empty if all slots were
      *     currently free
      */
-    ResourceCounter releaseSlots(ResourceID owner, Exception cause);
+    default ResourceCounter releaseSlots(ResourceID owner, Exception cause) {
+        return releaseSlots(owner, true, cause);
+    }
+
+    ResourceCounter releaseSlots(ResourceID owner, boolean freeSlots, Exception cause);
 
     /**
      * Releases the slot specified by allocationId if one exists.

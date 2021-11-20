@@ -531,7 +531,8 @@ public class JobMasterTest extends TestLogger {
         }
 
         @Override
-        public boolean releaseTaskManager(ResourceID resourceId, Exception cause) {
+        public boolean releaseTaskManager(
+                ResourceID resourceId, boolean freeSlots, Exception cause) {
             registeredSlots.remove(resourceId);
             return true;
         }

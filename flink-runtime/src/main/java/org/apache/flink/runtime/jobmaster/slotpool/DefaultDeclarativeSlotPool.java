@@ -368,7 +368,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
     }
 
     @Override
-    public ResourceCounter releaseSlots(ResourceID owner, Exception cause) {
+    public ResourceCounter releaseSlots(ResourceID owner, boolean freeSlots, Exception cause) {
         final AllocatedSlotPool.AllocatedSlotsAndReservationStatus removedSlots =
                 slotPool.removeSlots(owner);
 
@@ -379,7 +379,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
             }
         }
 
-        return freeAndReleaseSlots(slotsToFree, removedSlots.getAllocatedSlots(), cause);
+        return freeAndReleaseSlots(slotsToFree, freeSlots, removedSlots.getAllocatedSlots(), cause);
     }
 
     @Override
@@ -393,6 +393,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
             final Collection<AllocatedSlot> slotAsCollection = Collections.singleton(slot);
             return freeAndReleaseSlots(
                     wasSlotFree ? Collections.emptySet() : slotAsCollection,
+                    true,
                     slotAsCollection,
                     cause);
         } else {
@@ -402,6 +403,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
 
     private ResourceCounter freeAndReleaseSlots(
             Collection<AllocatedSlot> currentlyReservedSlots,
+            boolean freeSlots,
             Collection<AllocatedSlot> slots,
             Exception cause) {
 
@@ -409,7 +411,7 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
                 getFulfilledRequirements(currentlyReservedSlots);
 
         releasePayload(currentlyReservedSlots, cause);
-        releaseSlots(slots, cause);
+        releaseSlots(slots, freeSlots, cause);
 
         return previouslyFulfilledRequirements;
     }
@@ -458,13 +460,16 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
         }
 
         releaseSlots(
-                slotsToReturnToOwner, new FlinkException("Returning idle slots to their owners."));
+                slotsToReturnToOwner,
+                true,
+                new FlinkException("Returning idle slots to their owners."));
         LOG.debug(
                 "Idle slots have been returned; new total acquired resources: {}",
                 fulfilledResourceRequirements);
     }
 
-    private void releaseSlots(Iterable<AllocatedSlot> slotsToReturnToOwner, Throwable cause) {
+    private void releaseSlots(
+            Iterable<AllocatedSlot> slotsToReturnToOwner, boolean freeSlots, Throwable cause) {
         for (AllocatedSlot slotToReturn : slotsToReturnToOwner) {
             Preconditions.checkState(!slotToReturn.isUsed(), "Free slot must not be used.");
 
@@ -480,22 +485,24 @@ public class DefaultDeclarativeSlotPool implements DeclarativeSlotPool {
                     fulfilledResourceRequirements.subtract(matchingResourceProfile, 1);
             slotToRequirementProfileMappings.remove(slotToReturn.getAllocationId());
 
-            final CompletableFuture<Acknowledge> freeSlotFuture =
-                    slotToReturn
-                            .getTaskManagerGateway()
-                            .freeSlot(slotToReturn.getAllocationId(), cause, rpcTimeout);
+            if (freeSlots) {
+                final CompletableFuture<Acknowledge> freeSlotFuture =
+                        slotToReturn
+                                .getTaskManagerGateway()
+                                .freeSlot(slotToReturn.getAllocationId(), cause, rpcTimeout);
 
-            freeSlotFuture.whenComplete(
-                    (Acknowledge ignored, Throwable throwable) -> {
-                        if (throwable != null) {
-                            // The slot status will be synced to task manager in next heartbeat.
-                            LOG.debug(
-                                    "Releasing slot [{}] of registered TaskExecutor {} failed. Discarding slot.",
-                                    slotToReturn.getAllocationId(),
-                                    slotToReturn.getTaskManagerId(),
-                                    throwable);
-                        }
-                    });
+                freeSlotFuture.whenComplete(
+                        (Acknowledge ignored, Throwable throwable) -> {
+                            if (throwable != null) {
+                                // The slot status will be synced to task manager in next heartbeat.
+                                LOG.debug(
+                                        "Releasing slot [{}] of registered TaskExecutor {} failed. Discarding slot.",
+                                        slotToReturn.getAllocationId(),
+                                        slotToReturn.getTaskManagerId(),
+                                        throwable);
+                            }
+                        });
+            }
         }
     }
 

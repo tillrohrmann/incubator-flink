@@ -163,7 +163,8 @@ public class ExecutionGraphRestartTest extends TestLogger {
             final ResourceID taskManagerResourceId = offerSlots(slotPool, NUM_TASKS);
 
             // Release the TaskManager and wait for the job to restart
-            slotPool.releaseTaskManager(taskManagerResourceId, new Exception("Test Exception"));
+            slotPool.releaseTaskManager(
+                    taskManagerResourceId, true, new Exception("Test Exception"));
             assertEquals(JobStatus.RESTARTING, executionGraph.getState());
 
             // Canceling needs to abort the restart

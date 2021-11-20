@@ -507,7 +507,7 @@ public class JobMaster extends PermanentlyFencedRpcEndpoint<JobMasterId>
                 cause.getMessage());
 
         taskManagerHeartbeatManager.unmonitorTarget(resourceID);
-        //        slotPoolService.releaseTaskManager(resourceID, cause);
+        slotPoolService.releaseTaskManager(resourceID, false, cause);
         partitionTracker.stopTrackingPartitionsFor(resourceID);
 
         Tuple2<TaskManagerLocation, TaskExecutorGateway> taskManagerConnection =

@@ -146,6 +146,7 @@ public class SlotPoolUtils {
                         () ->
                                 slotPool.releaseTaskManager(
                                         taskManagerResourceId,
+                                        true,
                                         new FlinkException("Let's get rid of the offered slot.")),
                         mainThreadExecutor)
                 .join();

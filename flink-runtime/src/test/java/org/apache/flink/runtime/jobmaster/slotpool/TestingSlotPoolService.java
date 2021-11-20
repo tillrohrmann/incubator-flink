@@ -143,7 +143,8 @@ public class TestingSlotPoolService implements SlotPoolService {
     }
 
     @Override
-    public boolean releaseTaskManager(ResourceID taskManagerId, Exception cause) {
+    public boolean releaseTaskManager(
+            ResourceID taskManagerId, boolean freeSlots, Exception cause) {
         return releaseTaskManagerFunction.apply(taskManagerId, cause);
     }
 
