@@ -18,9 +18,12 @@
 
 package org.apache.flink.runtime.dispatcher;
 
+import java.util.concurrent.CompletionException;
+
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.operators.ResourceSpec;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.SavepointFormatType;
@@ -122,6 +125,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.instanceOf;
@@ -223,6 +227,29 @@ public class DispatcherTest extends AbstractDispatcherTest {
         haServices.getJobResultStore().markResultAsClean(jobGraph.getJobID());
 
         assertDuplicateJobSubmission();
+    }
+
+    @Test
+    public void testDuplicateJobSubmissionIsDetected() throws Exception {
+        dispatcher =
+                createAndStartDispatcher(
+                        heartbeatServices,
+                        haServices,
+                        new TestingJobMasterServiceLeadershipRunnerFactory());
+
+        final DispatcherGateway dispatcherGateway = dispatcher.getSelfGateway(
+                DispatcherGateway.class);
+        final CompletableFuture<Acknowledge> firstSubmission = dispatcherGateway.submitJob(
+                jobGraph,
+                TIMEOUT);
+        final CompletableFuture<Acknowledge> secondSubmission = dispatcherGateway.submitJob(
+                jobGraph,
+                TIMEOUT);
+
+        firstSubmission.join();
+        assertThatExceptionOfType(CompletionException.class)
+                .isThrownBy(secondSubmission::join)
+                .withCauseInstanceOf(DuplicateJobSubmissionException.class);
     }
 
     private void assertDuplicateJobSubmission() throws Exception {
